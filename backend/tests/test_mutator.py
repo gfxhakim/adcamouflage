@@ -227,3 +227,24 @@ def test_sha256_of_known_bytes(tmp_path):
     path = tmp_path / "blob.bin"
     path.write_bytes(b"adcamouflage")
     assert sha256_file(path) == __import__("hashlib").sha256(b"adcamouflage").hexdigest()
+
+
+@requires_ffmpeg
+def test_deep_scramble_keeps_audio_and_honours_the_trim(sample_video, tmp_path):
+    """The scramble pass is video-only, so audio must be remapped from the source."""
+
+    source = probe(sample_video)
+    report = mutate(
+        sample_video,
+        tmp_path / "scramble-audio.mp4",
+        AssetKind.VIDEO,
+        _options(deep_scramble=True, temporal_trim=True, intensity=70, seed=31),
+        seed=31,
+    )
+    output = probe(report.output_path)
+
+    assert output.has_audio, "audio was dropped by the deep-scramble path"
+    assert output.has_video
+    # The trim shaves a little off each end, so the result is shorter but not
+    # truncated to a fraction of the original.
+    assert 0.5 * source.duration < output.duration < source.duration

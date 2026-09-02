@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import zipfile
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
+import aiofiles
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -156,8 +158,6 @@ async def presets() -> dict[str, Any]:
 
 async def _persist_upload(upload: UploadFile, destination: Path) -> int:
     """Stream an upload to disk, aborting if it exceeds the configured cap."""
-
-    import aiofiles
 
     written = 0
     try:
@@ -394,8 +394,6 @@ def _build_archive(batch_id: str, assets: list[AssetJob], destination: Path) -> 
             }
             for asset in assets
         ]
-        import json
-
         archive.writestr(
             "camouflage-manifest.json",
             json.dumps(

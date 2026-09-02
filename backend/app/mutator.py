@@ -616,26 +616,24 @@ def mutate_video(
         video_filters = build_video_filters(plan, info)
         audio_filters = build_audio_filters(plan, info)
 
-        args: list[str] = []
         effective_duration = max(info.duration - plan.trim_head - plan.trim_tail, 0.1)
-        if plan.trim_head:
-            args += ["-ss", f"{plan.trim_head:.3f}"]
-        args += ["-i", str(render_source)]
-        if plan.trim_tail or plan.trim_head:
+        seek: list[str] = ["-ss", f"{plan.trim_head:.3f}"] if plan.trim_head else []
+        take_audio_from_source = plan.deep_scramble and info.has_audio
+
+        # Input options must precede the -i they apply to; -t is added once
+        # afterwards as an output option so it bounds the muxed result.
+        args: list[str] = [*seek, "-i", str(render_source)]
+        if take_audio_from_source:
+            # The scramble pass is video-only; pull audio from the original.
+            args += [*seek, "-i", str(source)]
+        if plan.trim_head or plan.trim_tail:
             args += ["-t", f"{effective_duration:.3f}"]
 
-        if plan.deep_scramble and info.has_audio:
-            # The scramble pass is video-only; pull audio from the original.
-            if plan.trim_head:
-                args += ["-ss", f"{plan.trim_head:.3f}"]
-            args += ["-i", str(source)]
-            if plan.trim_head or plan.trim_tail:
-                args += ["-t", f"{effective_duration:.3f}"]
-            args += ["-map", "0:v:0", "-map", "1:a:0?"]
-        else:
-            args += ["-map", "0:v:0"]
-            if info.has_audio:
-                args += ["-map", "0:a:0?"]
+        args += ["-map", "0:v:0"]
+        if take_audio_from_source:
+            args += ["-map", "1:a:0?"]
+        elif info.has_audio:
+            args += ["-map", "0:a:0?"]
 
         if video_filters:
             args += ["-vf", ",".join(video_filters)]
