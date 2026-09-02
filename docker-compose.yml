@@ -1,0 +1,82 @@
+name: adcamouflage
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      ADCAM_REDIS_URL: redis://redis:6379/0
+      ADCAM_STORAGE_ROOT: /data
+      ADCAM_SECRET_KEY: ${ADCAM_SECRET_KEY:?set ADCAM_SECRET_KEY in .env before starting}
+      ADCAM_CORS_ORIGINS: ${ADCAM_CORS_ORIGINS:-http://localhost:3000}
+      ADCAM_ENVIRONMENT: ${ADCAM_ENVIRONMENT:-production}
+      ADCAM_MAX_UPLOAD_MB: ${ADCAM_MAX_UPLOAD_MB:-2048}
+      ADCAM_RETENTION_HOURS: ${ADCAM_RETENTION_HOURS:-24}
+    volumes:
+      - media:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+    # Renders are CPU-bound, so scale this service rather than raising -c.
+    command: ["celery", "-A", "app.celery_app.celery_app", "worker", "-Q", "mutations", "-c", "2", "--loglevel=info"]
+    environment:
+      ADCAM_REDIS_URL: redis://redis:6379/0
+      ADCAM_STORAGE_ROOT: /data
+      ADCAM_SECRET_KEY: ${ADCAM_SECRET_KEY:?set ADCAM_SECRET_KEY in .env before starting}
+      ADCAM_JOB_TIMEOUT_SECONDS: ${ADCAM_JOB_TIMEOUT_SECONDS:-2700}
+    volumes:
+      - media:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ./backend
+    # Runs the retention sweep that deletes expired uploads and renders.
+    command: ["celery", "-A", "app.celery_app.celery_app", "beat", "--loglevel=info"]
+    environment:
+      ADCAM_REDIS_URL: redis://redis:6379/0
+      ADCAM_STORAGE_ROOT: /data
+      ADCAM_SECRET_KEY: ${ADCAM_SECRET_KEY:?set ADCAM_SECRET_KEY in .env before starting}
+    volumes:
+      - media:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  media:
