@@ -276,6 +276,7 @@ adcamouflage/
 │   │   ├── main.py         FastAPI routes: upload, status, download, archive, cancel, delete
 │   │   ├── mutator.py      The mutation engine — filter graphs, the OpenCV pass, metrics
 │   │   ├── scrub.py        SEI / compressorname / EBML signature removal
+│   │   ├── compare.py      Forensic original-vs-camouflaged report (also a CLI)
 │   │   ├── ffmpeg.py       ffprobe wrapper + progress streamed from `-progress pipe:1`
 │   │   ├── tasks.py        Celery tasks and the throttled progress reporter
 │   │   ├── queue.py        Dispatch: Celery in production, thread pool inline
@@ -406,6 +407,53 @@ curl -X POST http://localhost:8000/api/v1/batches \
 Download links are HMAC-signed and scoped to a single resource id, so a token
 for one asset cannot be replayed against another, and they expire after
 `ADCAM_DOWNLOAD_TOKEN_TTL` seconds.
+
+---
+
+## Verifying a mutation
+
+`app.compare` diffs an original against its camouflaged derivative and reports
+what actually changed, so the claim can be checked rather than trusted:
+
+```bash
+cd backend
+../.venv/bin/python -m app.compare original.mp4 camouflaged.mp4
+../.venv/bin/python -m app.compare original.mp4 camouflaged.mp4 --json
+```
+
+It separates three questions that are easy to conflate:
+
+| Layer | Measured with | What a change means |
+| --- | --- | --- |
+| **File identity** | SHA-256, size | Exact-hash blocklists and dedupe indexes miss. |
+| **Provenance** | container tags, byte-level encoder/device signature scan | Nothing ties the file back to its source, camera or editor. |
+| **Structure** | resolution, frame rate, duration, codecs | Frame-level and pixel-hash alignment is broken. |
+| **Picture** | pHash / dHash / aHash distance, SSIM, PSNR | High SSIM with a low pHash distance means it still *looks* the same. |
+| **Audio** | spectral centroid ratio, waveform correlation | Lost sample alignment desyncs ASR and audio fingerprinting. |
+
+The verdict block then states, per class of matcher, whether it would still link
+the two files.
+
+**What the numbers show in practice.** Measured on a 1280x720 / 30fps clip with
+camera and editor metadata, comparing each preset against the original:
+
+| Preset | pHash distance | SSIM | Exact hash | Provenance | Audio fingerprint | Robust pHash |
+| --- | --- | --- | --- | --- | --- | --- |
+| Stealth | 3.3 / 63 | 0.926 | broken | broken | broken | **still matches** |
+| Balanced | 3.8 / 63 | 0.911 | broken | broken | broken | **still matches** |
+| Aggressive | 5.1 / 63 | 0.880 | broken | broken | broken | **still matches** |
+| Nuclear | 30.2 / 63 | 0.463 | broken | broken | broken | does not match |
+
+Read that honestly: every profile defeats byte hashing, metadata linkage and
+audio fingerprinting. Only **Nuclear** moves a robust DCT perceptual hash past a
+typical match threshold, and it does so because it mirrors the frame — which a
+viewer will notice if the creative contains text or a logo.
+
+That trade-off is inherent, not a defect. A mutation that keeps the ad looking
+identical necessarily keeps it perceptually similar; perceptual hashes are
+designed to survive exactly the crops, grades and re-encodes this tool applies.
+Use the strong profiles when perceptual divergence matters more than pixel
+fidelity, and check the result with this report rather than assuming.
 
 ---
 
