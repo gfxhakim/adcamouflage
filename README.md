@@ -46,33 +46,122 @@ fails if any of them survive.
 
 ## Quick start
 
+### Windows
+
+**1 · Install the three prerequisites.** Open **Command Prompt** and paste:
+
+```bat
+winget install Python.Python.3.12
+winget install OpenJS.NodeJS.LTS
+winget install Gyan.FFmpeg
+```
+
+Then **close that window and open a new one** — installers only add themselves
+to `PATH` for new terminals. Check they took:
+
+```bat
+python --version
+node --version
+ffmpeg -version
+```
+
+If `ffmpeg` still is not recognised, see [Windows troubleshooting](#windows-troubleshooting).
+
+**2 · Get the code.** With git:
+
+```bat
+git clone https://github.com/gfxhakim/adcamouflage.git
+cd adcamouflage
+```
+
+No git? Download the ZIP from the repository's green **Code** button, extract
+it, then `cd` into the extracted folder.
+
+**3 · Start it.**
+
+```bat
+scripts\start.bat
+```
+
+(Or just double-click `start.bat` in the `scripts` folder.)
+
+The first run takes a few minutes while it installs dependencies. When it
+finishes it prints:
+
+```
+  AdCamouflage is up
+
+    Web UI     http://localhost:3000
+    API docs   http://localhost:8000/api/docs
+```
+
+Open **http://localhost:3000**. Press **Ctrl-C** in the window to stop.
+
+> Windows uses the in-process worker rather than Celery, because Celery's
+> prefork pool does not run on Windows. It executes the identical rendering
+> code, just inside the API process — fine for local use.
+
+### macOS and Linux
+
 ```bash
 git clone https://github.com/gfxhakim/adcamouflage.git
 cd adcamouflage
 ./scripts/start.sh
 ```
 
-That is the whole thing. The script checks prerequisites, generates the signing
-key, installs dependencies on first run, starts Redis, the API, a render worker
-and the web UI, and prints the URLs. Ctrl-C stops everything.
-
-Open **http://localhost:3000**.
-
-Prerequisites: Python 3.11+, Node 20+, and FFmpeg on `PATH`. Redis is optional —
-without it the script falls back to the in-process worker and says so.
+Prerequisites: Python 3.11+, Node 20+, FFmpeg. Redis is optional — with it you
+get the full Celery queue, without it the launcher falls back to the in-process
+worker and says so.
 
 ```bash
 sudo apt-get install ffmpeg        # Debian / Ubuntu
 brew install ffmpeg                # macOS
-winget install Gyan.FFmpeg         # Windows
 ```
 
-Prefer containers? `./scripts/start-docker.sh` does the same through Docker
-Compose, generating the key so `docker compose up` never fails on a missing
-secret.
+### Docker (any OS)
 
-The two sections below spell out what those scripts do, for when you want to run
-the pieces yourself.
+If you have Docker Desktop, this needs nothing else installed:
+
+```bash
+./scripts/start-docker.sh           # macOS / Linux
+docker compose up --build           # Windows, after copying .env.example to .env
+```
+
+### Launcher options
+
+Both launchers pass arguments through to `scripts/start.py`:
+
+```bash
+python scripts/start.py --api-port 8001 --web-port 3001   # ports already taken
+python scripts/start.py --inline                          # skip Celery, render in-process
+python scripts/start.py --no-web                          # API and worker only
+```
+
+---
+
+## Windows troubleshooting
+
+**`'ffmpeg' is not recognized as an internal or external command`**
+The installer added it to `PATH`, but your current terminal was opened before
+that happened. Close every Command Prompt window and open a new one. If it still
+fails, restart the machine — `winget` occasionally defers the `PATH` update
+until then.
+
+**`'python' is not recognized`**
+Windows ships a stub that opens the Microsoft Store. Either install from
+python.org (tick *Add python.exe to PATH*), or use `py` instead of `python`.
+`start.bat` already prefers `py` when it exists.
+
+**`Port 8000 is already in use`**
+Something else holds the port. Either close it, or run
+`scripts\start.bat --api-port 8001 --web-port 3001`.
+
+**The window flashes and closes when double-clicking `start.bat`**
+It should pause on error, but if it does not, run it from Command Prompt
+instead so you can read the message.
+
+**PowerShell instead of cmd?**
+Same command, prefixed: `.\scripts\start.bat`
 
 ---
 
@@ -212,7 +301,9 @@ adcamouflage/
 │   ├── tailwind.config.js
 │   └── Dockerfile
 ├── scripts/
-│   ├── start.sh            One-command local launch (deps, Redis, API, worker, UI)
+│   ├── start.py            The launcher: prerequisites, deps, Redis, API, worker, UI
+│   ├── start.bat           Windows wrapper around start.py
+│   ├── start.sh            macOS / Linux wrapper around start.py
 │   └── start-docker.sh     One-command Compose launch
 ├── docker-compose.yml
 ├── Makefile
