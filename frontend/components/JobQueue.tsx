@@ -30,12 +30,12 @@ export function JobQueue({
     return (
       <NeonCard tone="muted" padding="lg" radius="xl" className="h-full">
         <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-500">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-black/10 bg-meta-50 text-black0">
             <Inbox className="h-6 w-6" aria-hidden />
           </span>
           <div>
-            <p className="text-sm font-semibold text-slate-300">No active batch</p>
-            <p className="mt-1 max-w-xs text-xs leading-relaxed text-slate-500">
+            <p className="text-sm font-semibold text-ink-muted">No active batch</p>
+            <p className="mt-1 max-w-xs text-xs leading-relaxed text-black0">
               Drop your assets on the left, pick a camouflage profile, and the mutation queue will
               appear here with live progress.
             </p>
@@ -59,14 +59,14 @@ export function JobQueue({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-slate-100">
+                <p className="text-sm font-semibold text-black">
                   {allDone ? "Batch complete" : "Mutating assets"}
                 </p>
                 {polling ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" aria-hidden />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-meta-500" aria-hidden />
                 ) : null}
               </div>
-              <p className="mt-0.5 font-mono text-[11px] text-slate-500">{batch.batch.id}</p>
+              <p className="mt-0.5 font-mono text-[11px] text-black0">{batch.batch.id}</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -106,24 +106,24 @@ export function JobQueue({
               tone={batch.failed > 0 ? "danger" : allDone ? "success" : "neon"}
               label="Batch progress"
             />
-            <span className="w-10 shrink-0 text-right font-mono text-[11px] text-slate-400">
+            <span className="w-10 shrink-0 text-right font-mono text-[11px] text-ink-subtle">
               {Math.round(batch.progress)}%
             </span>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="chip !text-[10px]">{batch.total} assets</span>
-            <span className="chip !text-[10px] !text-emerald-300">{batch.completed} done</span>
+            <span className="chip !text-[10px] !text-meta-600">{batch.completed} done</span>
             {running > 0 ? (
-              <span className="chip !text-[10px] !text-cyan-300">{running} in flight</span>
+              <span className="chip !text-[10px] !text-meta-500">{running} in flight</span>
             ) : null}
             {batch.failed > 0 ? (
-              <span className="chip !text-[10px] !text-rose-300">{batch.failed} failed</span>
+              <span className="chip !text-[10px] !text-red-600">{batch.failed} failed</span>
             ) : null}
           </div>
 
           {error ? (
-            <p className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/[0.07] px-3 py-2 text-[11px] text-amber-200">
+            <p className="mt-3 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
               {error}
             </p>
           ) : null}

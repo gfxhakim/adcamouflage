@@ -20,12 +20,12 @@ export default function Error({
     <main className="grid min-h-screen place-items-center px-4">
       <NeonCard tone="danger" padding="lg" radius="xl" className="w-full max-w-md">
         <div className="flex flex-col items-center gap-4 text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-rose-400/30 bg-rose-500/10 text-rose-300">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-red-300 bg-red-50 text-red-600">
             <OctagonX className="h-6 w-6" aria-hidden />
           </span>
           <div>
-            <h1 className="text-lg font-semibold text-slate-100">Something broke in the console</h1>
-            <p className="mt-1.5 text-sm text-slate-400">
+            <h1 className="text-lg font-semibold text-black">Something broke in the console</h1>
+            <p className="mt-1.5 text-sm text-ink-subtle">
               {error.message || "An unexpected client-side error occurred."}
             </p>
           </div>

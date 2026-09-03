@@ -5,15 +5,23 @@
 /* ==========================================================================
    Synchronised moving neon borders
    --------------------------------------------------------------------------
-   Every neon border in the app is a conic gradient rotated by a single angle,
+   Every border in the app is one conic gradient rotated by a single angle,
    --neon-angle. Registering the property with @property makes it an animatable
    *inherited* value, so the animation runs exactly once - on :root - and every
-   card reads the same computed angle on the same frame.
+   card reads the same angle on the same frame. A card that mounts thirty
+   seconds late inherits the rotation already in flight instead of starting its
+   own out of phase.
 
-   This is why the borders stay in lockstep: a card that mounts thirty seconds
-   after page load inherits the angle mid-rotation instead of restarting its own
-   animation out of phase, which is what happens when each element animates
-   independently.
+   Two things previously stopped the rotation on real machines, both fixed here:
+
+   * `@property` is unsupported (Firefox below 128, older Safari). The angle
+     then never animates. components/NeonDriver.tsx detects that the computed
+     angle is not advancing and drives it from requestAnimationFrame instead -
+     still from :root, so synchronisation is preserved.
+   * `prefers-reduced-motion` (Windows "Animation effects: off" turns this on
+     for every site). This used to stop the rotation dead. It now slows to a
+     30s cycle instead: a gentle hue drift with no positional movement, which
+     is what the preference is actually asking for.
    ========================================================================== */
 
 @property --neon-angle {
@@ -41,18 +49,31 @@
 }
 
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
-  --neon-1: #22d3ee;
-  --neon-2: #a855f7;
-  --neon-3: #ec4899;
-  --neon-4: #38bdf8;
+  /* One accent family: Meta blue. */
+  --meta-50: #e7f0ff;
+  --meta-100: #cce0ff;
+  --meta-200: #99c2ff;
+  --meta-300: #66a3ff;
+  --meta-400: #3385ff;
+  --meta-500: #0866ff;
+  --meta-600: #0052cc;
+  --meta-700: #003d99;
+  --meta-800: #002966;
 
-  --surface: 2 6 23;
-  --border-width: 1.5px;
+  --page: #ffffff;
+  --surface: 255 255 255;
+  --ink: #000000;
+  --ink-muted: #4b4f56;
+  --ink-subtle: #65676b;
+  --ink-faint: #8a8d91;
+  --line: 0 0 0;
 
-  color-scheme: dark;
+  --border-width: 2px;
+
+  color-scheme: light;
 
   /* The single source of truth for every border's phase. */
   animation: neon-rotate 6s linear infinite, neon-rotate-slow 14s linear infinite;
@@ -60,7 +81,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    animation: none;
+    /* Slowed, not stopped - see the note at the top of this file. */
+    animation: neon-rotate 30s linear infinite, neon-rotate-slow 60s linear infinite;
   }
 }
 
@@ -70,23 +92,25 @@ body {
 }
 
 body {
-  @apply bg-slate-950 text-slate-200 antialiased;
-  background-image:
-    radial-gradient(ellipse 80% 55% at 50% -10%, rgb(34 211 238 / 0.16), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 85% 15%, rgb(168 85 247 / 0.14), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 10% 85%, rgb(236 72 153 / 0.1), transparent 60%);
+  @apply bg-white text-black antialiased;
+  background-color: var(--page);
+  background-image: radial-gradient(
+    ellipse 60% 32% at 50% -10%,
+    rgb(8 102 255 / 0.05),
+    transparent 60%
+  );
   background-attachment: fixed;
 }
 
 ::selection {
-  background: rgb(34 211 238 / 0.28);
-  color: #f0f9ff;
+  background: rgb(8 102 255 / 0.22);
+  color: #001433;
 }
 
 /* Scrollbars ------------------------------------------------------------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(51 65 85) transparent;
+  scrollbar-color: rgb(8 102 255 / 0.35) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
@@ -96,11 +120,11 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgb(34 211 238 / 0.5), rgb(168 85 247 / 0.5));
+  background: rgb(8 102 255 / 0.35);
   border-radius: 999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgb(34 211 238 / 0.8), rgb(168 85 247 / 0.8));
+  background: rgb(8 102 255 / 0.6);
 }
 
 @layer components {
@@ -111,22 +135,26 @@ body {
      it only in the --border-width ring around the edge, using two stacked
      masks combined with `xor`. That keeps the border crisp at any radius and
      needs no extra DOM node behind the content.
+
+     The gradient is banded rather than evenly blended so the rotation is
+     unmistakable: a bright pale-blue band travels around a deeper blue rim.
      ---------------------------------------------------------------------- */
   .neon-frame {
     position: relative;
     isolation: isolate;
     border-radius: 1rem;
-    background:
-      conic-gradient(
-        from var(--neon-angle),
-        var(--neon-1),
-        var(--neon-2),
-        var(--neon-3),
-        var(--neon-4),
-        var(--neon-1)
-      );
+    background: conic-gradient(
+      from var(--neon-angle),
+      var(--meta-300) 0deg,
+      var(--meta-500) 55deg,
+      var(--meta-800) 130deg,
+      var(--meta-600) 210deg,
+      var(--meta-400) 290deg,
+      var(--meta-300) 360deg
+    );
     padding: var(--border-width);
-    transition: filter 240ms ease, transform 240ms ease;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 10px 28px -18px rgb(0 0 0 / 0.18);
+    transition: filter 240ms ease, transform 240ms ease, box-shadow 240ms ease;
   }
 
   /* The outer bloom. Blurring a copy of the same gradient keeps the glow in
@@ -138,71 +166,71 @@ body {
     z-index: -1;
     border-radius: inherit;
     background: inherit;
-    filter: blur(14px);
-    opacity: 0.32;
+    filter: blur(12px);
+    opacity: 0.28;
     transition: opacity 300ms ease, filter 300ms ease;
     pointer-events: none;
   }
 
   .neon-frame:hover::before {
-    opacity: 0.7;
-    filter: blur(20px);
+    opacity: 0.55;
+    filter: blur(18px);
   }
 
   .neon-frame > .neon-inner {
     position: relative;
     height: 100%;
     border-radius: calc(1rem - var(--border-width));
-    background: rgb(var(--surface) / 0.9);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgb(var(--surface) / 0.97);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     overflow: hidden;
   }
 
-  /* A faint inner hairline stops the neon from bleeding into the content. */
+  /* A faint inner hairline stops the border from bleeding into the content. */
   .neon-frame > .neon-inner::after {
     content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    border: 1px solid rgb(255 255 255 / 0.06);
+    border: 1px solid rgb(var(--line) / 0.07);
     pointer-events: none;
   }
 
+  /* Counter-rotating variant, for visual variety across a grid of cards. */
   .neon-frame[data-tone="slow"] {
     background: conic-gradient(
       from var(--neon-angle-slow),
-      var(--neon-2),
-      var(--neon-3),
-      var(--neon-1),
-      var(--neon-2)
-    );
-  }
-
-  .neon-frame[data-tone="danger"] {
-    background: conic-gradient(
-      from var(--neon-angle),
-      #f43f5e,
-      #fb923c,
-      #f43f5e
+      var(--meta-800) 0deg,
+      var(--meta-500) 90deg,
+      var(--meta-300) 180deg,
+      var(--meta-600) 270deg,
+      var(--meta-800) 360deg
     );
   }
 
   .neon-frame[data-tone="success"] {
     background: conic-gradient(
       from var(--neon-angle),
-      #22d3ee,
-      #4ade80,
-      #22d3ee
+      var(--meta-300) 0deg,
+      var(--meta-500) 120deg,
+      var(--meta-800) 240deg,
+      var(--meta-300) 360deg
     );
+  }
+
+  /* Failure is the one place that stays red: it is a functional signal, not
+     decoration, and a blue error state is unreadable at a glance. */
+  .neon-frame[data-tone="danger"] {
+    background: conic-gradient(from var(--neon-angle), #f87171, #dc2626, #f87171);
   }
 
   .neon-frame[data-tone="muted"] {
     background: conic-gradient(
       from var(--neon-angle),
-      rgb(148 163 184 / 0.5),
-      rgb(100 116 139 / 0.25),
-      rgb(148 163 184 / 0.5)
+      rgb(8 102 255 / 0.55),
+      rgb(8 102 255 / 0.18),
+      rgb(8 102 255 / 0.55)
     );
   }
 
@@ -210,65 +238,64 @@ body {
     transform: translateY(-2px);
   }
 
-  /* Fallback for engines without @property support: the conic gradient cannot
-     be animated there, so a static multi-stop gradient is used instead. It
-     still reads as a neon rim, just without the rotation. */
+  /* Engines without @property cannot animate a conic gradient's angle from
+     CSS. NeonDriver.tsx drives it from JS there, so this only has to keep the
+     rim looking right before the driver's first frame lands. */
   @supports not (background: conic-gradient(from var(--neon-angle), red, blue)) {
     .neon-frame,
-    .neon-frame[data-tone="slow"] {
-      background: linear-gradient(120deg, var(--neon-1), var(--neon-2), var(--neon-3), var(--neon-1));
+    .neon-frame[data-tone="slow"],
+    .neon-frame[data-tone="success"] {
+      background: linear-gradient(120deg, var(--meta-200), var(--meta-500), var(--meta-700), var(--meta-200));
     }
   }
 
   /* ----------------------------------------------------------------------
-     Glass surfaces, buttons and form controls
+     Surfaces, buttons and form controls
      ---------------------------------------------------------------------- */
   .glass {
-    @apply border border-white/10 bg-slate-950/90 backdrop-blur-xl;
+    @apply border border-black/10 bg-white/90 backdrop-blur-xl;
   }
 
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold;
-    @apply transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950;
+    @apply transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
     @apply disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none;
   }
 
   .btn-primary {
-    @apply btn text-slate-950;
-    background-image: linear-gradient(110deg, #22d3ee, #38bdf8 40%, #a855f7 75%, #ec4899);
-    box-shadow: 0 0 24px -6px rgb(34 211 238 / 0.7);
+    @apply btn bg-meta-500 text-white;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 8px 22px -10px rgb(8 102 255 / 0.75);
   }
   .btn-primary:hover:not(:disabled) {
-    box-shadow: 0 0 34px -4px rgb(34 211 238 / 0.9), 0 0 60px -18px rgb(168 85 247 / 0.8);
-    filter: brightness(1.08);
+    @apply bg-meta-600;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.1), 0 14px 30px -10px rgb(8 102 255 / 0.85);
   }
 
   .btn-ghost {
-    @apply btn border border-white/10 bg-white/5 text-slate-200;
+    @apply btn border border-black/[0.12] bg-white text-black;
   }
   .btn-ghost:hover:not(:disabled) {
-    @apply border-cyan-400/50 bg-cyan-400/10 text-cyan-100;
-    box-shadow: 0 0 20px -8px rgb(34 211 238 / 0.8);
+    @apply border-meta-500/50 bg-meta-50 text-meta-700;
   }
 
   .btn-danger {
-    @apply btn border border-rose-500/30 bg-rose-500/10 text-rose-200;
+    @apply btn border border-red-300 bg-red-50 text-red-700;
   }
   .btn-danger:hover:not(:disabled) {
-    @apply border-rose-400/60 bg-rose-500/20 text-rose-100;
+    @apply border-red-400 bg-red-100;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-300;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-black/[0.03] px-2.5 py-1 text-[11px] font-medium tracking-wide text-ink-muted;
   }
 
   .label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400;
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-subtle;
   }
 
   .field {
-    @apply w-full rounded-lg border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-slate-100;
-    @apply focus:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/40;
+    @apply w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black;
+    @apply focus:border-meta-500 focus:outline-none focus:ring-1 focus:ring-meta-500/40;
   }
 
   /* A slim shimmer that travels along a progress bar while work is running. */
@@ -277,25 +304,26 @@ body {
     position: absolute;
     inset: 0;
     width: 33%;
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.55), transparent);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.7), transparent);
     animation: neon-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
   .grid-backdrop {
     background-image:
-      linear-gradient(rgb(148 163 184 / 0.07) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(148 163 184 / 0.07) 1px, transparent 1px);
+      linear-gradient(rgb(8 102 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(8 102 255 / 0.06) 1px, transparent 1px);
     background-size: 56px 56px;
   }
 
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(110deg, #67e8f9, #a855f7 50%, #f472b6);
+    background-image: linear-gradient(100deg, var(--meta-600), var(--meta-500) 45%, var(--meta-300));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
+  /* The border rotation is handled above; everything else stops. */
+  *:not(:root),
   *::before,
   *::after {
     animation-duration: 0.001ms !important;

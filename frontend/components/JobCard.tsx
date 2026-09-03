@@ -31,11 +31,11 @@ const TONE_BY_STATUS: Record<AssetJob["status"], NeonTone> = {
 };
 
 const STATUS_TEXT: Record<AssetJob["status"], string> = {
-  queued: "text-slate-400",
-  processing: "text-cyan-300",
-  completed: "text-emerald-300",
-  failed: "text-rose-300",
-  cancelled: "text-slate-500",
+  queued: "text-ink-subtle",
+  processing: "text-meta-500",
+  completed: "text-meta-600",
+  failed: "text-red-600",
+  cancelled: "text-black0",
 };
 
 function StatusIcon({ status }: { status: AssetJob["status"] }) {
@@ -70,8 +70,8 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
         <div className="flex items-start gap-3">
           <span
             className={clsx(
-              "grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5",
-              asset.kind === "video" ? "text-fuchsia-300" : "text-cyan-300",
+              "grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-black/10 bg-meta-50",
+              asset.kind === "video" ? "text-meta-600" : "text-meta-500",
             )}
           >
             {asset.kind === "video" ? (
@@ -84,15 +84,15 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-100">
+                <p className="truncate text-sm font-medium text-black">
                   {asset.original_filename}
                   {asset.variants_total > 1 ? (
-                    <span className="ml-1.5 font-mono text-[11px] text-fuchsia-300">
+                    <span className="ml-1.5 font-mono text-[11px] text-meta-600">
                       v{asset.variant_index + 1}
                     </span>
                   ) : null}
                 </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-black0">
                   <span>{formatBytes(asset.size_bytes)}</span>
                   {metrics.source_resolution ? (
                     <>
@@ -129,7 +129,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   <button
                     type="button"
                     onClick={() => onCancel(asset.id)}
-                    className="rounded-md p-1 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-300"
+                    className="rounded-md p-1 text-black0 transition-colors hover:bg-red-50 hover:text-red-600"
                     aria-label={`Cancel ${asset.original_filename}`}
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />
@@ -152,14 +152,14 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   }
                   label={`${asset.original_filename} progress`}
                 />
-                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-slate-500">
+                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-black0">
                   {Math.round(asset.progress)}%
                 </span>
               </div>
             ) : null}
 
             {asset.error ? (
-              <p className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2 text-[11px] leading-relaxed text-rose-200">
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-700">
                 {asset.error}
               </p>
             ) : null}
@@ -182,7 +182,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
 
                 {typeof metrics.dhash_distance === "number" ? (
                   <span className="chip !text-[10px]" title="Perceptual hash distance from the original">
-                    <Fingerprint className="h-3 w-3 text-fuchsia-300" aria-hidden />
+                    <Fingerprint className="h-3 w-3 text-meta-600" aria-hidden />
                     pHash Δ {metrics.dhash_distance}
                   </span>
                 ) : null}
@@ -190,7 +190,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                 <button
                   type="button"
                   onClick={() => setExpanded((value) => !value)}
-                  className="ml-auto flex items-center gap-1 text-[11px] font-medium text-slate-400 transition-colors hover:text-cyan-300"
+                  className="ml-auto flex items-center gap-1 text-[11px] font-medium text-ink-subtle transition-colors hover:text-meta-500"
                   aria-expanded={expanded}
                 >
                   {expanded ? "Hide" : "Report"}
@@ -203,13 +203,13 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
             ) : null}
 
             {expanded && asset.status === "completed" ? (
-              <div className="mt-3 space-y-3 rounded-lg border border-white/[0.07] bg-slate-900/50 p-3">
+              <div className="mt-3 space-y-3 rounded-lg border border-black/[0.08] bg-meta-50/60 p-3">
                 <div>
                   <p className="label mb-1.5">Applied mutations</p>
                   <ul className="space-y-1">
                     {asset.applied.map((entry) => (
-                      <li key={entry} className="flex gap-2 text-[11px] text-slate-400">
-                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-cyan-400" aria-hidden />
+                      <li key={entry} className="flex gap-2 text-[11px] text-ink-subtle">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-meta-500" aria-hidden />
                         {entry}
                       </li>
                     ))}
@@ -218,49 +218,49 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
 
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                   <div className="col-span-2 flex justify-between gap-2">
-                    <dt className="text-slate-500">Source SHA-256</dt>
-                    <dd className="truncate font-mono text-slate-400">
+                    <dt className="text-black0">Source SHA-256</dt>
+                    <dd className="truncate font-mono text-ink-subtle">
                       {shortHash(metrics.source_sha256, 16)}
                     </dd>
                   </div>
                   <div className="col-span-2 flex justify-between gap-2">
-                    <dt className="text-slate-500">Output SHA-256</dt>
-                    <dd className="truncate font-mono text-emerald-300">
+                    <dt className="text-black0">Output SHA-256</dt>
+                    <dd className="truncate font-mono text-meta-600">
                       {shortHash(metrics.output_sha256, 16)}
                     </dd>
                   </div>
                   {metrics.source_fps ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-slate-500">Frame rate</dt>
-                      <dd className="font-mono text-slate-300">
+                      <dt className="text-black0">Frame rate</dt>
+                      <dd className="font-mono text-ink-muted">
                         {metrics.source_fps} → {metrics.output_fps}
                       </dd>
                     </div>
                   ) : null}
                   {typeof metrics.residual_exif_tags === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-slate-500">EXIF left</dt>
-                      <dd className="font-mono text-emerald-300">{metrics.residual_exif_tags}</dd>
+                      <dt className="text-black0">EXIF left</dt>
+                      <dd className="font-mono text-meta-600">{metrics.residual_exif_tags}</dd>
                     </div>
                   ) : null}
                   {metrics.residual_tags ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-slate-500">Provenance tags</dt>
-                      <dd className="font-mono text-emerald-300">
+                      <dt className="text-black0">Provenance tags</dt>
+                      <dd className="font-mono text-meta-600">
                         {metrics.residual_tags.length}
                       </dd>
                     </div>
                   ) : null}
                   {typeof metrics.scrubbed_signatures === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-slate-500">Signatures wiped</dt>
-                      <dd className="font-mono text-slate-300">{metrics.scrubbed_signatures}</dd>
+                      <dt className="text-black0">Signatures wiped</dt>
+                      <dd className="font-mono text-ink-muted">{metrics.scrubbed_signatures}</dd>
                     </div>
                   ) : null}
                   {typeof metrics.seed === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-slate-500">Seed</dt>
-                      <dd className="font-mono text-slate-300">{metrics.seed}</dd>
+                      <dt className="text-black0">Seed</dt>
+                      <dd className="font-mono text-ink-muted">{metrics.seed}</dd>
                     </div>
                   ) : null}
                 </dl>

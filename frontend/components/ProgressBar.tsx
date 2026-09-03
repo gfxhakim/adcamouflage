@@ -11,10 +11,10 @@ interface ProgressBarProps {
 }
 
 const TONES: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
-  neon: "bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-500",
-  success: "bg-gradient-to-r from-cyan-400 to-emerald-400",
-  danger: "bg-gradient-to-r from-rose-500 to-orange-400",
-  muted: "bg-slate-600",
+  neon: "bg-gradient-to-r from-meta-400 via-meta-500 to-meta-700",
+  success: "bg-gradient-to-r from-meta-400 to-meta-600",
+  danger: "bg-gradient-to-r from-red-500 to-red-400",
+  muted: "bg-ink-faint",
 };
 
 const GLOWS: Record<NonNullable<ProgressBarProps["tone"]>, string> = {
@@ -35,7 +35,7 @@ export function ProgressBar({
 
   return (
     <div
-      className={clsx("relative h-1.5 w-full overflow-hidden rounded-full bg-slate-800/80", className)}
+      className={clsx("relative h-1.5 w-full overflow-hidden rounded-full bg-black/[0.08]", className)}
       role="progressbar"
       aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}

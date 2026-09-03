@@ -30,19 +30,19 @@ interface OptionsPanelProps {
 const PRESET_COPY: Record<Exclude<PresetId, "custom">, { blurb: string; accent: string }> = {
   stealth: {
     blurb: "Minimum visible change. Breaks byte and pixel hashes only.",
-    accent: "from-cyan-500/20 to-sky-500/10 text-cyan-200 border-cyan-400/40",
+    accent: "from-meta-50 to-white text-meta-700 border-meta-500/50",
   },
   balanced: {
     blurb: "The default. Geometry, noise, colour and audio all shift.",
-    accent: "from-sky-500/20 to-violet-500/10 text-sky-200 border-sky-400/40",
+    accent: "from-meta-100 to-meta-50 text-meta-700 border-meta-500/60",
   },
   aggressive: {
     blurb: "Adds the per-frame OpenCV scramble. Slower, far harder to match.",
-    accent: "from-violet-500/20 to-fuchsia-500/10 text-violet-200 border-violet-400/40",
+    accent: "from-meta-200 to-meta-50 text-meta-800 border-meta-600/70",
   },
   nuclear: {
     blurb: "Everything on, mirrored frame. Maximum divergence.",
-    accent: "from-fuchsia-500/20 to-rose-500/10 text-fuchsia-200 border-fuchsia-400/40",
+    accent: "from-meta-300 to-meta-100 text-meta-900 border-meta-700/80",
   },
 };
 
@@ -155,15 +155,15 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                 aria-pressed={active}
                 className={clsx(
                   "group relative overflow-hidden rounded-xl border p-3.5 text-left transition-all duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? clsx("bg-gradient-to-br shadow-neon-sm", copy.accent)
-                    : "border-white/[0.08] bg-white/[0.02] text-slate-300 hover:border-white/20 hover:bg-white/[0.05]",
+                    ? clsx("bg-gradient-to-br shadow-meta-sm", copy.accent)
+                    : "border-white/[0.08] bg-black/[0.02] text-ink-muted hover:border-black/20 hover:bg-white/[0.05]",
                 )}
               >
                 <span className="flex items-center gap-2 text-sm font-semibold capitalize">
-                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-slate-500")} aria-hidden />
+                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-black0")} aria-hidden />
                   {preset}
                 </span>
                 <span className="mt-1 block text-[11px] leading-relaxed opacity-80">{copy.blurb}</span>
@@ -178,7 +178,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
           <label htmlFor="intensity" className="label">
             Mutation intensity
           </label>
-          <span className="font-mono text-sm text-cyan-300">{options.intensity}</span>
+          <span className="font-mono text-sm text-meta-500">{options.intensity}</span>
         </div>
         <input
           id="intensity"
@@ -189,12 +189,12 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
           value={options.intensity}
           disabled={disabled}
           onChange={(event) => set("intensity", Number(event.target.value))}
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-800 accent-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
             backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, rgb(30 41 59) ${options.intensity}%)`,
           }}
         />
-        <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-slate-600">
+        <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint">
           <span>Subtle</span>
           <span>Balanced</span>
           <span>Extreme</span>
@@ -216,19 +216,19 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                 onClick={() => set(key, !active)}
                 className={clsx(
                   "flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? "border-cyan-400/40 bg-cyan-400/[0.07] text-slate-100"
-                    : "border-white/[0.07] bg-white/[0.02] text-slate-400 hover:border-white/15",
+                    ? "border-meta-500/50 bg-meta-50 text-black"
+                    : "border-black/[0.08] bg-black/[0.02] text-ink-subtle hover:border-black/15",
                 )}
               >
                 <span
                   className={clsx(
                     "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
                     active
-                      ? "border-cyan-400/40 bg-cyan-400/15 text-cyan-200"
-                      : "border-white/10 bg-white/5 text-slate-500",
+                      ? "border-meta-500/50 bg-meta-100 text-meta-600"
+                      : "border-black/10 bg-meta-50 text-black0",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -239,12 +239,12 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                     <span
                       className={clsx(
                         "h-1.5 w-1.5 rounded-full transition-colors",
-                        active ? "bg-cyan-400 shadow-neon-sm" : "bg-slate-700",
+                        active ? "bg-meta-500 shadow-meta-sm" : "bg-black/20",
                       )}
                       aria-hidden
                     />
                   </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
+                  <span className="mt-0.5 block text-[11px] leading-snug text-black0">
                     {description}
                   </span>
                 </span>
@@ -330,7 +330,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
         </div>
       </section>
 
-      <p className="text-[11px] leading-relaxed text-slate-600">
+      <p className="text-[11px] leading-relaxed text-ink-faint">
         A seed makes a render reproducible — the same seed and settings always produce the same
         variant. Leave it empty for fresh entropy on every asset.
       </p>

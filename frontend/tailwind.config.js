@@ -8,12 +8,24 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        neon: {
-          cyan: "#22d3ee",
-          blue: "#38bdf8",
-          violet: "#a855f7",
-          pink: "#ec4899",
-          lime: "#a3e635",
+        // Single accent family for the whole product: Meta blue.
+        meta: {
+          50: "#E7F0FF",
+          100: "#CCE0FF",
+          200: "#99C2FF",
+          300: "#66A3FF",
+          400: "#3385FF",
+          500: "#0866FF", // Meta / Facebook primary blue
+          600: "#0052CC",
+          700: "#003D99",
+          800: "#002966",
+          900: "#001433",
+        },
+        ink: {
+          DEFAULT: "#000000",
+          muted: "#4B4F56",
+          subtle: "#65676B",
+          faint: "#8A8D91",
         },
       },
       fontFamily: {
@@ -21,14 +33,11 @@ module.exports = {
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        "neon-sm": "0 0 12px -2px rgb(34 211 238 / 0.45)",
-        neon: "0 0 24px -4px rgb(34 211 238 / 0.55), 0 0 48px -12px rgb(168 85 247 / 0.45)",
-        "neon-lg": "0 0 40px -6px rgb(34 211 238 / 0.6), 0 0 80px -16px rgb(236 72 153 / 0.5)",
-        panel: "0 24px 64px -32px rgb(0 0 0 / 0.9)",
-      },
-      backgroundImage: {
-        "grid-fade":
-          "linear-gradient(to bottom, rgb(2 6 23 / 0), rgb(2 6 23 / 0.85) 70%, rgb(2 6 23) 100%)",
+        "meta-sm": "0 0 10px -2px rgb(8 102 255 / 0.35)",
+        meta: "0 0 22px -4px rgb(8 102 255 / 0.45), 0 8px 24px -12px rgb(8 102 255 / 0.4)",
+        "meta-lg": "0 0 36px -6px rgb(8 102 255 / 0.5), 0 20px 48px -20px rgb(8 102 255 / 0.45)",
+        card: "0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -16px rgb(0 0 0 / 0.16)",
+        lifted: "0 2px 4px rgb(0 0 0 / 0.05), 0 18px 40px -20px rgb(0 0 0 / 0.22)",
       },
       keyframes: {
         "neon-sweep": {
@@ -36,7 +45,7 @@ module.exports = {
           "100%": { transform: "translateX(300%)" },
         },
         "pulse-glow": {
-          "0%, 100%": { opacity: "0.45" },
+          "0%, 100%": { opacity: "0.5" },
           "50%": { opacity: "1" },
         },
         "float-slow": {
@@ -47,17 +56,12 @@ module.exports = {
           from: { opacity: "0", transform: "translate3d(0, 12px, 0)" },
           to: { opacity: "1", transform: "translate3d(0, 0, 0)" },
         },
-        "scan-line": {
-          "0%": { transform: "translateY(-100%)" },
-          "100%": { transform: "translateY(1200%)" },
-        },
       },
       animation: {
         "neon-sweep": "neon-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite",
         "pulse-glow": "pulse-glow 2.8s ease-in-out infinite",
         "float-slow": "float-slow 9s ease-in-out infinite",
         "fade-up": "fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "scan-line": "scan-line 7s linear infinite",
       },
     },
   },

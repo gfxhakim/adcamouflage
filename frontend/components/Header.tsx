@@ -23,26 +23,26 @@ export function Header({ health, healthError }: HeaderProps) {
         : "Engine online";
 
   const statusTone = healthError
-    ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
+    ? "border-red-300 bg-red-50 text-red-700"
     : degraded
-      ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
+      ? "border-amber-400/40 bg-amber-50 text-amber-700"
       : online
-        ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-200"
-        : "border-white/10 bg-white/5 text-slate-300";
+        ? "border-meta-500/50 bg-meta-50 text-meta-700"
+        : "border-black/10 bg-meta-50 text-ink-muted";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-slate-950/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
-          <span className="relative grid h-10 w-10 place-items-center rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-transparent to-fuchsia-500/20">
-            <ShieldHalf className="h-5 w-5 text-cyan-300" aria-hidden />
-            <span className="absolute inset-0 animate-pulse-glow rounded-xl shadow-neon-sm" aria-hidden />
+          <span className="relative grid h-10 w-10 place-items-center rounded-xl border border-meta-500/40 bg-gradient-to-br from-meta-100 via-transparent to-meta-200">
+            <ShieldHalf className="h-5 w-5 text-meta-500" aria-hidden />
+            <span className="absolute inset-0 animate-pulse-glow rounded-xl shadow-meta-sm" aria-hidden />
           </span>
           <div className="leading-tight">
-            <p className="text-sm font-semibold tracking-tight text-slate-50">
+            <p className="text-sm font-semibold tracking-tight text-black">
               Ad<span className="text-gradient">Camouflage</span>
             </p>
-            <p className="hidden text-[11px] text-slate-500 sm:block">
+            <p className="hidden text-[11px] text-black0 sm:block">
               Media mutation &amp; fingerprint stripping
             </p>
           </div>
@@ -51,7 +51,7 @@ export function Header({ health, healthError }: HeaderProps) {
         <div className="flex items-center gap-2">
           {health ? (
             <span className="chip hidden md:inline-flex" title="Render backend">
-              <Waves className="h-3.5 w-3.5 text-fuchsia-300" aria-hidden />
+              <Waves className="h-3.5 w-3.5 text-meta-600" aria-hidden />
               {health.worker_mode} · {health.active_jobs} active
             </span>
           ) : null}

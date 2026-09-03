@@ -18,14 +18,14 @@ export function StatTile({
   value,
   hint,
   tone = "default",
-  accent = "text-cyan-300",
+  accent = "text-meta-500",
 }: StatTileProps) {
   return (
     <NeonCard tone={tone} interactive padding="none" radius="lg">
       <div className="flex items-start gap-4 p-5">
         <span
           className={clsx(
-            "grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5",
+            "grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-black/10 bg-meta-50",
             accent,
           )}
         >
@@ -33,10 +33,10 @@ export function StatTile({
         </span>
         <div className="min-w-0">
           <p className="label">{label}</p>
-          <p className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-50">
+          <p className="mt-1 truncate text-2xl font-semibold tracking-tight text-black">
             {value}
           </p>
-          {hint ? <p className="mt-0.5 truncate text-xs text-slate-500">{hint}</p> : null}
+          {hint ? <p className="mt-0.5 truncate text-xs text-black0">{hint}</p> : null}
         </div>
       </div>
     </NeonCard>
