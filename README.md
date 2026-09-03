@@ -46,15 +46,44 @@ fails if any of them survive.
 
 ## Quick start
 
+```bash
+git clone https://github.com/gfxhakim/adcamouflage.git
+cd adcamouflage
+./scripts/start.sh
+```
+
+That is the whole thing. The script checks prerequisites, generates the signing
+key, installs dependencies on first run, starts Redis, the API, a render worker
+and the web UI, and prints the URLs. Ctrl-C stops everything.
+
+Open **http://localhost:3000**.
+
+Prerequisites: Python 3.11+, Node 20+, and FFmpeg on `PATH`. Redis is optional —
+without it the script falls back to the in-process worker and says so.
+
+```bash
+sudo apt-get install ffmpeg        # Debian / Ubuntu
+brew install ffmpeg                # macOS
+winget install Gyan.FFmpeg         # Windows
+```
+
+Prefer containers? `./scripts/start-docker.sh` does the same through Docker
+Compose, generating the key so `docker compose up` never fails on a missing
+secret.
+
+The two sections below spell out what those scripts do, for when you want to run
+the pieces yourself.
+
+---
+
+## Running the pieces yourself
+
 Two options. Docker is the fastest way to see it running; the local path is
 better for development.
 
 ### Option A — Docker Compose
 
 ```bash
-git clone https://github.com/gfxhakim/adcamouflage.git
-cd adcamouflage
-
 cp .env.example .env
 # Required: the key that signs download links.
 python3 -c "import secrets; print('ADCAM_SECRET_KEY=' + secrets.token_urlsafe(48))" >> .env
@@ -182,6 +211,9 @@ adcamouflage/
 │   ├── lib/                API client, types, formatters
 │   ├── tailwind.config.js
 │   └── Dockerfile
+├── scripts/
+│   ├── start.sh            One-command local launch (deps, Redis, API, worker, UI)
+│   └── start-docker.sh     One-command Compose launch
 ├── docker-compose.yml
 ├── Makefile
 └── .env.example

@@ -11,8 +11,10 @@ import secrets
 from functools import lru_cache
 from pathlib import Path
 
+from typing import Annotated
+
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -51,7 +53,10 @@ class Settings(BaseSettings):
     secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
     download_token_ttl: int = 3600
     api_key: str | None = None
-    cors_origins: list[str] = Field(
+    # NoDecode stops pydantic-settings from JSON-parsing the raw env value, so
+    # the documented comma-separated form reaches the validator below instead of
+    # blowing up with a JSONDecodeError before it ever runs.
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://localhost:3000",
             "http://127.0.0.1:3000",
@@ -68,8 +73,20 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
+        """Accept either a comma-separated string or a JSON array."""
+
         if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
+            candidate = value.strip()
+            if candidate.startswith("["):
+                import json
+
+                try:
+                    parsed = json.loads(candidate)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return [str(origin).strip() for origin in parsed if str(origin).strip()]
+            return [origin.strip() for origin in candidate.split(",") if origin.strip()]
         return value
 
     @field_validator("storage_root", mode="before")
