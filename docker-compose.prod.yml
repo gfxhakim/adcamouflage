@@ -1,0 +1,130 @@
+# Production stack: Caddy (TLS + one origin) -> Next.js and FastAPI,
+# with Postgres for accounts and Redis for the render queue.
+#
+#   cp .env.example .env     # then fill in the values marked REQUIRED
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Scale render capacity with:
+#   docker compose -f docker-compose.prod.yml up -d --scale worker=4
+
+name: adcamouflage-prod
+
+x-api-env: &api-env
+  ADCAM_ENVIRONMENT: production
+  ADCAM_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-adcam}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-adcamouflage}
+  ADCAM_REDIS_URL: redis://redis:6379/0
+  ADCAM_STORAGE_ROOT: /data
+  ADCAM_SECRET_KEY: ${ADCAM_SECRET_KEY:?set ADCAM_SECRET_KEY}
+  # Caddy serves everything over HTTPS on one origin, so the cookie can be
+  # Secure and SameSite=lax - the strongest setting that still works here.
+  ADCAM_COOKIE_SECURE: "true"
+  ADCAM_COOKIE_SAMESITE: lax
+  ADCAM_CORS_ORIGINS: https://${SITE_DOMAIN:?set SITE_DOMAIN}
+  ADCAM_ALLOW_REGISTRATION: ${ADCAM_ALLOW_REGISTRATION:-true}
+  ADCAM_MAX_UPLOAD_MB: ${ADCAM_MAX_UPLOAD_MB:-2048}
+  ADCAM_RETENTION_HOURS: ${ADCAM_RETENTION_HOURS:-24}
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN}
+      MAX_UPLOAD_SIZE: ${MAX_UPLOAD_SIZE:-2GB}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+      - api
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    environment:
+      # Server-side only, so the backend address is changeable without a rebuild.
+      API_ORIGIN: http://api:8000
+      NODE_ENV: production
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment: *api-env
+    volumes:
+      - media:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    command:
+      ["celery", "-A", "app.celery_app.celery_app", "worker", "-Q", "mutations", "-c", "2", "--loglevel=info"]
+    environment: *api-env
+    volumes:
+      - media:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    # Enforces the retention window that deletes expired uploads and renders.
+    command: ["celery", "-A", "app.celery_app.celery_app", "beat", "--loglevel=info"]
+    environment: *api-env
+    volumes:
+      - media:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-adcam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-adcamouflage}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adcam} -d ${POSTGRES_DB:-adcamouflage}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  redis-data:
+  media:

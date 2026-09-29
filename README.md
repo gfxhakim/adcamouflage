@@ -22,6 +22,53 @@ them is a metadata edit — the output is a genuinely new encode.
 | **Provenance** | `-map_metadata -1`, chapters dropped, bitexact muxing, **plus** the encoder signatures that flag misses (see below). | EXIF, XMP, ICC and PNG text chunks are gone by construction — the file is re-encoded from a bare pixel array. |
 | **Deep scramble** *(optional)* | An OpenCV pass that rewrites every frame with a slowly drifting noise field, sub-pixel affine jitter and a per-frame gamma wobble before re-encode. This is what breaks perceptual-hash *sequences* rather than single frames. | — |
 
+### Accounts and access
+
+The site is two things behind one origin: a **landing page** at `/` where
+visitors sign in or create an account, and the **console** at `/app`, which
+requires a session.
+
+- Passwords are hashed with bcrypt (cost 12). Anything over 72 bytes is
+  rejected rather than silently truncated, which would make two different long
+  passwords equivalent.
+- Sessions are JWTs in an httpOnly cookie. Changing a password bumps a
+  `token_version` and ends every other signed-in session.
+- An unknown email and a wrong password return the same message and comparable
+  work, so the endpoint cannot be used to enumerate accounts. Repeated failures
+  from one client are throttled.
+- **Every batch belongs to its creator.** Status, downloads, the zip archive,
+  cancel and delete all check ownership, and a valid signed download link is
+  still refused to anyone else. Refusals are 404 rather than 403 so batch ids
+  cannot be probed.
+
+Accounts live in SQLite by default and Postgres in production — the same code,
+selected by `ADCAM_DATABASE_URL`. The suite runs green against both.
+
+### Brand overlay
+
+Composite your own image onto every asset in a batch, with three timing modes:
+
+| Mode | Behaviour |
+| --- | --- |
+| **Every frame** | A persistent watermark across the whole clip. |
+| **Intro only** | Visible for the first N seconds, then gone. |
+| **Custom frames** | Visible only on the frame ranges you pick. |
+
+Nine anchor positions or absolute coordinates, width as a share of the frame,
+and adjustable opacity. Transparent PNGs keep their alpha. Stills take the same
+positioning.
+
+Two details that matter:
+
+- The overlay is composited **between** the geometry pass and the grain pass, so
+  it picks up the same per-frame noise as the rest of the picture. Compositing
+  last would leave it a pristine, unchanging region — a stable fingerprint
+  across every variant, which is the opposite of the point.
+- Frame ranges are converted to **timestamps** using the source frame rate, then
+  shifted by the temporal trim. Frame numbers alone would drift because the
+  output frame rate is deliberately changed, and ignoring the trim put the
+  overlay one to four frames early.
+
 ### The encoder signatures most tools leave behind
 
 `-map_metadata -1` only clears tag dictionaries. Three fingerprints survive it,
@@ -274,6 +321,9 @@ adcamouflage/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py         FastAPI routes: upload, status, download, archive, cancel, delete
+│   │   ├── accounts.py     Password hashing, session tokens, request dependencies
+│   │   ├── auth_routes.py  Register, sign in, sign out, password change, history
+│   │   ├── db.py           SQLAlchemy models and engine (SQLite or Postgres)
 │   │   ├── mutator.py      The mutation engine — filter graphs, the OpenCV pass, metrics
 │   │   ├── scrub.py        SEI / compressorname / EBML signature removal
 │   │   ├── compare.py      Forensic original-vs-camouflaged report (also a CLI)
@@ -289,12 +339,16 @@ adcamouflage/
 │   └── Dockerfile
 ├── frontend/
 │   ├── app/
-│   │   ├── page.tsx        The dashboard: upload, options, live queue
+│   │   ├── page.tsx        Landing page with sign in / create account
+│   │   ├── app/page.tsx    The console: upload, options, overlay, live queue
 │   │   ├── layout.tsx
 │   │   └── globals.css     The synchronised neon border system + design tokens
 │   ├── components/
 │   │   ├── NeonCard.tsx    The rotating-border glass panel every surface is built from
 │   │   ├── UploadZone.tsx  Drag-and-drop with client-side validation
+│   │   ├── AuthPanel.tsx   Sign in / create account
+│   │   ├── OverlayPanel.tsx Overlay image, timing mode, position, opacity
+│   │   ├── NeonDriver.tsx  Keeps the borders rotating where CSS cannot
 │   │   ├── OptionsPanel.tsx
 │   │   ├── JobQueue.tsx / JobCard.tsx
 │   │   ├── ProgressBar.tsx / StatTile.tsx / Header.tsx
@@ -306,7 +360,11 @@ adcamouflage/
 │   ├── start.bat           Windows wrapper around start.py
 │   ├── start.sh            macOS / Linux wrapper around start.py
 │   └── start-docker.sh     One-command Compose launch
-├── docker-compose.yml
+├── middleware.ts           Guards /app, redirects signed-in users to it
+├── deploy/Caddyfile        TLS + one-origin routing
+├── docker-compose.yml      Development stack
+├── docker-compose.prod.yml Production stack with Postgres and Caddy
+├── docs/DEPLOY.md
 ├── Makefile
 └── .env.example
 ```
@@ -375,6 +433,10 @@ All backend settings are environment variables prefixed `ADCAM_`. See
 | `ADCAM_RETENTION_HOURS` | `24` | Uploads, renders and job records are purged after this. |
 | `ADCAM_VIDEO_MAX_DURATION` | `1800` | Longer sources are rejected up front. |
 | `ADCAM_API_KEY` | unset | When set, every mutating endpoint requires `X-API-Key`. |
+| `ADCAM_DATABASE_URL` | SQLite in the storage root | `postgresql+psycopg://…` in production. |
+| `ADCAM_ALLOW_REGISTRATION` | `true` | `false` closes sign-ups; existing users still sign in. |
+| `ADCAM_COOKIE_SECURE` | `false` | `true` in production. Required if `SAMESITE=none`. |
+| `API_ORIGIN` | `http://127.0.0.1:8000` | Where Next proxies `/api`. Server-side, so no rebuild needed. |
 | `ADCAM_CORS_ORIGINS` | `localhost:3000` | Comma-separated. |
 
 Frontend: `NEXT_PUBLIC_API_URL` (and optionally `NEXT_PUBLIC_API_KEY`). These
@@ -388,6 +450,12 @@ Full OpenAPI docs at `/api/docs`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `POST` | `/api/v1/auth/register` | Create an account and start a session. |
+| `POST` | `/api/v1/auth/login` | Sign in. |
+| `POST` | `/api/v1/auth/logout` | Clear the session cookie. |
+| `GET` | `/api/v1/auth/me` | The signed-in user. |
+| `POST` | `/api/v1/auth/password` | Change password; ends all other sessions. |
+| `GET` | `/api/v1/auth/batches` | Your batch history. |
 | `GET` | `/api/v1/health` | Engine status: ffmpeg, Redis, worker mode, queue depth. |
 | `GET` | `/api/v1/presets` | Preset definitions, limits and supported formats. |
 | `POST` | `/api/v1/batches` | Multipart upload. `files[]` plus a JSON `options` field. Returns `202`. |
@@ -398,10 +466,19 @@ Full OpenAPI docs at `/api/docs`.
 | `POST` | `/api/v1/assets/{id}/cancel` | Revoke a queued or running render. |
 | `DELETE` | `/api/v1/batches/{id}` | Cancel outstanding work and delete every file. |
 
+Every batch endpoint requires a session cookie:
+
 ```bash
-curl -X POST http://localhost:8000/api/v1/batches \
+# Sign in once and keep the cookie
+curl -c jar.txt -X POST http://localhost:8000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"your-password"}'
+
+# Then submit work, optionally with an overlay image
+curl -b jar.txt -X POST http://localhost:8000/api/v1/batches \
   -F "files=@promo.mp4" \
-  -F 'options={"preset":"aggressive","variants":2}'
+  -F "overlay_image=@logo.png" \
+  -F 'options={"preset":"aggressive","variants":2,"overlay":{"enabled":true,"mode":"intro","intro_seconds":3}}'
 ```
 
 Download links are HMAC-signed and scoped to a single resource id, so a token
@@ -474,6 +551,22 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 ```
 
 ---
+
+## Deploying
+
+See **[docs/DEPLOY.md](docs/DEPLOY.md)** for the full walkthrough. The short
+version, on any server with Docker and a domain pointed at it:
+
+```bash
+cp .env.example .env     # set SITE_DOMAIN, ADCAM_SECRET_KEY, POSTGRES_PASSWORD
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Caddy terminates TLS and puts the web UI and the API on **one origin**, which
+keeps the session cookie first-party (so it stays `Secure` + `SameSite=lax`
+rather than the weaker cross-domain setting), lets the Next middleware guard
+`/app`, removes CORS entirely, and sends large uploads straight to FastAPI
+instead of through Node.
 
 ## Production notes
 

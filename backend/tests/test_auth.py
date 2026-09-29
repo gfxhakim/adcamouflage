@@ -7,6 +7,7 @@ to read, download or delete another user's assets.
 from __future__ import annotations
 
 import json
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +19,15 @@ from app.db import User, get_session_factory, init_db
 from app.main import app
 
 from .conftest import requires_ffmpeg
+
+# Tests must not assume an empty database: SQLite gets a fresh file per run,
+# but a real Postgres keeps its rows between runs. Namespacing the addresses
+# makes every test independent of what is already stored.
+RUN_ID = uuid.uuid4().hex[:12]
+
+
+def address(name: str) -> str:
+    return f"{name}-{RUN_ID}@example.com"
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -80,30 +90,31 @@ def test_malformed_hash_is_rejected_not_raised():
 
 
 def test_register_signs_the_user_in(client):
-    response = _register(client, "alice@example.com")
+    response = _register(client, address("alice"))
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["email"] == "alice@example.com"
+    assert body["email"] == address("alice")
     assert "password" not in json.dumps(body)
 
     assert client.cookies.get(settings.cookie_name)
-    assert client.get("/api/v1/auth/me").json()["email"] == "alice@example.com"
+    assert client.get("/api/v1/auth/me").json()["email"] == address("alice")
 
 
 def test_email_is_stored_lowercase_and_login_is_case_insensitive(client):
-    assert _register(client, "MixedCase@Example.com").status_code == 201
-    assert client.get("/api/v1/auth/me").json()["email"] == "mixedcase@example.com"
+    lower = address("mixedcase")
+    assert _register(client, lower.upper()).status_code == 201
+    assert client.get("/api/v1/auth/me").json()["email"] == lower
 
     fresh = TestClient(app)
     assert fresh.post(
         "/api/v1/auth/login",
-        json={"email": "MIXEDCASE@EXAMPLE.COM", "password": "correct-horse-battery"},
+        json={"email": lower.upper(), "password": "correct-horse-battery"},
     ).status_code == 200
 
 
 def test_duplicate_email_is_rejected(client):
-    assert _register(client, "dupe@example.com").status_code == 201
-    assert _register(TestClient(app), "dupe@example.com").status_code == 409
+    assert _register(client, address("dupe")).status_code == 201
+    assert _register(TestClient(app), address("dupe")).status_code == 409
 
 
 @pytest.mark.parametrize("email", ["", "nope", "a@b", "no-at-sign.com", "spaces @x.com"])
@@ -114,7 +125,7 @@ def test_invalid_emails_are_rejected(client, email):
 
 
 def test_short_password_is_rejected(client):
-    response = client.post("/api/v1/auth/register", json={"email": "short@example.com", "password": "abc"})
+    response = client.post("/api/v1/auth/register", json={"email": address("short"), "password": "abc"})
     assert response.status_code == 422
     assert str(settings.min_password_length) in response.json()["detail"]
 
@@ -123,19 +134,19 @@ def test_overlong_password_is_rejected(client):
     """bcrypt truncates past 72 bytes, which would make long passwords collide."""
 
     response = client.post(
-        "/api/v1/auth/register", json={"email": "long@example.com", "password": "x" * 200}
+        "/api/v1/auth/register", json={"email": address("long"), "password": "x" * 200}
     )
     assert response.status_code == 422
 
 
 def test_wrong_password_and_unknown_email_give_the_same_answer(client):
-    assert _register(client, "real@example.com").status_code == 201
+    assert _register(client, address("real")).status_code == 201
 
     wrong = TestClient(app).post(
-        "/api/v1/auth/login", json={"email": "real@example.com", "password": "not-the-password"}
+        "/api/v1/auth/login", json={"email": address("real"), "password": "not-the-password"}
     )
     missing = TestClient(app).post(
-        "/api/v1/auth/login", json={"email": "ghost@example.com", "password": "not-the-password"}
+        "/api/v1/auth/login", json={"email": address("ghost"), "password": "not-the-password"}
     )
     assert wrong.status_code == missing.status_code == 401
     # Identical wording, so the response cannot be used to enumerate accounts.
@@ -144,11 +155,11 @@ def test_wrong_password_and_unknown_email_give_the_same_answer(client):
 
 def test_repeated_failures_are_throttled():
     fresh = TestClient(app)
-    fresh.post("/api/v1/auth/register", json={"email": "brute@example.com", "password": "correct-horse-battery"})
+    fresh.post("/api/v1/auth/register", json={"email": address("brute"), "password": "correct-horse-battery"})
 
     attacker = TestClient(app)
     statuses = [
-        attacker.post("/api/v1/auth/login", json={"email": "brute@example.com", "password": f"guess{i}"}).status_code
+        attacker.post("/api/v1/auth/login", json={"email": address("brute"), "password": f"guess{i}"}).status_code
         for i in range(12)
     ]
     assert 429 in statuses, statuses
@@ -157,7 +168,7 @@ def test_repeated_failures_are_throttled():
 
 
 def test_logout_clears_the_session(client):
-    assert _register(client, "bye@example.com").status_code == 201
+    assert _register(client, address("bye")).status_code == 201
     assert client.get("/api/v1/auth/me").status_code == 200
 
     assert client.post("/api/v1/auth/logout").status_code == 204
@@ -169,14 +180,14 @@ def test_me_requires_a_session():
 
 
 def test_tampered_cookie_is_rejected(client):
-    assert _register(client, "tamper@example.com").status_code == 201
+    assert _register(client, address("tamper")).status_code == 201
     token = client.cookies.get(settings.cookie_name)
     client.cookies.set(settings.cookie_name, token[:-3] + "aaa")
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
 def test_password_change_invalidates_other_sessions(client):
-    email = "rotate@example.com"
+    email = address("rotate")
     assert _register(client, email).status_code == 201
 
     # A second device signed in with the same password.
@@ -195,7 +206,7 @@ def test_password_change_invalidates_other_sessions(client):
 
 
 def test_password_change_requires_the_current_password(client):
-    assert _register(client, "guard@example.com").status_code == 201
+    assert _register(client, address("guard")).status_code == 201
     assert client.post(
         "/api/v1/auth/password",
         json={"current_password": "wrong", "new_password": "another-long-secret"},
@@ -203,7 +214,7 @@ def test_password_change_requires_the_current_password(client):
 
 
 def test_deactivated_account_cannot_use_its_session(client):
-    email = "disabled@example.com"
+    email = address("disabled")
     assert _register(client, email).status_code == 201
 
     with get_session_factory()() as session:
@@ -228,8 +239,8 @@ def test_batch_endpoints_require_a_session(sample_image):
 
 
 def test_a_user_cannot_read_another_users_batch(sample_image):
-    owner = _fresh_client("owner@example.com")
-    intruder = _fresh_client("intruder@example.com")
+    owner = _fresh_client(address("owner"))
+    intruder = _fresh_client(address("intruder"))
 
     created = owner.post(
         "/api/v1/batches", files={"files": ("mine.jpg", sample_image.read_bytes(), "image/jpeg")}
@@ -251,8 +262,8 @@ def test_a_user_cannot_read_another_users_batch(sample_image):
 def test_a_valid_download_token_does_not_bypass_ownership(sample_image):
     import time
 
-    owner = _fresh_client("dl-owner@example.com")
-    intruder = _fresh_client("dl-intruder@example.com")
+    owner = _fresh_client(address("dl-owner"))
+    intruder = _fresh_client(address("dl-intruder"))
 
     created = owner.post(
         "/api/v1/batches", files={"files": ("secret.jpg", sample_image.read_bytes(), "image/jpeg")}
@@ -277,8 +288,8 @@ def test_a_valid_download_token_does_not_bypass_ownership(sample_image):
 
 
 def test_batch_history_lists_only_your_own(sample_image):
-    owner = _fresh_client("hist@example.com")
-    stranger = _fresh_client("hist-other@example.com")
+    owner = _fresh_client(address("hist"))
+    stranger = _fresh_client(address("hist-other"))
 
     created = owner.post(
         "/api/v1/batches", files={"files": ("h.jpg", sample_image.read_bytes(), "image/jpeg")}
