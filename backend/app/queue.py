@@ -80,6 +80,31 @@ def _run_guarded(asset_id: str) -> None:
         _pending.pop(asset_id, None)
 
 
+def shutdown_inline_workers(wait: bool = True, timeout: float = 60.0) -> None:
+    """Drain the inline thread pool.
+
+    Tests call this before removing the storage root, so a render still in
+    flight cannot fail on a directory that has just been deleted.
+    """
+
+    global _executor
+    if _executor is None:
+        return
+    if wait:
+        deadline = __import__("time").monotonic() + timeout
+        for future in list(_pending.values()):
+            remaining = deadline - __import__("time").monotonic()
+            if remaining <= 0:
+                break
+            try:
+                future.result(timeout=remaining)
+            except Exception:  # noqa: BLE001 - we only care that it finished
+                pass
+    _executor.shutdown(wait=wait, cancel_futures=not wait)
+    _executor = None
+    _pending.clear()
+
+
 def cancel_asset(asset_id: str) -> bool:
     """Best-effort cancellation of a queued job."""
 

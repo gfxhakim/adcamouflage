@@ -19,7 +19,14 @@ from .conftest import requires_ffmpeg
 
 @pytest.fixture(scope="module")
 def client():
+    """A signed-in client. Every batch endpoint now requires a session."""
+
     with TestClient(app) as test_client:
+        credentials = {"email": "api-tests@example.com", "password": "correct-horse-battery"}
+        response = test_client.post("/api/v1/auth/register", json=credentials)
+        if response.status_code == 409:
+            response = test_client.post("/api/v1/auth/login", json=credentials)
+        assert response.status_code in (200, 201), response.text
         yield test_client
 
 
@@ -150,6 +157,9 @@ def test_download_requires_a_valid_token(client, sample_image):
     # A token signed for a different resource must not unlock this one.
     other = sign_download("asset_someone_else")
     assert client.get(f"/api/v1/assets/{asset_id}/download?token={other}").status_code == 403
+    # And a valid token is not a substitute for being signed in.
+    valid = sign_download(asset_id)
+    assert TestClient(app).get(f"/api/v1/assets/{asset_id}/download?token={valid}").status_code == 401
 
 
 def test_expired_token_is_refused(client, sample_image):
@@ -164,6 +174,10 @@ def test_expired_token_is_refused(client, sample_image):
 def test_unknown_ids_return_404(client):
     assert client.get("/api/v1/batches/batch_missing").status_code == 404
     assert client.get("/api/v1/assets/asset_missing").status_code == 404
+
+
+def test_anonymous_callers_are_turned_away():
+    assert TestClient(app).get("/api/v1/batches/batch_missing").status_code == 401
 
 
 def test_delete_batch_removes_files(client, sample_image):

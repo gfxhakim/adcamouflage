@@ -32,6 +32,11 @@ requires_ffmpeg = pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg is n
 def _storage_root():
     settings.ensure_dirs()
     yield
+    # Let any in-flight inline render finish before the directory disappears,
+    # otherwise teardown races the worker and prints spurious tracebacks.
+    from app.queue import shutdown_inline_workers
+
+    shutdown_inline_workers(wait=True, timeout=90)
     shutil.rmtree(_TMP_ROOT, ignore_errors=True)
 
 

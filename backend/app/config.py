@@ -63,6 +63,21 @@ class Settings(BaseSettings):
         ]
     )
 
+    # --- database & accounts ---------------------------------------------
+    # Defaults to SQLite inside the storage root, which needs no setup. Set a
+    # postgresql+psycopg:// URL in production.
+    database_url: str | None = None
+    allow_registration: bool = True
+    min_password_length: int = 10
+    session_ttl_hours: int = 24 * 14
+
+    # Session cookie. When the API and the web UI sit on different domains the
+    # cookie must be SameSite=None and Secure, or the browser drops it.
+    cookie_name: str = "adcam_session"
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+    cookie_domain: str | None = None
+
     # --- media engine -----------------------------------------------------
     ffmpeg_binary: str = "ffmpeg"
     ffprobe_binary: str = "ffprobe"
@@ -119,6 +134,17 @@ class Settings(BaseSettings):
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def resolved_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+        return f"sqlite:///{(self.storage_root / 'adcamouflage.db').as_posix()}"
+
+    @property
+    def cookie_samesite_value(self) -> str:
+        value = (self.cookie_samesite or "lax").lower()
+        return value if value in {"lax", "strict", "none"} else "lax"
 
     def ensure_dirs(self) -> None:
         for path in (self.uploads_dir, self.outputs_dir, self.work_dir):

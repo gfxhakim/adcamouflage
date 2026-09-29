@@ -16,8 +16,14 @@ from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
+from sqlalchemy.orm import Session
+
 from . import __version__
+from .accounts import current_user
+from .auth_routes import record_batch
+from .auth_routes import router as auth_router
 from .config import settings
+from .db import User, get_db, init_db
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .queue import cancel_asset, enqueue_asset, queue_depth, worker_mode
@@ -50,6 +56,7 @@ CHUNK_SIZE = 1024 * 1024
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.ensure_dirs()
+    init_db()
     store = get_store()
     if not ffmpeg_available():
         logger.error(
@@ -77,10 +84,14 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+app.include_router(auth_router)
+
+# Credentials must be allowed for the session cookie to reach the API from
+# the browser; with credentials on, the origin list cannot be a wildcard.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
@@ -191,6 +202,8 @@ async def _persist_upload(upload: UploadFile, destination: Path) -> int:
 async def create_batch(
     files: Annotated[list[UploadFile], File(description="One or more media assets to camouflage.")],
     options: Annotated[str | None, Form(description="JSON-encoded MutationOptions.")] = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
 ) -> BatchCreated:
     if not files:
         raise HTTPException(status_code=400, detail="Upload at least one asset.")
@@ -206,7 +219,7 @@ async def create_batch(
         raise HTTPException(status_code=422, detail=f"Invalid options payload: {exc}") from exc
 
     resolved = parsed.resolved()
-    batch = Batch(options=resolved)
+    batch = Batch(options=resolved, user_id=user.id)
 
     accepted: list[AssetJob] = []
     rejected: list[UploadRejection] = []
@@ -261,6 +274,7 @@ async def create_batch(
     batch.asset_ids = [job.id for job in accepted]
     store.save_batch(batch)
     store.attach_assets(batch.id, batch.asset_ids)
+    record_batch(db, batch.id, user.id, len(accepted), resolved)
 
     for job in accepted:
         task_id = await asyncio.to_thread(enqueue_asset, job.id)
@@ -270,6 +284,19 @@ async def create_batch(
 
     logger.info("batch %s accepted %s assets (%s rejected)", batch.id, len(accepted), len(rejected))
     return BatchCreated(batch_id=batch.id, accepted=accepted, rejected=rejected, options=resolved)
+
+
+def _owned_batch(batch_id: str, user: User) -> Batch:
+    """Fetch a batch, or 404 if it is missing or belongs to someone else.
+
+    Returning 404 rather than 403 keeps batch ids from being probed to learn
+    which ones exist.
+    """
+
+    batch = get_store().get_batch(batch_id)
+    if batch is None or batch.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Batch not found or expired.")
+    return batch
 
 
 def _summarise(batch: Batch, assets: list[AssetJob]) -> BatchStatus:
@@ -308,26 +335,29 @@ def _summarise(batch: Batch, assets: list[AssetJob]) -> BatchStatus:
 
 
 @app.get("/api/v1/batches/{batch_id}", response_model=BatchStatus, tags=["batches"])
-async def get_batch(batch_id: str) -> BatchStatus:
+async def get_batch(batch_id: str, user: User = Depends(current_user)) -> BatchStatus:
     store = get_store()
-    batch = store.get_batch(batch_id)
-    if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found or expired.")
+    batch = _owned_batch(batch_id, user)
     asset_ids = batch.asset_ids or store.list_asset_ids(batch_id)
     assets = await asyncio.to_thread(store.get_assets, asset_ids)
     return _summarise(batch, assets)
 
 
 @app.get("/api/v1/assets/{asset_id}", response_model=AssetJob, tags=["assets"])
-async def get_asset(asset_id: str) -> AssetJob:
+async def get_asset(asset_id: str, user: User = Depends(current_user)) -> AssetJob:
     asset = get_store().get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found or expired.")
+    _owned_batch(asset.batch_id, user)
     return asset
 
 
 @app.post("/api/v1/assets/{asset_id}/cancel", tags=["assets"], dependencies=[Depends(require_api_key)])
-async def cancel(asset_id: str) -> dict[str, str]:
+async def cancel(asset_id: str, user: User = Depends(current_user)) -> dict[str, str]:
+    asset = get_store().get_asset(asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Asset not found or expired.")
+    _owned_batch(asset.batch_id, user)
     if not await asyncio.to_thread(cancel_asset, asset_id):
         raise HTTPException(status_code=409, detail="This asset has already finished or does not exist.")
     return {"asset_id": asset_id, "status": JobStatus.CANCELLED.value}
@@ -346,6 +376,7 @@ def _output_filename(asset: AssetJob) -> str:
 async def download_asset(
     asset_id: str,
     token: Annotated[str, Query(description="Signed download token.")],
+    user: User = Depends(current_user),
 ) -> FileResponse:
     if not verify_download(token, asset_id):
         raise HTTPException(status_code=403, detail="This download link is invalid or has expired.")
@@ -353,6 +384,7 @@ async def download_asset(
     asset = get_store().get_asset(asset_id)
     if asset is None or asset.status is not JobStatus.COMPLETED or not asset.output_filename:
         raise HTTPException(status_code=404, detail="No mutated output is available for this asset.")
+    _owned_batch(asset.batch_id, user)
 
     path = resolve_within(settings.outputs_dir, asset.output_filename)
     if not path.exists():
@@ -413,14 +445,13 @@ async def download_archive(
     batch_id: str,
     token: Annotated[str, Query(description="Signed download token.")],
     background: BackgroundTasks = None,  # type: ignore[assignment]
+    user: User = Depends(current_user),
 ) -> FileResponse:
     if not verify_download(token, batch_id):
         raise HTTPException(status_code=403, detail="This download link is invalid or has expired.")
 
     store = get_store()
-    batch = store.get_batch(batch_id)
-    if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found or expired.")
+    batch = _owned_batch(batch_id, user)
 
     assets = await asyncio.to_thread(store.get_assets, batch.asset_ids or store.list_asset_ids(batch_id))
     if not any(a.status is JobStatus.COMPLETED for a in assets):
@@ -441,11 +472,9 @@ async def download_archive(
 
 
 @app.delete("/api/v1/batches/{batch_id}", tags=["batches"], dependencies=[Depends(require_api_key)])
-async def delete_batch(batch_id: str) -> dict[str, Any]:
+async def delete_batch(batch_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
     store = get_store()
-    batch = store.get_batch(batch_id)
-    if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found or expired.")
+    batch = _owned_batch(batch_id, user)
 
     asset_ids = batch.asset_ids or store.list_asset_ids(batch_id)
     assets = await asyncio.to_thread(store.get_assets, asset_ids)

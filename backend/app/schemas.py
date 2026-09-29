@@ -189,6 +189,8 @@ class AssetJob(BaseModel):
 
 class Batch(BaseModel):
     id: str = Field(default_factory=lambda: new_id("batch"))
+    # Owner of the batch. Every read path checks this before returning data.
+    user_id: int | None = None
     options: MutationOptions
     asset_ids: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
