@@ -137,9 +137,19 @@ class Settings(BaseSettings):
 
     @property
     def resolved_database_url(self) -> str:
-        if self.database_url:
-            return self.database_url
-        return f"sqlite:///{(self.storage_root / 'adcamouflage.db').as_posix()}"
+        if not self.database_url:
+            return f"sqlite:///{(self.storage_root / 'adcamouflage.db').as_posix()}"
+
+        url = self.database_url.strip()
+        # Managed providers (Railway, Heroku, Render) hand out bare
+        # postgresql:// or the legacy postgres:// form. SQLAlchemy then reaches
+        # for psycopg2, which is not installed - this project uses psycopg 3.
+        # Naming the driver here turns a confusing ModuleNotFoundError at boot
+        # into a URL that simply works.
+        for prefix in ("postgresql://", "postgres://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix) :]
+        return url
 
     @property
     def cookie_samesite_value(self) -> str:

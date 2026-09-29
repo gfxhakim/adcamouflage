@@ -98,3 +98,28 @@ def test_env_example_is_loadable(env, monkeypatch):
     settings = Settings()
     assert settings.cors_origins
     assert settings.max_upload_mb > 0
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Railway, Render and Heroku hand out these forms; SQLAlchemy would
+        # otherwise reach for psycopg2, which this project does not install.
+        ("postgresql://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
+        ("postgres://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
+        # An explicit driver is left alone.
+        ("postgresql+psycopg://u:p@host:5432/db", "postgresql+psycopg://u:p@host:5432/db"),
+        ("sqlite:////tmp/x.db", "sqlite:////tmp/x.db"),
+    ],
+)
+def test_managed_provider_database_urls_get_the_right_driver(env, raw, expected):
+    assert env(ADCAM_DATABASE_URL=raw).resolved_database_url == expected
+
+
+def test_database_url_defaults_to_sqlite_in_the_storage_root(env, monkeypatch, tmp_path):
+    # The suite may be running against a real Postgres, so clear the ambient
+    # value before asserting what the default is.
+    monkeypatch.delenv("ADCAM_DATABASE_URL", raising=False)
+    settings = env(ADCAM_STORAGE_ROOT=str(tmp_path))
+    assert settings.resolved_database_url.startswith("sqlite:///")
+    assert "adcamouflage.db" in settings.resolved_database_url

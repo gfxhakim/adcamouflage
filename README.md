@@ -554,8 +554,14 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 
 ## Deploying
 
-See **[docs/DEPLOY.md](docs/DEPLOY.md)** for the full walkthrough. The short
-version, on any server with Docker and a domain pointed at it:
+Two supported targets:
+
+- **[Railway](docs/RAILWAY.md)** — two services from this repo plus managed
+  Postgres and Redis. No server to run.
+- **[Any VPS with Docker](docs/DEPLOY.md)** — `docker-compose.prod.yml` with
+  Caddy for automatic TLS. Cheaper at sustained load.
+
+The VPS short version, with a domain pointed at the box:
 
 ```bash
 cp .env.example .env     # set SITE_DOMAIN, ADCAM_SECRET_KEY, POSTGRES_PASSWORD
