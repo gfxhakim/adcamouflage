@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def utcnow() -> datetime:
@@ -49,6 +49,74 @@ class Preset(str, Enum):
     CUSTOM = "custom"
 
 
+class OverlayMode(str, Enum):
+    """When the overlay image is visible."""
+
+    ALWAYS = "always"      # on every frame of the video
+    INTRO = "intro"        # only at the start, for `intro_seconds`
+    RANGES = "ranges"      # only on the frame ranges the user picked
+
+
+class OverlayPosition(str, Enum):
+    TOP_LEFT = "top_left"
+    TOP_CENTER = "top_center"
+    TOP_RIGHT = "top_right"
+    CENTER_LEFT = "center_left"
+    CENTER = "center"
+    CENTER_RIGHT = "center_right"
+    BOTTOM_LEFT = "bottom_left"
+    BOTTOM_CENTER = "bottom_center"
+    BOTTOM_RIGHT = "bottom_right"
+    CUSTOM = "custom"      # offset_x / offset_y are absolute pixel coordinates
+
+
+class FrameRange(BaseModel):
+    """An inclusive range of source frames."""
+
+    start_frame: int = Field(ge=0)
+    end_frame: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "FrameRange":
+        if self.end_frame < self.start_frame:
+            raise ValueError("end_frame must not be before start_frame")
+        return self
+
+
+class OverlaySettings(BaseModel):
+    """Composite a user-supplied image onto the asset."""
+
+    enabled: bool = False
+    mode: OverlayMode = OverlayMode.ALWAYS
+    position: OverlayPosition = OverlayPosition.BOTTOM_RIGHT
+
+    # Margin from the chosen edge, or absolute coordinates when position is
+    # CUSTOM. Negative values are allowed so an overlay can sit part-way off.
+    offset_x: int = Field(default=24, ge=-10000, le=10000)
+    offset_y: int = Field(default=24, ge=-10000, le=10000)
+
+    # Overlay width as a percentage of the output video width.
+    scale_percent: float = Field(default=18.0, gt=0, le=100)
+    opacity: float = Field(default=1.0, ge=0.05, le=1.0)
+
+    # Used when mode is INTRO.
+    intro_seconds: float = Field(default=3.0, gt=0, le=600)
+
+    # Used when mode is RANGES. Frame numbers refer to the *source* video; the
+    # engine converts them to timestamps, so they stay correct even though the
+    # output frame rate is deliberately changed.
+    ranges: list[FrameRange] = Field(default_factory=list, max_length=50)
+
+    # Set by the API once the overlay image has been stored.
+    image_filename: str | None = None
+
+    @model_validator(mode="after")
+    def _ranges_required(self) -> "OverlaySettings":
+        if self.enabled and self.mode is OverlayMode.RANGES and not self.ranges:
+            raise ValueError("pick at least one frame range, or choose another overlay mode")
+        return self
+
+
 class MutationOptions(BaseModel):
     """User-facing knobs for a single batch."""
 
@@ -77,6 +145,9 @@ class MutationOptions(BaseModel):
 
     # Number of distinct mutated copies to emit per uploaded asset.
     variants: int = Field(default=1, ge=1, le=5)
+
+    # Optional image composited onto the asset.
+    overlay: OverlaySettings = Field(default_factory=OverlaySettings)
 
     @field_validator("output_format")
     @classmethod

@@ -202,6 +202,10 @@ async def _persist_upload(upload: UploadFile, destination: Path) -> int:
 async def create_batch(
     files: Annotated[list[UploadFile], File(description="One or more media assets to camouflage.")],
     options: Annotated[str | None, Form(description="JSON-encoded MutationOptions.")] = None,
+    overlay_image: Annotated[
+        UploadFile | None,
+        File(description="Optional image composited onto every asset in the batch."),
+    ] = None,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> BatchCreated:
@@ -219,6 +223,31 @@ async def create_batch(
         raise HTTPException(status_code=422, detail=f"Invalid options payload: {exc}") from exc
 
     resolved = parsed.resolved()
+
+    if overlay_image is not None and overlay_image.filename:
+        overlay_name = sanitize_filename(overlay_image.filename)
+        if classify(overlay_name, overlay_image.content_type) is not AssetKind.IMAGE:
+            raise HTTPException(
+                status_code=422,
+                detail="The overlay must be an image (PNG, JPG or WEBP). PNG keeps transparency.",
+            )
+        stored_overlay = f"overlay_{new_id('ov')}{Path(overlay_name).suffix.lower()}"
+        destination = resolve_within(settings.uploads_dir, stored_overlay)
+        try:
+            written = await _persist_upload(overlay_image, destination)
+        except StorageError as exc:
+            raise HTTPException(status_code=422, detail=f"Overlay image rejected: {exc}") from exc
+        if written == 0:
+            destination.unlink(missing_ok=True)
+            raise HTTPException(status_code=422, detail="The overlay image was empty.")
+        resolved.overlay.image_filename = stored_overlay
+        resolved.overlay.enabled = True
+    elif resolved.overlay.enabled and not resolved.overlay.image_filename:
+        raise HTTPException(
+            status_code=422,
+            detail="Overlay is switched on but no overlay image was attached.",
+        )
+
     batch = Batch(options=resolved, user_id=user.id)
 
     accepted: list[AssetJob] = []

@@ -32,7 +32,7 @@ from PIL import Image
 
 from .config import settings
 from .ffmpeg import MediaError, MediaInfo, open_ffmpeg_writer, probe, run_ffmpeg
-from .schemas import AssetKind, MutationOptions
+from .schemas import AssetKind, MutationOptions, OverlayMode, OverlaySettings
 from .scrub import bitstream_filter_args, scrub_container
 
 logger = logging.getLogger(__name__)
@@ -273,22 +273,42 @@ def build_plan(
 
 
 def build_video_filters(plan: MutationPlan, info: MediaInfo) -> list[str]:
-    filters: list[str] = []
+    """The whole picture chain, for the common case with no overlay."""
+
+    pre, post = build_video_filter_stages(plan, info)
+    return pre + post
+
+
+def build_video_filter_stages(
+    plan: MutationPlan, info: MediaInfo
+) -> tuple[list[str], list[str]]:
+    """Split the picture chain either side of the overlay.
+
+    Geometry and grading run first, so an overlay is positioned against the
+    final, already-cropped frame. Grain and the frame-rate change run after, so
+    the overlay picks up the same per-frame noise as the rest of the picture -
+    otherwise it would sit there as a pristine, unchanging region and become a
+    fingerprint of its own across every variant.
+    """
+
+    pre: list[str] = []
+    post: list[str] = []
     video = info.video
+
     if video and plan.crop_x and plan.crop_y and plan.out_width > 0 and plan.out_height > 0:
         crop_w = _even(video.width - 2 * plan.crop_x)
         crop_h = _even(video.height - 2 * plan.crop_y)
-        filters.append(f"crop={crop_w}:{crop_h}:{plan.crop_x}:{plan.crop_y}")
+        pre.append(f"crop={crop_w}:{crop_h}:{plan.crop_x}:{plan.crop_y}")
         if (crop_w, crop_h) != (plan.out_width, plan.out_height):
-            filters.append(f"scale={plan.out_width}:{plan.out_height}:flags=lanczos")
+            pre.append(f"scale={plan.out_width}:{plan.out_height}:flags=lanczos")
     elif plan.out_width and plan.out_height and video and (plan.out_width, plan.out_height) != (video.width, video.height):
-        filters.append(f"scale={plan.out_width}:{plan.out_height}:flags=lanczos")
+        pre.append(f"scale={plan.out_width}:{plan.out_height}:flags=lanczos")
 
     if plan.mirror:
-        filters.append("hflip")
+        pre.append("hflip")
 
     if plan.brightness or plan.contrast != 1.0 or plan.saturation != 1.0 or plan.gamma != 1.0:
-        filters.append(
+        pre.append(
             "eq="
             f"brightness={plan.brightness}:"
             f"contrast={plan.contrast}:"
@@ -297,22 +317,230 @@ def build_video_filters(plan: MutationPlan, info: MediaInfo) -> list[str]:
         )
 
     if plan.hue_degrees:
-        filters.append(f"hue=h={plan.hue_degrees}")
+        pre.append(f"hue=h={plan.hue_degrees}")
 
     if plan.sharpen:
-        filters.append(f"unsharp=3:3:{plan.sharpen}:3:3:0.0")
+        pre.append(f"unsharp=3:3:{plan.sharpen}:3:3:0.0")
 
     if plan.noise_strength:
         # allf=t+u => temporally varying, uniformly distributed noise, so the
         # grain pattern differs on every single frame.
-        filters.append(f"noise=alls={plan.noise_strength}:allf=t+u")
+        post.append(f"noise=alls={plan.noise_strength}:allf=t+u")
 
     if plan.fps:
-        filters.append(f"fps=fps={_fps_expression(plan.fps)}")
+        post.append(f"fps=fps={_fps_expression(plan.fps)}")
 
-    filters.append("setsar=1")
-    filters.append("format=yuv420p")
-    return filters
+    post.append("setsar=1")
+    post.append("format=yuv420p")
+    return pre, post
+
+
+# --------------------------------------------------------------------------
+# image overlay
+# --------------------------------------------------------------------------
+
+# x/y expressions for each anchor. W,H are the main frame; w,h the overlay;
+# OX,OY the user's margins, substituted in below.
+_POSITION_EXPRESSIONS: dict[str, tuple[str, str]] = {
+    "top_left": ("{ox}", "{oy}"),
+    "top_center": ("(W-w)/2", "{oy}"),
+    "top_right": ("W-w-({ox})", "{oy}"),
+    "center_left": ("{ox}", "(H-h)/2"),
+    "center": ("(W-w)/2", "(H-h)/2"),
+    "center_right": ("W-w-({ox})", "(H-h)/2"),
+    "bottom_left": ("{ox}", "H-h-({oy})"),
+    "bottom_center": ("(W-w)/2", "H-h-({oy})"),
+    "bottom_right": ("W-w-({ox})", "H-h-({oy})"),
+    "custom": ("{ox}", "{oy}"),
+}
+
+
+def overlay_position_expressions(overlay: OverlaySettings) -> tuple[str, str]:
+    x_template, y_template = _POSITION_EXPRESSIONS.get(
+        overlay.position.value, _POSITION_EXPRESSIONS["bottom_right"]
+    )
+    return (
+        x_template.format(ox=overlay.offset_x, oy=overlay.offset_y),
+        y_template.format(ox=overlay.offset_x, oy=overlay.offset_y),
+    )
+
+
+def overlay_enable_expression(
+    overlay: OverlaySettings, source_fps: float, duration: float, trim_head: float = 0.0
+) -> str | None:
+    """When the overlay is visible, as an ffmpeg timeline expression.
+
+    Frame ranges are converted to timestamps using the *source* frame rate.
+    Using `t` rather than `n` keeps the user's frame numbers meaningful even
+    though the mutation deliberately changes the output frame rate, which would
+    otherwise renumber every frame.
+
+    ``trim_head`` is subtracted because the temporal trim seeks into the source,
+    so output time zero is source time ``trim_head``. Without this the overlay
+    lands a few frames early - invisible for a whole-clip watermark, but wrong
+    when someone has picked exact frames.
+    """
+
+    if overlay.mode is OverlayMode.ALWAYS:
+        return None
+
+    if overlay.mode is OverlayMode.INTRO:
+        # An intro is defined from the start of the delivered clip, so it is
+        # not shifted by the trim.
+        end = overlay.intro_seconds
+        if duration > 0:
+            end = min(end, duration)
+        return f"between(t,0,{end:.3f})"
+
+    fps = source_fps if source_fps and source_fps > 0 else 30.0
+    windows: list[str] = []
+    for frame_range in overlay.ranges:
+        start = frame_range.start_frame / fps - trim_head
+        # end_frame is inclusive, so the window runs to the end of that frame.
+        end = (frame_range.end_frame + 1) / fps - trim_head
+        start = max(start, 0.0)
+        if duration > 0:
+            if start >= duration:
+                continue
+            end = min(end, duration)
+        if end <= start:
+            continue
+        windows.append(f"between(t,{start:.3f},{end:.3f})")
+
+    if not windows:
+        # Every requested range fell outside the clip; show nothing rather than
+        # silently falling back to "always".
+        return "0"
+    # In ffmpeg's expression language non-zero is true, so summing the windows
+    # is a logical OR across them.
+    return "+".join(windows)
+
+
+def build_overlay_filtergraph(
+    overlay: OverlaySettings,
+    plan: MutationPlan,
+    info: MediaInfo,
+    *,
+    pre: list[str],
+    post: list[str],
+    duration: float,
+    overlay_input: int,
+    trim_head: float = 0.0,
+) -> str:
+    """The complete -filter_complex graph for a render that has an overlay."""
+
+    source_fps = info.video.fps if info.video else 30.0
+    width = plan.out_width or (info.video.width if info.video else 0)
+
+    pre_chain = ",".join(pre) if pre else "null"
+    post_chain = ",".join(post) if post else "null"
+
+    # Width as a share of the output frame; -1 keeps the aspect ratio, and
+    # rounding to an even width avoids chroma subsampling artefacts.
+    overlay_width = max(2, int(round(width * overlay.scale_percent / 100.0))) if width else 120
+    if overlay_width % 2:
+        overlay_width += 1
+
+    overlay_chain = [
+        f"scale={overlay_width}:-1:flags=lanczos",
+        # rgba first, so an opacity below 1 has an alpha channel to act on and
+        # a logo with its own transparency is preserved.
+        "format=rgba",
+    ]
+    if overlay.opacity < 1.0:
+        overlay_chain.append(f"colorchannelmixer=aa={overlay.opacity:.3f}")
+
+    x_expression, y_expression = overlay_position_expressions(overlay)
+    overlay_args = [f"x={x_expression}", f"y={y_expression}"]
+
+    enable = overlay_enable_expression(overlay, source_fps, duration, trim_head)
+    if enable is not None:
+        overlay_args.append(f"enable='{enable}'")
+    # Hold the last overlay frame rather than ending the output early; the
+    # overlay is a still, so it has exactly one frame.
+    overlay_args.append("eof_action=repeat")
+
+    return (
+        f"[0:v]{pre_chain}[base];"
+        f"[{overlay_input}:v]{','.join(overlay_chain)}[ovl];"
+        f"[base][ovl]overlay={':'.join(overlay_args)}[composited];"
+        f"[composited]{post_chain}[vout]"
+    )
+
+
+def composite_overlay_on_image(
+    base_rgb: np.ndarray, overlay_path: Path, overlay: OverlaySettings
+) -> np.ndarray:
+    """Alpha-composite the overlay onto a still, honouring position and opacity.
+
+    Frame-range and intro modes have no meaning for a still, so the overlay is
+    simply drawn; position, scale and opacity all behave as they do for video.
+    """
+
+    with Image.open(overlay_path) as handle:
+        badge = handle.convert("RGBA")
+
+    height, width = base_rgb.shape[:2]
+    target_width = max(1, int(round(width * overlay.scale_percent / 100.0)))
+    target_height = max(1, int(round(badge.height * target_width / badge.width)))
+    badge = badge.resize((target_width, target_height), Image.LANCZOS)
+
+    if overlay.opacity < 1.0:
+        alpha = badge.getchannel("A").point(lambda value: int(value * overlay.opacity))
+        badge.putalpha(alpha)
+
+    x, y = _still_overlay_origin(
+        overlay, width, height, target_width, target_height
+    )
+
+    canvas = Image.fromarray(base_rgb).convert("RGBA")
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    layer.paste(badge, (x, y), badge)
+    return np.array(Image.alpha_composite(canvas, layer).convert("RGB"))
+
+
+def _still_overlay_origin(
+    overlay: OverlaySettings, width: int, height: int, badge_w: int, badge_h: int
+) -> tuple[int, int]:
+    """Top-left pixel for the overlay, matching the video anchor semantics."""
+
+    ox, oy = overlay.offset_x, overlay.offset_y
+    position = overlay.position.value
+
+    if position == "custom":
+        return ox, oy
+
+    if position.endswith("_left"):
+        x = ox
+    elif position.endswith("_right"):
+        x = width - badge_w - ox
+    else:
+        x = (width - badge_w) // 2
+
+    if position.startswith("top"):
+        y = oy
+    elif position.startswith("bottom"):
+        y = height - badge_h - oy
+    else:
+        y = (height - badge_h) // 2
+
+    return x, y
+
+
+def overlay_is_active(options: MutationOptions) -> bool:
+    return bool(options.overlay and options.overlay.enabled and options.overlay.image_filename)
+
+
+def resolve_overlay_image(options: MutationOptions) -> Path | None:
+    """Locate the stored overlay image, or None when there is not one."""
+
+    if not overlay_is_active(options):
+        return None
+    name = Path(options.overlay.image_filename or "").name
+    if not name:
+        return None
+    candidate = settings.uploads_dir / name
+    return candidate if candidate.exists() else None
 
 
 def _fps_expression(fps: float) -> str:
@@ -613,8 +841,9 @@ def mutate_video(
             render_source = scratch
             applied.append("opencv deep frame scramble")
 
-        video_filters = build_video_filters(plan, info)
+        pre_filters, post_filters = build_video_filter_stages(plan, info)
         audio_filters = build_audio_filters(plan, info)
+        overlay_path = resolve_overlay_image(options)
 
         effective_duration = max(info.duration - plan.trim_head - plan.trim_tail, 0.1)
         seek: list[str] = ["-ss", f"{plan.trim_head:.3f}"] if plan.trim_head else []
@@ -629,14 +858,35 @@ def mutate_video(
         if plan.trim_head or plan.trim_tail:
             args += ["-t", f"{effective_duration:.3f}"]
 
-        args += ["-map", "0:v:0"]
+        if overlay_path is not None:
+            # The overlay is a still image looped for the length of the clip.
+            overlay_input = 2 if take_audio_from_source else 1
+            args += ["-loop", "1", "-framerate", "25", "-i", str(overlay_path)]
+            graph = build_overlay_filtergraph(
+                options.overlay,
+                plan,
+                info,
+                pre=pre_filters,
+                post=post_filters,
+                duration=effective_duration,
+                overlay_input=overlay_input,
+                trim_head=plan.trim_head,
+            )
+            args += ["-filter_complex", graph, "-map", "[vout]"]
+            # -loop makes the overlay input infinite, so the output length has
+            # to come from the video rather than the longest input.
+            args += ["-shortest"]
+        else:
+            args += ["-map", "0:v:0"]
+            video_filters = pre_filters + post_filters
+            if video_filters:
+                args += ["-vf", ",".join(video_filters)]
+
         if take_audio_from_source:
             args += ["-map", "1:a:0?"]
         elif info.has_audio:
             args += ["-map", "0:a:0?"]
 
-        if video_filters:
-            args += ["-vf", ",".join(video_filters)]
         if audio_filters and info.has_audio:
             args += ["-af", ",".join(audio_filters)]
         elif not info.has_audio:
@@ -698,6 +948,18 @@ def mutate_video(
         applied.append(f"audio pitch shifted x{plan.pitch_ratio:.4f} (ASR desync)")
     if info.has_audio and not math.isclose(plan.tempo_ratio, 1.0, abs_tol=1e-4):
         applied.append(f"audio tempo x{plan.tempo_ratio:.4f}")
+    if overlay_path is not None:
+        overlay = options.overlay
+        if overlay.mode is OverlayMode.ALWAYS:
+            when = "every frame"
+        elif overlay.mode is OverlayMode.INTRO:
+            when = f"first {overlay.intro_seconds:g}s"
+        else:
+            when = f"{len(overlay.ranges)} frame range(s)"
+        applied.append(
+            f"image overlay at {overlay.position.value.replace('_', ' ')} "
+            f"({overlay.scale_percent:g}% width, {overlay.opacity:.0%} opacity) on {when}"
+        )
     if options.strip_metadata:
         applied.append("container metadata, chapters and encoder tags stripped")
         applied.append("encoder SEI and compressor signatures scrubbed")
@@ -799,6 +1061,14 @@ def mutate_image(
         hsv[..., 1] = np.clip(hsv[..., 1] * plan.saturation, 0, 255)
         working = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB)
         applied.append("hue and saturation drift")
+
+    overlay_path = resolve_overlay_image(options)
+    if overlay_path is not None:
+        working = composite_overlay_on_image(working, overlay_path, options.overlay)
+        applied.append(
+            f"image overlay at {options.overlay.position.value.replace('_', ' ')} "
+            f"({options.overlay.scale_percent:g}% width, {options.overlay.opacity:.0%} opacity)"
+        )
 
     if plan.sharpen:
         blurred = cv2.GaussianBlur(working, (0, 0), 1.1)
