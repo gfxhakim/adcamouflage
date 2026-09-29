@@ -1,16 +1,32 @@
 "use client";
 
 import clsx from "clsx";
-import { Activity, CircleAlert, Github, ShieldHalf, Waves } from "lucide-react";
+import { Activity, CircleAlert, LogOut, ShieldHalf, User as UserIcon, Waves } from "lucide-react";
+import { useState } from "react";
 
+import { signOut, type UserProfile } from "@/lib/auth";
 import type { HealthReport } from "@/lib/types";
 
 interface HeaderProps {
   health: HealthReport | null;
   healthError: string | null;
+  user?: UserProfile | null;
 }
 
-export function Header({ health, healthError }: HeaderProps) {
+export function Header({ health, healthError, user }: HeaderProps) {
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      // A full navigation lets the middleware see the cleared cookie.
+      window.location.assign("/");
+    }
+  };
+
   const online = Boolean(health) && !healthError;
   const degraded = health?.status === "degraded";
 
@@ -65,15 +81,28 @@ export function Header({ health, healthError }: HeaderProps) {
             {statusLabel}
           </span>
 
-          <a
-            href="https://github.com/gfxhakim/adcamouflage"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="btn-ghost hidden !px-2.5 sm:inline-flex"
-            aria-label="Open the project repository"
-          >
-            <Github className="h-4 w-4" aria-hidden />
-          </a>
+          {user ? (
+            <div className="flex items-center gap-2">
+              <span
+                className="chip hidden max-w-[180px] truncate lg:inline-flex"
+                title={user.email}
+              >
+                <UserIcon className="h-3.5 w-3.5 text-meta-500" aria-hidden />
+                {user.display_name || user.email}
+              </span>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="btn-ghost !px-2.5"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">{signingOut ? "Signing out…" : "Sign out"}</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </header>

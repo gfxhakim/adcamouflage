@@ -4,6 +4,38 @@ export type JobStatus = "queued" | "processing" | "completed" | "failed" | "canc
 
 export type PresetId = "stealth" | "balanced" | "aggressive" | "nuclear" | "custom";
 
+export type OverlayMode = "always" | "intro" | "ranges";
+
+export type OverlayPosition =
+  | "top_left"
+  | "top_center"
+  | "top_right"
+  | "center_left"
+  | "center"
+  | "center_right"
+  | "bottom_left"
+  | "bottom_center"
+  | "bottom_right"
+  | "custom";
+
+export interface FrameRange {
+  start_frame: number;
+  end_frame: number;
+}
+
+export interface OverlaySettings {
+  enabled: boolean;
+  mode: OverlayMode;
+  position: OverlayPosition;
+  offset_x: number;
+  offset_y: number;
+  scale_percent: number;
+  opacity: number;
+  intro_seconds: number;
+  ranges: FrameRange[];
+  image_filename?: string | null;
+}
+
 export interface MutationOptions {
   preset: PresetId;
   intensity: number;
@@ -21,6 +53,7 @@ export interface MutationOptions {
   output_format?: string | null;
   seed?: number | null;
   variants: number;
+  overlay: OverlaySettings;
 }
 
 export interface AssetMetrics {

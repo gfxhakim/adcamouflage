@@ -6,9 +6,13 @@ import type {
   PresetCatalogue,
 } from "./types";
 
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
-).replace(/\/+$/, "");
+/**
+ * Empty by default: requests go to this app's own origin and next.config.js
+ * proxies /api to the backend. That keeps the session cookie first-party.
+ * Set NEXT_PUBLIC_API_URL only when pointing the browser straight at a
+ * separately hosted API, which then needs CORS and SameSite=None cookies.
+ */
+export const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
@@ -74,11 +78,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       cache: "no-store",
+      credentials: "include",
       headers: { ...authHeaders(), ...(init?.headers ?? {}) },
     });
   } catch {
     throw new ApiError(
-      `Cannot reach the mutation engine at ${API_BASE}. Is the API running?`,
+      `Cannot reach the mutation engine at ${API_BASE || "this site"}. Is the API running?`,
       0,
     );
   }
@@ -118,14 +123,20 @@ export function createBatch(
   options: MutationOptions,
   onUploadProgress?: (fraction: number) => void,
   signal?: AbortSignal,
+  overlayImage?: File | null,
 ): Promise<BatchCreated> {
   return new Promise((resolve, reject) => {
     const form = new FormData();
     files.forEach((file) => form.append("files", file, file.name));
     form.append("options", JSON.stringify(options));
+    if (overlayImage) {
+      form.append("overlay_image", overlayImage, overlayImage.name);
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/api/v1/batches`);
+    // Send the session cookie with the upload.
+    xhr.withCredentials = true;
     Object.entries(authHeaders()).forEach(([key, value]) =>
       xhr.setRequestHeader(key, value),
     );
@@ -172,7 +183,7 @@ export function createBatch(
     };
 
     xhr.onerror = () =>
-      reject(new ApiError(`Cannot reach the mutation engine at ${API_BASE}.`, 0));
+      reject(new ApiError(`Cannot reach the mutation engine at ${API_BASE || "this site"}.`, 0));
     xhr.ontimeout = () => reject(new ApiError("The upload timed out.", 0));
     xhr.onabort = () => reject(new ApiError("Upload cancelled.", 0));
 
