@@ -51,9 +51,13 @@ reference below.
 | Setting | Value |
 | --- | --- |
 | Root Directory | `backend` |
-| Builder | Dockerfile (auto-detected) |
-| Custom Start Command | `/usr/local/bin/entrypoint.sh` |
-| Health Check Path | `/api/v1/health` |
+| Config File Path | `/backend/railway.json` |
+
+`backend/railway.json` sets the Dockerfile build, the start command
+(`/usr/local/bin/entrypoint.sh`), the `/api/v1/health` health check, the restart
+policy and a single replica, so nothing else needs setting by hand. Railway does
+not look inside the Root Directory for this file, which is why its path is given
+explicitly.
 
 Add a **Volume** mounted at **`/data`** (Settings → Volumes). Size it for your
 throughput; outputs are deleted on the retention timer, so it does not grow
@@ -68,6 +72,10 @@ ADCAM_REDIS_URL=${{Redis.REDIS_URL}}
 
 ADCAM_STORAGE_ROOT=/data
 ADCAM_ENVIRONMENT=production
+
+# Pin the port. Railway otherwise injects its own PORT, and the web service's
+# API_ORIGIN below would point at the wrong one.
+PORT=8000
 
 # REQUIRED. Generate once and never change it, or every session and download
 # link is invalidated:
@@ -97,7 +105,7 @@ private network, which keeps the API off the public internet entirely.
 | Setting | Value |
 | --- | --- |
 | Root Directory | `frontend` |
-| Builder | Dockerfile |
+| Config File Path | `/frontend/railway.json` |
 | Public Networking | Generate a domain (this is the one people visit) |
 
 Variables:
@@ -172,8 +180,8 @@ cheaper at sustained load; Railway is easier to operate.
 refuses to run without it in production. The deploy log shows the reason.
 
 **`web` returns 502.** `API_ORIGIN` does not resolve. Confirm the API service's
-name matches the hostname, and that it is listening (its log prints
-`starting api on [::]:<port>`).
+name matches the hostname, that `PORT=8000` is set on it, and that it is
+listening (its log prints `starting api on [::]:8000`).
 
 **Renders stay queued.** `ADCAM_REDIS_URL` is wrong, or the worker did not
 start. The API log should show `celery@… ready` shortly after boot, and
