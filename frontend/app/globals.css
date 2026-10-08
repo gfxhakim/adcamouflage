@@ -2,52 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ==========================================================================
-   Synchronised moving neon borders
-   --------------------------------------------------------------------------
-   Every border in the app is one conic gradient rotated by a single angle,
-   --neon-angle. Registering the property with @property makes it an animatable
-   *inherited* value, so the animation runs exactly once - on :root - and every
-   card reads the same angle on the same frame. A card that mounts thirty
-   seconds late inherits the rotation already in flight instead of starting its
-   own out of phase.
-
-   Two things previously stopped the rotation on real machines, both fixed here:
-
-   * `@property` is unsupported (Firefox below 128, older Safari). The angle
-     then never animates. components/NeonDriver.tsx detects that the computed
-     angle is not advancing and drives it from requestAnimationFrame instead -
-     still from :root, so synchronisation is preserved.
-   * `prefers-reduced-motion` (Windows "Animation effects: off" turns this on
-     for every site). This used to stop the rotation dead. It now slows to a
-     30s cycle instead: a gentle hue drift with no positional movement, which
-     is what the preference is actually asking for.
-   ========================================================================== */
-
-@property --neon-angle {
-  syntax: "<angle>";
-  inherits: true;
-  initial-value: 0deg;
-}
-
-@property --neon-angle-slow {
-  syntax: "<angle>";
-  inherits: true;
-  initial-value: 0deg;
-}
-
-@keyframes neon-rotate {
-  to {
-    --neon-angle: 360deg;
-  }
-}
-
-@keyframes neon-rotate-slow {
-  to {
-    --neon-angle-slow: 360deg;
-  }
-}
-
 :root {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -71,19 +25,7 @@
   --ink-faint: #8a8d91;
   --line: 0 0 0;
 
-  --border-width: 2px;
-
   color-scheme: light;
-
-  /* The single source of truth for every border's phase. */
-  animation: neon-rotate 6s linear infinite, neon-rotate-slow 14s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    /* Slowed, not stopped - see the note at the top of this file. */
-    animation: neon-rotate 30s linear infinite, neon-rotate-slow 60s linear infinite;
-  }
 }
 
 html,
@@ -129,123 +71,168 @@ body {
 
 @layer components {
   /* ----------------------------------------------------------------------
-     .neon-frame - the animated border itself.
+     .blob-card - white cards with a moving Meta-blue neon rim.
+     Markup lives in components/ui/gradient-bold-card.tsx.
 
-     The element paints the rotating gradient as its own background and shows
-     it only in the --border-width ring around the edge, using two stacked
-     masks combined with `xor`. That keeps the border crisp at any radius and
-     needs no extra DOM node behind the content.
+     The card is a pale-blue rim around a white surface inset by
+     --blob-border. Behind the surface, a blurred gradient blob travels
+     clockwise through the four corners, lighting the rim as it passes.
 
-     The gradient is banded rather than evenly blended so the rotation is
-     unmistakable: a bright pale-blue band travels around a deeper blue rim.
+     The demo this is adapted from moved the blob with translate(-100%) on a
+     fixed-size box. A translate percentage refers to the element itself, so
+     here the motion is split across two full-size layers: .blob-track moves
+     along x and .blob-track-y along y, each by ±50% of its own box - which is
+     exactly the card's width or height. The blob therefore follows the real
+     edge of any card at any breakpoint, using only composited transforms.
      ---------------------------------------------------------------------- */
-  .neon-frame {
+  .blob-card {
+    --blob-border: 4px;
+    --blob-radius: 1rem;
+    --blob-speed: 6s;
+    --blob-size: clamp(160px, 60%, 520px);
+    --blob-from: #00c6ff;
+    --blob-via: #0866ff;
+    --blob-to: #0040c1;
+    --blob-opacity: 1;
+
     position: relative;
     isolation: isolate;
-    border-radius: 1rem;
-    background: conic-gradient(
-      from var(--neon-angle),
-      var(--meta-300) 0deg,
-      var(--meta-500) 55deg,
-      var(--meta-800) 130deg,
-      var(--meta-600) 210deg,
-      var(--meta-400) 290deg,
-      var(--meta-300) 360deg
-    );
-    padding: var(--border-width);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 10px 28px -18px rgb(0 0 0 / 0.18);
-    transition: filter 240ms ease, transform 240ms ease, box-shadow 240ms ease;
-  }
-
-  /* The outer bloom. Blurring a copy of the same gradient keeps the glow in
-     phase with the border it belongs to. */
-  .neon-frame::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    z-index: -1;
-    border-radius: inherit;
-    background: inherit;
-    filter: blur(12px);
-    opacity: 0.28;
-    transition: opacity 300ms ease, filter 300ms ease;
-    pointer-events: none;
-  }
-
-  .neon-frame:hover::before {
-    opacity: 0.55;
-    filter: blur(18px);
-  }
-
-  .neon-frame > .neon-inner {
-    position: relative;
-    height: 100%;
-    border-radius: calc(1rem - var(--border-width));
-    background: rgb(var(--surface) / 0.97);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
     overflow: hidden;
+    min-width: 0;
+    padding: var(--blob-border);
+    border-radius: var(--blob-radius);
+    background: linear-gradient(135deg, var(--meta-100), var(--meta-50) 45%, var(--meta-100));
+    box-shadow:
+      10px 10px 30px -6px rgb(160 174 200 / 0.45),
+      -10px -10px 30px -6px rgb(255 255 255 / 0.9),
+      0 0 0 1px rgb(8 102 255 / 0.06);
+    transition: transform 240ms ease, box-shadow 240ms ease;
   }
 
-  /* A faint inner hairline stops the border from bleeding into the content. */
-  .neon-frame > .neon-inner::after {
-    content: "";
+  .blob-track,
+  .blob-track-y {
     position: absolute;
     inset: 0;
-    border-radius: inherit;
-    border: 1px solid rgb(var(--line) / 0.07);
+    z-index: 0;
     pointer-events: none;
+    will-change: transform;
+    animation-duration: var(--blob-speed);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
   }
 
-  /* Counter-rotating variant, for visual variety across a grid of cards. */
-  .neon-frame[data-tone="slow"] {
-    background: conic-gradient(
-      from var(--neon-angle-slow),
-      var(--meta-800) 0deg,
-      var(--meta-500) 90deg,
-      var(--meta-300) 180deg,
-      var(--meta-600) 270deg,
-      var(--meta-800) 360deg
-    );
+  .blob-track {
+    animation-name: blob-x;
   }
 
-  .neon-frame[data-tone="success"] {
-    background: conic-gradient(
-      from var(--neon-angle),
-      var(--meta-300) 0deg,
-      var(--meta-500) 120deg,
-      var(--meta-800) 240deg,
-      var(--meta-300) 360deg
-    );
+  .blob-track-y {
+    animation-name: blob-y;
+  }
+
+  /* The trailing blob runs half a lap behind the leader. */
+  .blob-track--trail,
+  .blob-track--trail > .blob-track-y {
+    animation-delay: calc(var(--blob-speed) / -2);
+  }
+
+  .blob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--blob-size);
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(90deg, var(--blob-from), var(--blob-via), var(--blob-to));
+    filter: blur(12px);
+    opacity: var(--blob-opacity);
+  }
+
+  .blob-track--trail .blob {
+    width: calc(var(--blob-size) * 0.75);
+    opacity: calc(var(--blob-opacity) * 0.7);
+  }
+
+  .blob-surface {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    min-width: 0;
+    border-radius: calc(var(--blob-radius) - var(--blob-border));
+    background: rgb(var(--surface) / 0.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    outline: 1px solid rgb(255 255 255 / 0.9);
+    outline-offset: -1px;
+  }
+
+  .blob-card[data-tone="slow"] {
+    --blob-speed: 9s;
+    --blob-from: #66a3ff;
+    --blob-via: #0866ff;
+    --blob-to: #00c6ff;
+  }
+
+  .blob-card[data-tone="success"] {
+    --blob-from: #00c6ff;
+    --blob-via: #0081fb;
+    --blob-to: #0866ff;
   }
 
   /* Failure is the one place that stays red: it is a functional signal, not
      decoration, and a blue error state is unreadable at a glance. */
-  .neon-frame[data-tone="danger"] {
-    background: conic-gradient(from var(--neon-angle), #f87171, #dc2626, #f87171);
+  .blob-card[data-tone="danger"] {
+    --blob-from: #fca5a5;
+    --blob-via: #ef4444;
+    --blob-to: #b91c1c;
+    background: linear-gradient(135deg, #fee2e2, #fef2f2);
   }
 
-  .neon-frame[data-tone="muted"] {
-    background: conic-gradient(
-      from var(--neon-angle),
-      rgb(8 102 255 / 0.55),
-      rgb(8 102 255 / 0.18),
-      rgb(8 102 255 / 0.55)
-    );
+  .blob-card[data-tone="muted"] {
+    --blob-speed: 10s;
+    --blob-opacity: 0.55;
   }
 
-  .neon-frame[data-interactive="true"]:hover {
+  .blob-card[data-interactive="true"]:hover {
     transform: translateY(-2px);
+    box-shadow:
+      12px 14px 36px -6px rgb(8 102 255 / 0.22),
+      -10px -10px 30px -6px rgb(255 255 255 / 0.9),
+      0 0 0 1px rgb(8 102 255 / 0.12);
   }
 
-  /* Engines without @property cannot animate a conic gradient's angle from
-     CSS. NeonDriver.tsx drives it from JS there, so this only has to keep the
-     rim looking right before the driver's first frame lands. */
-  @supports not (background: conic-gradient(from var(--neon-angle), red, blue)) {
-    .neon-frame,
-    .neon-frame[data-tone="slow"],
-    .neon-frame[data-tone="success"] {
-      background: linear-gradient(120deg, var(--meta-200), var(--meta-500), var(--meta-700), var(--meta-200));
+  @keyframes blob-x {
+    0%,
+    100% {
+      transform: translateX(-50%);
+    }
+    25%,
+    50% {
+      transform: translateX(50%);
+    }
+    75% {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes blob-y {
+    0%,
+    25%,
+    100% {
+      transform: translateY(-50%);
+    }
+    50%,
+    75% {
+      transform: translateY(50%);
+    }
+  }
+
+  /* Windows "Animation effects: off" turns this on for every site. The rim
+     keeps drifting, slowly, rather than freezing on one corner. */
+  @media (prefers-reduced-motion: reduce) {
+    .blob-card,
+    .blob-card[data-tone] {
+      --blob-speed: 30s;
     }
   }
 
@@ -322,8 +309,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* The border rotation is handled above; everything else stops. */
-  *:not(:root),
+  /* The card rims slow down instead (see .blob-card); everything else stops. */
+  *:not(.blob-track):not(.blob-track-y),
   *::before,
   *::after {
     animation-duration: 0.001ms !important;

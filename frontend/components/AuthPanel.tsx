@@ -1,8 +1,8 @@
 "use client";
 
-import clsx from "clsx";
 import { ArrowRight, Loader2, Lock, Mail, OctagonAlert, User } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useId, useState } from "react";
 
 import { signIn, signUp } from "@/lib/auth";
@@ -13,19 +13,25 @@ type Mode = "signin" | "signup";
 /** Must match ADCAM_MIN_PASSWORD_LENGTH on the API. */
 const MIN_PASSWORD_LENGTH = 10;
 
-export function AuthPanel({ initialMode = "signin" }: { initialMode?: Mode }) {
-  const router = useRouter();
+/** Only same-site paths, so a crafted ?next= cannot send someone off-site. */
+function safeDestination(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/app";
+  return next;
+}
+
+export function AuthPanel({ mode }: { mode: Mode }) {
   const params = useSearchParams();
   const formId = useId();
 
-  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const destination = params.get("next") || "/app";
+  const next = params.get("next");
+  const destination = safeDestination(next);
+  const otherPage = (mode === "signup" ? "/login" : "/signup") + (next ? `?next=${encodeURIComponent(next)}` : "");
 
   const submit = useCallback(
     async (event: React.FormEvent) => {
@@ -47,7 +53,7 @@ export function AuthPanel({ initialMode = "signin" }: { initialMode?: Mode }) {
           await signIn(email.trim(), password);
         }
         // The API set an httpOnly cookie; a full navigation lets the Next
-        // middleware see it and route into the console.
+        // middleware see it and route into the workspace.
         window.location.assign(destination);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Something went wrong. Try again.");
@@ -57,36 +63,17 @@ export function AuthPanel({ initialMode = "signin" }: { initialMode?: Mode }) {
     [busy, destination, displayName, email, mode, password],
   );
 
-  const switchMode = (next: Mode) => {
-    setMode(next);
-    setError(null);
-  };
-
   return (
-    <NeonCard padding="lg" radius="xl" className="w-full max-w-md" id="signin">
-      <div
-        className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-black/10 bg-black/[0.03] p-1"
-        role="tablist"
-        aria-label="Sign in or create an account"
-      >
-        {(["signin", "signup"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={mode === value}
-            onClick={() => switchMode(value)}
-            className={clsx(
-              "rounded-lg px-3 py-2 text-sm font-semibold transition-all",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
-              mode === value
-                ? "bg-meta-500 text-white shadow-meta-sm"
-                : "text-ink-subtle hover:bg-white hover:text-black",
-            )}
-          >
-            {value === "signin" ? "Sign in" : "Create account"}
-          </button>
-        ))}
+    <NeonCard padding="lg" radius="xl" className="w-full max-w-md">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight text-black">
+          {mode === "signup" ? "Create your account" : "Welcome back"}
+        </h1>
+        <p className="mt-1.5 text-sm text-ink-muted">
+          {mode === "signup"
+            ? "Your assets and outputs are visible only to you."
+            : "Sign in to open your workspace."}
+        </p>
       </div>
 
       <form onSubmit={submit} className="space-y-4" noValidate>
@@ -179,30 +166,11 @@ export function AuthPanel({ initialMode = "signin" }: { initialMode?: Mode }) {
         </button>
       </form>
 
-      <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-faint">
-        {mode === "signup" ? (
-          <>
-            Already have an account?{" "}
-            <button
-              type="button"
-              className="font-semibold text-meta-600 hover:underline"
-              onClick={() => switchMode("signin")}
-            >
-              Sign in
-            </button>
-          </>
-        ) : (
-          <>
-            New here?{" "}
-            <button
-              type="button"
-              className="font-semibold text-meta-600 hover:underline"
-              onClick={() => switchMode("signup")}
-            >
-              Create an account
-            </button>
-          </>
-        )}
+      <p className="mt-5 text-center text-xs leading-relaxed text-ink-subtle">
+        {mode === "signup" ? "Already have an account? " : "New here? "}
+        <Link href={otherPage} className="font-semibold text-meta-600 hover:underline">
+          {mode === "signup" ? "Sign in" : "Create an account"}
+        </Link>
       </p>
     </NeonCard>
   );

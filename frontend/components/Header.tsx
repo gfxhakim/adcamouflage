@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { Activity, CircleAlert, LogOut, ShieldHalf, User as UserIcon, Waves } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { signOut, type UserProfile } from "@/lib/auth";
@@ -48,9 +49,9 @@ export function Header({ health, healthError, user }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <span className="relative grid h-10 w-10 place-items-center rounded-xl border border-meta-500/40 bg-gradient-to-br from-meta-100 via-transparent to-meta-200">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="AdCamouflage home">
+          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-meta-500/40 bg-gradient-to-br from-meta-100 via-transparent to-meta-200">
             <ShieldHalf className="h-5 w-5 text-meta-500" aria-hidden />
             <span className="absolute inset-0 animate-pulse-glow rounded-xl shadow-meta-sm" aria-hidden />
           </span>
@@ -58,11 +59,9 @@ export function Header({ health, healthError, user }: HeaderProps) {
             <p className="text-sm font-semibold tracking-tight text-black">
               Ad<span className="text-gradient">Camouflage</span>
             </p>
-            <p className="hidden text-[11px] text-black0 sm:block">
-              Media mutation &amp; fingerprint stripping
-            </p>
+            <p className="hidden text-[11px] text-ink-subtle sm:block">Workspace</p>
           </div>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-2">
           {health ? (
@@ -72,7 +71,7 @@ export function Header({ health, healthError, user }: HeaderProps) {
             </span>
           ) : null}
 
-          <span className={clsx("chip", statusTone)}>
+          <span className={clsx("chip whitespace-nowrap", statusTone)}>
             {healthError ? (
               <CircleAlert className="h-3.5 w-3.5" aria-hidden />
             ) : (

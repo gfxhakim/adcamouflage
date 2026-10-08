@@ -35,7 +35,7 @@ const STATUS_TEXT: Record<AssetJob["status"], string> = {
   processing: "text-meta-500",
   completed: "text-meta-600",
   failed: "text-red-600",
-  cancelled: "text-black0",
+  cancelled: "text-ink-subtle",
 };
 
 function StatusIcon({ status }: { status: AssetJob["status"] }) {
@@ -92,7 +92,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                     </span>
                   ) : null}
                 </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-black0">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-subtle">
                   <span>{formatBytes(asset.size_bytes)}</span>
                   {metrics.source_resolution ? (
                     <>
@@ -129,7 +129,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   <button
                     type="button"
                     onClick={() => onCancel(asset.id)}
-                    className="rounded-md p-1 text-black0 transition-colors hover:bg-red-50 hover:text-red-600"
+                    className="rounded-md p-1 text-ink-subtle transition-colors hover:bg-red-50 hover:text-red-600"
                     aria-label={`Cancel ${asset.original_filename}`}
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />
@@ -152,7 +152,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   }
                   label={`${asset.original_filename} progress`}
                 />
-                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-black0">
+                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-ink-subtle">
                   {Math.round(asset.progress)}%
                 </span>
               </div>
@@ -218,20 +218,20 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
 
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                   <div className="col-span-2 flex justify-between gap-2">
-                    <dt className="text-black0">Source SHA-256</dt>
+                    <dt className="text-ink-subtle">Source SHA-256</dt>
                     <dd className="truncate font-mono text-ink-subtle">
                       {shortHash(metrics.source_sha256, 16)}
                     </dd>
                   </div>
                   <div className="col-span-2 flex justify-between gap-2">
-                    <dt className="text-black0">Output SHA-256</dt>
+                    <dt className="text-ink-subtle">Output SHA-256</dt>
                     <dd className="truncate font-mono text-meta-600">
                       {shortHash(metrics.output_sha256, 16)}
                     </dd>
                   </div>
                   {metrics.source_fps ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-black0">Frame rate</dt>
+                      <dt className="text-ink-subtle">Frame rate</dt>
                       <dd className="font-mono text-ink-muted">
                         {metrics.source_fps} → {metrics.output_fps}
                       </dd>
@@ -239,13 +239,13 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   ) : null}
                   {typeof metrics.residual_exif_tags === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-black0">EXIF left</dt>
+                      <dt className="text-ink-subtle">EXIF left</dt>
                       <dd className="font-mono text-meta-600">{metrics.residual_exif_tags}</dd>
                     </div>
                   ) : null}
                   {metrics.residual_tags ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-black0">Provenance tags</dt>
+                      <dt className="text-ink-subtle">Provenance tags</dt>
                       <dd className="font-mono text-meta-600">
                         {metrics.residual_tags.length}
                       </dd>
@@ -253,13 +253,13 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   ) : null}
                   {typeof metrics.scrubbed_signatures === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-black0">Signatures wiped</dt>
+                      <dt className="text-ink-subtle">Signatures wiped</dt>
                       <dd className="font-mono text-ink-muted">{metrics.scrubbed_signatures}</dd>
                     </div>
                   ) : null}
                   {typeof metrics.seed === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-black0">Seed</dt>
+                      <dt className="text-ink-subtle">Seed</dt>
                       <dd className="font-mono text-ink-muted">{metrics.seed}</dd>
                     </div>
                   ) : null}
