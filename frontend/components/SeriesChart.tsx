@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 
-import type { Point } from "@/lib/admin";
+export interface Point {
+  day: string;
+  value: number;
+}
 
 interface SeriesChartProps {
   points: Point[];

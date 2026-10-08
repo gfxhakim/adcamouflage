@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import ActivityFeed from "@/components/admin/ActivityFeed";
 import SecretBox from "@/components/admin/SecretBox";
-import UsageMeter from "@/components/admin/UsageMeter";
+import UsageMeter from "@/components/UsageMeter";
 import NeonCard from "@/components/NeonCard";
 import {
   deleteUser,

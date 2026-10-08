@@ -47,6 +47,7 @@ from .schemas import (
 )
 from .security import require_api_key, sign_download, verify_download
 from .storage import StorageError, classify, get_store, resolve_within, sanitize_filename
+from .subscription_routes import router as subscription_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -92,6 +93,7 @@ app = FastAPI(
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(subscription_router)
 
 # Credentials must be allowed for the session cookie to reach the API from
 # the browser; with credentials on, the origin list cannot be a wildcard.

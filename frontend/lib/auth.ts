@@ -102,3 +102,60 @@ export async function fetchMyBatches(): Promise<BatchSummary[]> {
   if (!response.ok) return [];
   return (await response.json()) as BatchSummary[];
 }
+
+export interface PlanOption {
+  id: string;
+  label: string;
+  monthly_quota: number | null;
+  price: number;
+}
+
+export interface PlanRequest {
+  plan_id: string;
+  plan_label: string;
+  created_at: string;
+}
+
+export interface Subscription {
+  plan: PlanOption;
+  /** The limit on this account; support may have set it apart from the plan's. */
+  monthly_quota: number | null;
+  currency: string;
+  used_this_month: number;
+  left_this_month: number | null;
+  window_start: string;
+  resets_at: string;
+  projected_this_month: number;
+  plan_expires_at: string | null;
+  plan_expired: boolean;
+  member_since: string;
+  files_total: number;
+  batches_total: number;
+  favourite_preset: string | null;
+  daily: { day: string; value: number }[];
+  monthly: { month: string; files: number; batches: number }[];
+  plans: PlanOption[];
+  pending_request: PlanRequest | null;
+  retention_hours: number;
+}
+
+/** The signed-in user's plan, usage and history, or null when signed out. */
+export async function fetchSubscription(): Promise<Subscription | null> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/v1/auth/subscription`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError("Cannot reach the server. Check your connection.", 0);
+  }
+  if (response.status === 401) return null;
+  if (!response.ok) throw new ApiError(await readDetail(response), response.status);
+  return (await response.json()) as Subscription;
+}
+
+/** Ask support to move this account to another plan (nothing is charged). */
+export function requestPlan(planId: string, note = "") {
+  return post<PlanRequest>("/api/v1/auth/plan-request", { plan_id: planId, note });
+}

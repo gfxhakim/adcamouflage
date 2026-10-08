@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Download, Loader2, Search, UserPlus } from "
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import AddUserDialog from "@/components/admin/AddUserDialog";
-import UsageMeter from "@/components/admin/UsageMeter";
+import UsageMeter from "@/components/UsageMeter";
 import NeonCard from "@/components/NeonCard";
 import { exportUsersUrl, listUsers, type AdminUser, type PlanInfo, type UserPage } from "@/lib/admin";
 import { formatMoney, timeAgo } from "@/lib/format";
