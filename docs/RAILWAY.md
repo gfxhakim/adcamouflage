@@ -120,7 +120,8 @@ If you named the API service something other than `api`, change the hostname to
 match.
 
 `API_ORIGIN` is used while the image builds (Next fixes the proxy target at
-build time), so after changing it, redeploy the `web` service.
+build time) and while the site runs (the login pages use it to recognise the
+admin), so after changing it, redeploy the `web` service.
 
 ### 4. Deploy
 

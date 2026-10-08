@@ -24,7 +24,8 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
-# Kept for reference only: the proxy target was fixed at build time above.
+# Needed at runtime too: middleware.ts reads it on each request to ask the API
+# whether a session is an admin's. Keep it the same as the build value.
 ARG API_ORIGIN=http://api:8000
 ENV API_ORIGIN=${API_ORIGIN}
 
