@@ -15,7 +15,6 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
-import IntroScreen from "@/components/IntroScreen";
 import LandingNav from "@/components/LandingNav";
 import NeonCard from "@/components/NeonCard";
 import PricingSection, { type PublicPlan } from "@/components/PricingSection";
@@ -100,7 +99,6 @@ export default async function LandingPage() {
 
   return (
     <>
-      <IntroScreen />
       <SiteHeader signedIn={signedIn} nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />
 

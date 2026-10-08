@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
+import IntroScreen from "@/components/IntroScreen";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,8 +28,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className="min-h-screen">
+        <IntroScreen />
         {children}
       </body>
     </html>

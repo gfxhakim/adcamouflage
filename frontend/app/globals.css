@@ -322,14 +322,10 @@ body {
   }
 }
 
-/* Landing intro (components/IntroScreen.tsx) ------------------------------ */
-html[data-intro-seen] .intro-screen {
-  display: none;
-}
-
+/* Intro (components/IntroScreen.tsx) -------------------------------------- */
 /* If scripts never run, the intro still gets out of the way. */
 .intro-screen {
-  animation: intro-failsafe 0s linear 7s forwards;
+  animation: intro-failsafe 0s linear 10s forwards;
 }
 
 @keyframes intro-failsafe {

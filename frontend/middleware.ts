@@ -7,7 +7,9 @@ const AUTH_PAGES = ["/login", "/signup"];
 
 /**
  * Keeps signed-out visitors out of the workspace, and signed-in users off the
- * login and sign-up pages. The landing page at / is public for everyone.
+ * login and sign-up pages. The landing page at / is public for everyone, and
+ * the login page is only ever reached from its buttons: a signed-out visitor
+ * who opens /app is sent to the landing page, not to /login.
  *
  * This only checks that a session cookie is present - it deliberately does not
  * verify the signature, because the API is the authority on that and every
@@ -16,7 +18,7 @@ const AUTH_PAGES = ["/login", "/signup"];
  */
 export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
-  const { pathname, search } = request.nextUrl;
+  const { pathname } = request.nextUrl;
 
   // The admin panel is never advertised: a signed-out visitor gets the normal
   // 404 page rather than a redirect to sign-in that would reveal it exists.
@@ -26,8 +28,8 @@ export function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/app") && !hasSession) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = `?next=${encodeURIComponent(pathname + search)}`;
+    url.pathname = "/";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
