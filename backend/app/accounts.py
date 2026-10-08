@@ -10,10 +10,12 @@ import bcrypt
 import jwt
 from fastapi import Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import User, get_db
+from .plans import apply_plan
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +189,51 @@ def current_user(
     if user is None:
         raise AuthError("Sign in to continue.")
     return user
+
+
+def ensure_admin_account(db: Session) -> None:
+    """Give the first ADCAM_ADMIN_EMAILS address a working login from ADCAM_ADMIN_PASSWORD.
+
+    Runs on every API start. The account is created if it is missing, so nobody
+    can sign up with the admin's email first, and its password is reset whenever
+    it no longer matches the variable: the variable always wins, which makes it
+    the way to recover a forgotten admin password.
+    """
+
+    secret = settings.admin_password.get_secret_value() if settings.admin_password else ""
+    if not secret or not settings.admin_emails:
+        return
+    try:
+        email = validate_email(settings.admin_emails[0])
+        password = validate_password(secret)
+    except AuthError as exc:
+        logger.error("ADCAM_ADMIN_PASSWORD was not applied: %s", exc.detail)
+        return
+
+    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is None:
+        user = User(email=email, password_hash=hash_password(password), display_name="Admin")
+        # No file limit, but on the free plan so the owner is not counted as revenue.
+        apply_plan(db, user, "free")
+        user.monthly_quota = None
+        db.add(user)
+        change = "created"
+    elif not verify_password(password, user.password_hash):
+        user.password_hash = hash_password(password)
+        user.token_version += 1  # sign out sessions made with the old password
+        change = "password updated"
+    else:
+        change = ""
+    user.is_admin = True
+    user.is_active = True
+    try:
+        db.commit()
+    except IntegrityError:
+        # Another API process created it at the same moment; that one wins.
+        db.rollback()
+        return
+    if change:
+        logger.info("admin account %s for %s", change, email)
 
 
 def require_admin(user: User = Depends(current_user)) -> User:

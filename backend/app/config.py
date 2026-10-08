@@ -13,7 +13,7 @@ from pathlib import Path
 
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     # Comma-separated sign-in emails that are always admins. This is how the
     # first admin gets in; more can then be promoted from the admin panel.
     admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Optional password for the first ADCAM_ADMIN_EMAILS address. When set, that
+    # account is created (or its password reset) on every start, so the owner
+    # can sign in without signing up first. See accounts.ensure_admin_account.
+    admin_password: SecretStr | None = None
     # Plan given to new sign-ups (see app/plans.py for the list).
     default_plan: str = "free"
 

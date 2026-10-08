@@ -130,9 +130,18 @@ account, and you are live.
 ## After launch
 
 **Turn on the admin panel.** On the `api` service open **Variables → New
-Variable**, add `ADCAM_ADMIN_EMAILS` with the email you sign in with (several
-emails can be separated by commas), and let it redeploy. Then sign in on the web
-domain and type `/admin` after the address (bookmark it). Nothing in the app
+Variable** and add:
+
+- `ADCAM_ADMIN_EMAILS`: the email you will sign in with (several emails can be
+  separated by commas).
+- `ADCAM_ADMIN_PASSWORD`: a password of at least 10 characters for the first of
+  those emails. The account is created for you on the next deploy, so you do not
+  need to sign up. Changing this variable later resets the password, which is
+  also how you get back in if you forget it.
+
+Let it redeploy, then sign in on the web domain's `/login` page with that email
+and password: admins land straight in the admin panel instead of the
+workspace. You can also type `/admin` after the address (bookmark it). Nothing in the app
 links to it: customers who try `/admin` see the normal "page not found" screen,
 and the admin API answers them with a plain 404. It has four tabs:
 
