@@ -248,3 +248,12 @@ def test_deep_scramble_keeps_audio_and_honours_the_trim(sample_video, tmp_path):
     # The trim shaves a little off each end, so the result is shorter but not
     # truncated to a fraction of the original.
     assert 0.5 * source.duration < output.duration < source.duration
+
+
+def test_ffmpeg_exit_description_names_the_out_of_memory_kill():
+    from app.ffmpeg import describe_ffmpeg_exit
+
+    assert "out of memory" in describe_ffmpeg_exit(-9, "")
+    assert describe_ffmpeg_exit(-15, "") == "ffmpeg was killed (SIGTERM)"
+    assert describe_ffmpeg_exit(1, "") == "ffmpeg exited with code 1 and no error output"
+    assert describe_ffmpeg_exit(1, "warning\nwidth not divisible by 2\n") == "width not divisible by 2"
