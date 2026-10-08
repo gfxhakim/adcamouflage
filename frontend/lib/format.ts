@@ -65,3 +65,20 @@ export function formatDate(value?: string | null): string {
 export function usageText(used: number, quota: number | null): string {
   return `${used} / ${quota === null ? "∞" : quota}`;
 }
+
+/** "$1,234" style money for the admin's chosen currency code. */
+export function formatMoney(amount: number, currency = "USD"): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(amount % 1 === 0 ? 0 : 2)} ${currency}`;
+  }
+}
+
+export function formatPercent(share: number): string {
+  return `${Math.round(share * 1000) / 10}%`;
+}

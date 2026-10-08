@@ -14,6 +14,8 @@ export interface UserProfile {
   used_this_month: number;
   plan_expires_at: string | null;
   plan_expired: boolean;
+  /** A message from the admin for every signed-in user; empty for none. */
+  announcement: string;
 }
 
 export interface BatchSummary {

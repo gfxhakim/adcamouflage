@@ -133,9 +133,19 @@ account, and you are live.
 Variable**, add `ADCAM_ADMIN_EMAILS` with the email you sign in with (several
 emails can be separated by commas), and let it redeploy. Then sign in on the web
 domain: an **Admin** button appears in the workspace header, or go straight to
-`/admin`. From there you can see every user and their activity, put people on a
-plan, set a monthly file limit or end date, reset their usage, suspend them, or
-make other admins.
+`/admin`. It has four tabs:
+
+- **Overview**: revenue, users, activity feed, who needs attention, system health.
+- **Users**: search and filter, add a user by hand, export to CSV, and per user:
+  change plan, limit or end date, renew (+1 month, +3 months, +1 year), reset
+  usage, private notes, new password, sign out everywhere, suspend, make admin,
+  delete.
+- **Analytics**: monthly and yearly revenue, paying users, active users, sign-ups
+  and files per day, revenue by plan, top users, and who hit or is near their
+  limit or whose plan is ending.
+- **Settings**: open or close sign-ups, the plan new users start on, currency,
+  an announcement banner for every workspace, and each plan's name, price and
+  monthly limit.
 
 New sign-ups start on the plan named by `ADCAM_DEFAULT_PLAN` (`free`, 10 files a
 month, unless you change it). Accounts created before the admin panel existed

@@ -29,9 +29,9 @@ from .accounts import (
     verify_password,
 )
 from .activity import log_activity
-from .config import settings
+from .app_settings import announcement, registration_open
 from .db import BatchRecord, User, get_db
-from .plans import PLANS, apply_plan, default_plan, plan_expired, used_this_month
+from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
 
 logger = logging.getLogger(__name__)
 
@@ -117,10 +117,11 @@ class UserProfile(BaseModel):
     used_this_month: int = 0
     plan_expires_at: datetime | None = None
     plan_expired: bool = False
+    # A message the admin wants every signed-in user to see; empty for none.
+    announcement: str = ""
 
     @classmethod
     def of(cls, user: User, db: Session) -> "UserProfile":
-        plan = PLANS.get(user.plan)
         return cls(
             id=user.id,
             email=user.email,
@@ -129,11 +130,12 @@ class UserProfile(BaseModel):
             last_login_at=user.last_login_at,
             is_admin=is_admin(user),
             plan=user.plan,
-            plan_label=plan.label if plan else user.plan,
+            plan_label=plan_label(get_plans(db), user.plan),
             monthly_quota=user.monthly_quota,
             used_this_month=used_this_month(db, user),
             plan_expires_at=user.plan_expires_at,
             plan_expired=plan_expired(user),
+            announcement=announcement(db),
         )
 
 
@@ -151,7 +153,7 @@ class BatchSummary(BaseModel):
 
 @router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)) -> UserProfile:
-    if not settings.allow_registration:
+    if not registration_open(db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="New accounts are closed on this instance.",
@@ -166,7 +168,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         display_name=(payload.display_name or "").strip() or None,
         last_login_at=datetime.now(timezone.utc),
     )
-    apply_plan(user, default_plan().id)
+    apply_plan(db, user, default_plan(db).id)
     db.add(user)
     try:
         db.commit()

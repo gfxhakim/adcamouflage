@@ -70,6 +70,8 @@ class User(Base):
     # admin can hand back a user's allowance mid-month.
     usage_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Private notes the admin keeps about this customer.
+    admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     batches: Mapped[list["BatchRecord"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
@@ -100,6 +102,18 @@ class BatchRecord(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="batches")
+
+
+class AppSetting(Base):
+    """Settings an admin changes from the panel, stored as JSON per key."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
 
 
 class ActivityEvent(Base):
@@ -179,6 +193,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "plan_expires_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "usage_reset_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "last_seen_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "admin_notes", "TEXT"),
 ]
 
 

@@ -1,30 +1,52 @@
 "use client";
 
 import clsx from "clsx";
-import { Ban, CalendarClock, Loader2, RotateCcw, Save, ShieldCheck, ShieldOff, UserCheck, X } from "lucide-react";
+import {
+  Ban,
+  CalendarClock,
+  CalendarPlus,
+  KeyRound,
+  Loader2,
+  LogOut,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  ShieldOff,
+  StickyNote,
+  Trash2,
+  UserCheck,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import ActivityFeed from "@/components/admin/ActivityFeed";
+import SecretBox from "@/components/admin/SecretBox";
 import UsageMeter from "@/components/admin/UsageMeter";
 import NeonCard from "@/components/NeonCard";
 import {
+  deleteUser,
+  extendPlan,
   getUser,
+  resetPassword,
   resetUsage,
+  signOutUser,
   updateUser,
   type AdminUser,
   type PlanInfo,
   type UserDetail,
   type UserUpdate,
 } from "@/lib/admin";
-import { formatDate, timeAgo } from "@/lib/format";
+import { formatDate, formatMoney, timeAgo } from "@/lib/format";
 
 interface UserPanelProps {
   userId: number;
   plans: PlanInfo[];
   /** The signed-in admin, who cannot suspend or demote themselves. */
   selfId: number | null;
+  currency: string;
   onClose: () => void;
   onChanged: (user: AdminUser) => void;
+  onDeleted: (id: number) => void;
 }
 
 interface PlanForm {
@@ -44,18 +66,21 @@ function formFrom(user: AdminUser): PlanForm {
 }
 
 /** A side sheet (full screen on phones) for one user's plan, usage and history. */
-export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPanelProps) {
+export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged, onDeleted }: UserPanelProps) {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [form, setForm] = useState<PlanForm | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const data = await getUser(userId);
       setDetail(data);
       setForm(formFrom(data.user));
+      setNotes(data.user.admin_notes ?? "");
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load this user.");
@@ -65,6 +90,7 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
   useEffect(() => {
     setDetail(null);
     setNotice(null);
+    setTempPassword(null);
     void load();
   }, [load]);
 
@@ -99,6 +125,48 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
 
   const user = detail?.user;
   const isSelf = user ? user.id === selfId : false;
+
+  const issuePassword = async () => {
+    if (!user) return;
+    if (!window.confirm(`Give ${user.email} a new temporary password? Their current password stops working and they are signed out.`)) {
+      return;
+    }
+    setBusy("password");
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await resetPassword(user.id);
+      setTempPassword(result.temporary_password);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reset the password.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    if (!user) return;
+    const typed = window.prompt(
+      `This permanently deletes ${user.email} and their history. It cannot be undone.\n\nType their email to confirm:`,
+    );
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== user.email) {
+      setError("The email did not match, so nothing was deleted.");
+      return;
+    }
+    setBusy("delete");
+    setError(null);
+    try {
+      await deleteUser(user.id);
+      onDeleted(user.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this account.");
+      setBusy(null);
+    }
+  };
+
 
   const savePlan = () => {
     if (!user || !form) return;
@@ -144,8 +212,8 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
         onClick={onClose}
       />
 
-      <div className="relative h-full w-full overflow-y-auto bg-white p-3 sm:max-w-xl sm:p-4">
-        <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-3 flex items-center justify-between gap-3 border-b border-black/[0.07] bg-white/95 px-4 py-3 backdrop-blur sm:-mx-4 sm:-mt-4">
+      <div className="relative h-full w-full overflow-y-auto bg-white sm:max-w-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.07] bg-white px-4 py-3">
           <div className="min-w-0">
             <p className="label">User</p>
             <p className="truncate text-sm font-semibold text-black">{user?.email ?? "Loading…"}</p>
@@ -155,6 +223,7 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
           </button>
         </div>
 
+        <div className="p-3 sm:p-4">
         {!detail ? (
           <div className="grid place-items-center py-20 text-ink-faint">
             {error ? (
@@ -168,7 +237,9 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
             {/* Summary ---------------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone={user!.is_active ? "default" : "danger"}>
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="chip !border-meta-500/30 !bg-meta-50 !text-meta-700">{user!.plan_label}</span>
+                <span className="chip !border-meta-500/30 !bg-meta-50 !text-meta-700">
+                  {user!.plan_label} · {formatMoney(user!.price, currency)}/mo
+                </span>
                 {user!.is_admin ? <span className="chip !border-amber-300 !bg-amber-50 !text-amber-700">Admin</span> : null}
                 {!user!.is_active ? <span className="chip !border-red-300 !bg-red-50 !text-red-700">Suspended</span> : null}
                 {user!.plan_expired ? <span className="chip !border-red-300 !bg-red-50 !text-red-700">Plan expired</span> : null}
@@ -279,6 +350,32 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
                     </button>
                   ) : null}
                 </div>
+
+                <div className="mt-4 border-t border-black/[0.06] pt-4">
+                  <p className="label mb-2">Renew (adds to the end date)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        [30, "1 month"],
+                        [90, "3 months"],
+                        [365, "1 year"],
+                      ] as const
+                    ).map(([days, label]) => (
+                      <button
+                        key={days}
+                        type="button"
+                        className="btn-ghost !px-3"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          void run(`extend-${days}`, () => extendPlan(user!.id, days), `Plan extended by ${label}.`)
+                        }
+                      >
+                        <CalendarPlus className="h-4 w-4" aria-hidden />
+                        +{label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
                   Every uploaded file counts as one, and each extra variant counts again. The count starts over on the
                   1st of each month.
@@ -286,10 +383,50 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
               </NeonCard>
             ) : null}
 
+            {/* Notes ------------------------------------------------------- */}
+            <NeonCard padding="md" radius="lg" tone="muted">
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-black">
+                <StickyNote className="h-4 w-4 text-meta-500" aria-hidden />
+                Private notes
+              </h3>
+              <textarea
+                className="field min-h-[80px] resize-y"
+                maxLength={5000}
+                placeholder="Payment method, what they paid, company, anything to remember. Only admins see this."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn-ghost mt-2"
+                disabled={busy !== null || notes === (user!.admin_notes ?? "")}
+                onClick={() => void run("notes", () => updateUser(user!.id, { admin_notes: notes }), "Notes saved.")}
+              >
+                {busy === "notes" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+                Save notes
+              </button>
+            </NeonCard>
+
             {/* Account actions --------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone="muted">
               <h3 className="mb-3 text-sm font-semibold text-black">Account</h3>
               <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-ghost" disabled={busy !== null} onClick={() => void issuePassword()}>
+                  <KeyRound className="h-4 w-4" aria-hidden />
+                  New password
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  disabled={busy !== null || isSelf}
+                  title={isSelf ? "Use Sign out in the header" : undefined}
+                  onClick={() => void run("signout", () => signOutUser(user!.id), "Signed out of every device.")}
+                >
+                  <LogOut className="h-4 w-4" aria-hidden />
+                  Sign out everywhere
+                </button>
+
                 <button
                   type="button"
                   className="btn-ghost"
@@ -359,7 +496,27 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
                     Make admin
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  className="btn-danger"
+                  disabled={busy !== null || isSelf || user!.admin_from_settings}
+                  title={isSelf ? "You cannot delete yourself" : undefined}
+                  onClick={() => void remove()}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden />
+                  Delete account
+                </button>
               </div>
+
+              {tempPassword ? (
+                <div className="mt-3">
+                  <SecretBox
+                    value={tempPassword}
+                    note="Their new password. It is shown only once: send it to them and ask them to change it after signing in."
+                  />
+                </div>
+              ) : null}
             </NeonCard>
 
             {/* History ----------------------------------------------------- */}
@@ -391,6 +548,7 @@ export function UserPanel({ userId, plans, selfId, onClose, onChanged }: UserPan
             </NeonCard>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
