@@ -436,7 +436,7 @@ All backend settings are environment variables prefixed `ADCAM_`. See
 | `ADCAM_DATABASE_URL` | SQLite in the storage root | `postgresql+psycopg://…` in production. |
 | `ADCAM_ALLOW_REGISTRATION` | `true` | `false` closes sign-ups; existing users still sign in. |
 | `ADCAM_COOKIE_SECURE` | `false` | `true` in production. Required if `SAMESITE=none`. |
-| `API_ORIGIN` | `http://127.0.0.1:8000` | Where Next proxies `/api`. Server-side, so no rebuild needed. |
+| `API_ORIGIN` | `http://127.0.0.1:8000` | Where Next proxies `/api`. Read at build time, so changing it needs a rebuild. |
 | `ADCAM_CORS_ORIGINS` | `localhost:3000` | Comma-separated. |
 
 Frontend: `NEXT_PUBLIC_API_URL` (and optionally `NEXT_PUBLIC_API_KEY`). These

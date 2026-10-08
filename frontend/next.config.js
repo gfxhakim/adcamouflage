@@ -4,8 +4,9 @@
 // FastAPI service. That keeps the session cookie first-party, which is what
 // lets middleware.ts guard /app, and removes CORS from the deployment entirely.
 //
-// API_ORIGIN is a server-side variable, so it can be changed at deploy time
-// without rebuilding - unlike NEXT_PUBLIC_*, which is inlined at build time.
+// API_ORIGIN is read when `next build` runs: Next bakes rewrite destinations
+// into .next/routes-manifest.json, so changing it later needs a rebuild. The
+// Dockerfile takes it as a build arg for that reason.
 const API_ORIGIN = (process.env.API_ORIGIN || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 const nextConfig = {
