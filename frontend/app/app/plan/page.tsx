@@ -75,7 +75,7 @@ export default function PlanPage() {
       // Same recovery as the workspace: a cookie the API rejects is cleared first.
       if (!profile || !subscription) {
         await signOut().catch(() => undefined);
-        window.location.assign("/login?next=%2Fapp%2Fplan");
+        window.location.assign("/");
         return;
       }
       setUser(profile);

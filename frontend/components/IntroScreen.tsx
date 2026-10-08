@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 
 import HeroText from "@/components/ui/hero-shutter-text";
 
-/** How long the intro holds before the shutter opens. */
-const SHOW_MS = 4000;
+/** How long the intro holds before the shutter opens (about 5 s in all). */
+const SHOW_MS = 4100;
 /** How long the shutter takes to open. */
 const OPEN_MS = 900;
 /** Horizontal blades the screen splits into when it opens. */
@@ -20,19 +20,24 @@ type Phase = "playing" | "opening" | "done";
 /**
  * Full-screen "LET'S RUN F*CKED ADS" intro, mounted once in the root layout.
  *
- * It plays on every full page load (opening the link, or a refresh), before
- * whichever page was asked for, and not again while the visitor clicks around
- * inside the site, because the layout stays mounted across client navigations.
- * After 4 seconds the screen splits into blades that slide away to either side.
+ * It plays when someone opens the site's link (or refreshes) on the landing
+ * page, and nowhere else: not on the login, workspace or admin pages, not after
+ * signing in or out, and not again while the visitor clicks around, because
+ * the layout stays mounted across client navigations. After about 4 seconds the
+ * screen splits into blades that slide away to either side.
  */
 export function IntroScreen() {
   const pathname = usePathname();
-  const skip = pathname?.startsWith("/admin") ?? false;
-  const [phase, setPhase] = useState<Phase>(skip ? "done" : "playing");
+  const [phase, setPhase] = useState<Phase>(pathname === "/" ? "playing" : "done");
 
   useEffect(() => {
-    if (skip) return;
+    if (phase === "done") return;
     const root = document.documentElement;
+    // Set by INTRO_GATE_SCRIPT (lib/intro.ts) when this load was a hop inside the site.
+    if (root.getAttribute("data-intro") === "off") {
+      setPhase("done");
+      return;
+    }
     root.style.overflow = "hidden";
     const open = window.setTimeout(() => setPhase("opening"), SHOW_MS);
     const done = window.setTimeout(() => setPhase("done"), SHOW_MS + OPEN_MS);

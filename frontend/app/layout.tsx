@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import IntroScreen from "@/components/IntroScreen";
+import { INTRO_GATE_SCRIPT } from "@/lib/intro";
 
 import "./globals.css";
 
@@ -28,7 +29,11 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // The gate script below may mark <html> before React hydrates it.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: INTRO_GATE_SCRIPT }} />
+      </head>
       <body className="min-h-screen">
         <IntroScreen />
         {children}
