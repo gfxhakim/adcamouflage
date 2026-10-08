@@ -132,8 +132,9 @@ account, and you are live.
 **Turn on the admin panel.** On the `api` service open **Variables → New
 Variable**, add `ADCAM_ADMIN_EMAILS` with the email you sign in with (several
 emails can be separated by commas), and let it redeploy. Then sign in on the web
-domain: an **Admin** button appears in the workspace header, or go straight to
-`/admin`. It has four tabs:
+domain and type `/admin` after the address (bookmark it). Nothing in the app
+links to it: customers who try `/admin` see the normal "page not found" screen,
+and the admin API answers them with a plain 404. It has four tabs:
 
 - **Overview**: revenue, users, activity feed, who needs attention, system health.
 - **Users**: search and filter, add a user by hand, export to CSV, and per user:

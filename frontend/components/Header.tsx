@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Activity, CircleAlert, Gauge, LogOut, ShieldCheck, ShieldHalf, User as UserIcon, Waves } from "lucide-react";
+import { Activity, CircleAlert, Gauge, LogOut, ShieldHalf, User as UserIcon, Waves } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -97,12 +97,6 @@ export function Header({ health, healthError, user }: HeaderProps) {
             </span>
           ) : null}
 
-          {user?.is_admin ? (
-            <Link href="/admin" className="btn-ghost !px-2.5" title="Admin panel">
-              <ShieldCheck className="h-4 w-4 text-meta-500" aria-hidden />
-              <span className="hidden sm:inline">Admin</span>
-            </Link>
-          ) : null}
 
           {user ? (
             <div className="flex items-center gap-2">

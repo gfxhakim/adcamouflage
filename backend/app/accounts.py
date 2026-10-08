@@ -190,10 +190,14 @@ def current_user(
 
 
 def require_admin(user: User = Depends(current_user)) -> User:
-    """Require a signed-in admin."""
+    """Require a signed-in admin.
+
+    Everyone else gets the same 404 as a route that does not exist, so the
+    admin API is not discoverable by customers poking at the network tab.
+    """
 
     if not is_admin(user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     return user
 
 

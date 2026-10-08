@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 
 from .accounts import (
     AuthError,
-    is_admin,
     clear_session_cookie,
     create_session_token,
     current_user,
@@ -110,7 +109,6 @@ class UserProfile(BaseModel):
     display_name: str | None
     created_at: datetime
     last_login_at: datetime | None
-    is_admin: bool = False
     plan: str = "unlimited"
     plan_label: str = "Unlimited"
     monthly_quota: int | None = None
@@ -128,7 +126,6 @@ class UserProfile(BaseModel):
             display_name=user.display_name,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
-            is_admin=is_admin(user),
             plan=user.plan,
             plan_label=plan_label(get_plans(db), user.plan),
             monthly_quota=user.monthly_quota,

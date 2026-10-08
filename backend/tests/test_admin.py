@@ -61,14 +61,14 @@ def _upload(client: TestClient, image, count: int = 1):
 
 def test_regular_users_cannot_open_the_admin_api():
     user = _signed_in(address("plain"))
-    assert user.get("/api/v1/auth/me").json()["is_admin"] is False
+    # Customers must not be able to tell the admin API exists.
+    assert "is_admin" not in user.get("/api/v1/auth/me").json()
     for path in ("/api/v1/admin/overview", "/api/v1/admin/users", "/api/v1/admin/activity"):
-        assert user.get(path).status_code == 403
+        assert user.get(path).status_code == 404
     assert TestClient(app).get("/api/v1/admin/users").status_code == 401
 
 
 def test_admin_email_setting_grants_access(admin):
-    assert admin.get("/api/v1/auth/me").json()["is_admin"] is True
     overview = admin.get("/api/v1/admin/overview")
     assert overview.status_code == 200, overview.text
     assert overview.json()["total_users"] >= 1
@@ -160,7 +160,7 @@ def test_admin_cannot_lock_themselves_out(admin):
 def test_promoted_admin_gets_access(admin):
     helper = _signed_in(address("helper"))
     helper_id = _user_id(helper)
-    assert helper.get("/api/v1/admin/users").status_code == 403
+    assert helper.get("/api/v1/admin/users").status_code == 404
     admin.patch(f"/api/v1/admin/users/{helper_id}", json={"is_admin": True})
     assert helper.get("/api/v1/admin/users").status_code == 200
 

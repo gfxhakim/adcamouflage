@@ -6,7 +6,6 @@ export interface UserProfile {
   display_name: string | null;
   created_at: string;
   last_login_at: string | null;
-  is_admin: boolean;
   plan: string;
   plan_label: string;
   /** Files per calendar month; null means unlimited. */

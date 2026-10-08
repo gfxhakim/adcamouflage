@@ -10,7 +10,7 @@ import OverviewTab from "@/components/admin/OverviewTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 import UserPanel from "@/components/admin/UserPanel";
 import UsersTab from "@/components/admin/UsersTab";
-import NeonCard from "@/components/NeonCard";
+import NotFound from "@/app/not-found";
 import { getOverview, getPlans, type Overview, type PlanInfo } from "@/lib/admin";
 import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
 
@@ -51,22 +51,32 @@ export default function AdminPage() {
     return () => window.removeEventListener("hashchange", syncTab);
   }, []);
 
-  useEffect(() => {
-    fetchMe()
-      .then((profile) => {
-        if (!profile) {
-          void signOut()
-            .catch(() => undefined)
-            .finally(() => window.location.assign("/login?next=%2Fadmin"));
-          return;
-        }
-        setMe(profile);
-        setChecked(true);
-      })
-      .catch(() => setChecked(true));
-  }, []);
+  // Anyone who is not a signed-in admin sees the ordinary "page not found"
+  // screen, with no redirect to sign-in, so customers cannot tell this page
+  // exists. The admin API answers them with a plain 404 too.
+  const [allowed, setAllowed] = useState(false);
 
-  const allowed = Boolean(me?.is_admin);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await fetchMe();
+        if (!profile) return;
+        const planList = await getPlans();
+        if (cancelled) return;
+        setMe(profile);
+        setPlans(planList);
+        setAllowed(true);
+      } catch {
+        /* Not an admin, or not signed in: stay on the not-found screen. */
+      } finally {
+        if (!cancelled) setChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // --- shared data ---------------------------------------------------------
   const loadShared = useCallback(async () => {
@@ -120,21 +130,7 @@ export default function AdminPage() {
   }
 
   if (!allowed) {
-    return (
-      <main className="mx-auto grid min-h-screen max-w-md place-items-center px-4">
-        <NeonCard padding="lg" radius="xl" className="w-full text-center">
-          <ShieldHalf className="mx-auto h-8 w-8 text-meta-500" aria-hidden />
-          <h1 className="mt-3 text-lg font-semibold text-black">Admins only</h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            {me ? `${me.email} does not have admin access.` : "Sign in with an admin account to continue."}
-          </p>
-          <Link href="/app" className="btn-primary mt-5">
-            <ArrowLeft className="h-4 w-4" aria-hidden />
-            Back to workspace
-          </Link>
-        </NeonCard>
-      </main>
-    );
+    return <NotFound />;
   }
 
   const currency = overview?.currency ?? "USD";
