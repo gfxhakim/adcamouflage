@@ -109,11 +109,11 @@ export default function WorkspacePage() {
         if (cancelled || !mountedRef.current) return;
         // The middleware already gated this route on the cookie being present.
         // If the API rejects it (expired, or signed with an old secret), clear
-        // it first: otherwise /login would see the cookie and bounce back here.
+        // it first, then go back to the landing page to sign in again.
         if (!profile) {
           void signOut()
             .catch(() => undefined)
-            .finally(() => window.location.assign("/login?next=%2Fapp"));
+            .finally(() => window.location.assign("/"));
           return;
         }
         setUser(profile);
