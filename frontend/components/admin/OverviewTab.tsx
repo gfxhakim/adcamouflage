@@ -15,7 +15,7 @@ import {
 import { useEffect, useState } from "react";
 
 import ActivityFeed from "@/components/admin/ActivityFeed";
-import SeriesChart from "@/components/admin/SeriesChart";
+import SeriesChart from "@/components/SeriesChart";
 import NeonCard from "@/components/NeonCard";
 import StatTile from "@/components/StatTile";
 import { getActivity, type ActivityEvent, type Overview } from "@/lib/admin";
@@ -26,6 +26,7 @@ import type { HealthReport } from "@/lib/types";
 const FEED_FILTERS: { id: string; label: string }[] = [
   { id: "", label: "All" },
   { id: "signup", label: "Sign-ups" },
+  { id: "plan_request", label: "Plan requests" },
   { id: "batch", label: "Batches" },
   { id: "blocked", label: "Blocked" },
   { id: "login", label: "Logins" },

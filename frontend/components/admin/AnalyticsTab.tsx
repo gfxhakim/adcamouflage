@@ -4,8 +4,8 @@ import clsx from "clsx";
 import { Activity, BadgeDollarSign, Loader2, Percent, TrendingUp, Users, Wallet } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import SeriesChart from "@/components/admin/SeriesChart";
-import UsageMeter from "@/components/admin/UsageMeter";
+import SeriesChart from "@/components/SeriesChart";
+import UsageMeter from "@/components/UsageMeter";
 import NeonCard from "@/components/NeonCard";
 import StatTile from "@/components/StatTile";
 import { getAnalytics, type Analytics, type UserExpiry, type UserUsage } from "@/lib/admin";

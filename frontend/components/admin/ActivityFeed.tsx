@@ -1,4 +1,4 @@
-import { Ban, KeyRound, LogIn, Rocket, ShieldCheck, UserPlus, type LucideIcon } from "lucide-react";
+import { Ban, Crown, KeyRound, LogIn, Rocket, ShieldCheck, UserPlus, type LucideIcon } from "lucide-react";
 
 import type { ActivityEvent } from "@/lib/admin";
 import { timeAgo } from "@/lib/format";
@@ -7,6 +7,7 @@ const KINDS: Record<string, { icon: LucideIcon; tone: string }> = {
   signup: { icon: UserPlus, tone: "text-emerald-600 bg-emerald-50" },
   login: { icon: LogIn, tone: "text-meta-600 bg-meta-50" },
   batch: { icon: Rocket, tone: "text-meta-600 bg-meta-50" },
+  plan_request: { icon: Crown, tone: "text-meta-700 bg-meta-100" },
   blocked: { icon: Ban, tone: "text-red-600 bg-red-50" },
   admin: { icon: ShieldCheck, tone: "text-amber-700 bg-amber-50" },
   password: { icon: KeyRound, tone: "text-ink-muted bg-black/[0.04]" },
@@ -46,7 +47,7 @@ export function ActivityFeed({ events, hideEmail = false, onSelectUser }: Activi
               ) : (
                 <p className="truncate text-xs font-semibold text-black">{event.email}</p>
               )}
-              <p className="text-xs leading-relaxed text-ink-muted [overflow-wrap:anywhere]">{event.detail}</p>
+              <p className="text-xs leading-relaxed text-ink-muted [overflow-wrap:anywhere]">{event.detail.replace(/^\[[^\]]*\]\s*/, "")}</p>
             </div>
             <time
               className="shrink-0 whitespace-nowrap text-[11px] text-ink-faint"

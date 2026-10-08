@@ -20,6 +20,7 @@ import OverlayPanel from "@/components/OverlayPanel";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
 import OptionsPanel from "@/components/OptionsPanel";
+import PlanSummary from "@/components/plan/PlanSummary";
 import ProgressBar from "@/components/ProgressBar";
 import StatTile from "@/components/StatTile";
 import UploadZone from "@/components/UploadZone";
@@ -337,6 +338,8 @@ export default function WorkspacePage() {
             <p className="whitespace-pre-line text-sm leading-relaxed text-meta-900">{user.announcement}</p>
           </div>
         ) : null}
+
+        {user ? <PlanSummary user={user} /> : null}
 
         {/* Stats --------------------------------------------------------- */}
         <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
