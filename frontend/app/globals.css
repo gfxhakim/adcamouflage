@@ -28,9 +28,12 @@
   color-scheme: light;
 }
 
-html,
-body {
+/* min-height, not height: a fixed-height body would cut the sticky header loose mid-page. */
+html {
   height: 100%;
+}
+body {
+  min-height: 100%;
 }
 
 body {
@@ -316,5 +319,22 @@ body {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* Landing intro (components/IntroScreen.tsx) ------------------------------ */
+html[data-intro-seen] .intro-screen {
+  display: none;
+}
+
+/* If scripts never run, the intro still gets out of the way. */
+.intro-screen {
+  animation: intro-failsafe 0s linear 6s forwards;
+}
+
+@keyframes intro-failsafe {
+  to {
+    visibility: hidden;
+    pointer-events: none;
   }
 }
