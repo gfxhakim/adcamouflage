@@ -12,15 +12,12 @@ import {
   Tags,
 } from "lucide-react";
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import Link from "next/link";
 
 import LandingNav from "@/components/LandingNav";
 import NeonCard from "@/components/NeonCard";
 import PricingSection, { type PublicPlan } from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
-
-const SESSION_COOKIE = process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session";
 
 export const metadata: Metadata = {
   title: "AdCamouflage — One master, unlimited unique creatives",
@@ -93,13 +90,14 @@ async function loadPlans(): Promise<{ plans: PublicPlan[]; currency: string }> {
 }
 
 export default async function LandingPage() {
-  const signedIn = Boolean(cookies().get(SESSION_COOKIE)?.value);
-  const startHref = signedIn ? "/app" : "/signup";
+  // Everyone sees the visitor version of this page, and every start button
+  // opens the login page, which also offers to create an account.
+  const startHref = "/login";
   const pricing = await loadPlans();
 
   return (
     <>
-      <SiteHeader signedIn={signedIn} nav={<LandingNav variant="header" />} />
+      <SiteHeader nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />
 
       <main className="mx-auto max-w-7xl overflow-x-clip px-4 pb-28 pt-8 sm:px-6 sm:pt-10 lg:px-8 lg:pb-20">
@@ -144,13 +142,11 @@ export default async function LandingPage() {
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link href={startHref} className="btn-primary !px-6 !py-3 !text-base">
                   <Rocket className="h-4 w-4" aria-hidden />
-                  {signedIn ? "Open your workspace" : "Get started free"}
+                  Get started free
                 </Link>
-                {signedIn ? null : (
-                  <Link href="/login" className="btn-ghost !px-5 !py-3">
-                    I already have an account
-                  </Link>
-                )}
+                <Link href="/login" className="btn-ghost !px-5 !py-3">
+                  I already have an account
+                </Link>
               </div>
 
               <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
@@ -208,8 +204,8 @@ export default async function LandingPage() {
               overlay and watch the render queue. Batches, outputs and download links are visible
               only to you, and everything is purged on a retention timer.
             </p>
-            <Link href={startHref} className="btn-primary mt-5 !px-5">
-              {signedIn ? "Open your workspace" : "Create your account"}
+            <Link href="/signup" className="btn-primary mt-5 !px-5">
+              Create your account
               <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
           </NeonCard>
@@ -294,7 +290,7 @@ export default async function LandingPage() {
               </p>
               <Link href={startHref} className="btn-primary !px-6 !py-3 !text-base">
                 <Rocket className="h-4 w-4" aria-hidden />
-                {signedIn ? "Open your workspace" : "Get started"}
+                Get started
               </Link>
             </div>
           </NeonCard>

@@ -1,12 +1,10 @@
-import { ArrowRight, LayoutDashboard, ShieldHalf } from "lucide-react";
+import { ArrowRight, ShieldHalf } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 interface SiteHeaderProps {
-  /** A session cookie is present, so offer the workspace instead of sign-in. */
-  signedIn?: boolean;
   /** Hide the sign-in buttons, e.g. on the login and sign-up pages. */
   minimal?: boolean;
   /** Section links for the middle of the header (the landing page's nav pill). */
@@ -14,7 +12,7 @@ interface SiteHeaderProps {
 }
 
 /** The public header shared by the landing page and the auth pages. */
-export function SiteHeader({ signedIn = false, minimal = false, nav }: SiteHeaderProps) {
+export function SiteHeader({ minimal = false, nav }: SiteHeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
       <div
@@ -50,17 +48,13 @@ export function SiteHeader({ signedIn = false, minimal = false, nav }: SiteHeade
 
         {nav}
 
-        {minimal ? null : signedIn ? (
-          <Link href="/app" className="btn-primary justify-self-end !px-4 !py-2">
-            <LayoutDashboard className="h-4 w-4" aria-hidden />
-            Open workspace
-          </Link>
-        ) : (
+        {minimal ? null : (
+          // Both open the login page, which also offers to create an account.
           <nav className="flex shrink-0 items-center gap-2 justify-self-end">
             <Link href="/login" className="btn-ghost !px-3 !py-2 sm:!px-4">
               Log in
             </Link>
-            <Link href="/signup" className="btn-primary !px-3 !py-2 sm:!px-4">
+            <Link href="/login" className="btn-primary !px-3 !py-2 sm:!px-4">
               Get started
               <ArrowRight className="hidden h-3.5 w-3.5 sm:block" aria-hidden />
             </Link>

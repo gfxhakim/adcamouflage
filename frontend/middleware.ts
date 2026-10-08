@@ -3,8 +3,6 @@ import type { NextRequest } from "next/server";
 
 const SESSION_COOKIE = process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session";
 
-const AUTH_PAGES = ["/login", "/signup"];
-
 // Same default as next.config.js, which proxies /api to this origin. Read on
 // every request, so the web service needs it at runtime as well as at build.
 const API_ORIGIN = (process.env.API_ORIGIN || "http://127.0.0.1:8000").replace(/\/+$/, "");
@@ -50,20 +48,18 @@ function forgetSession(response: NextResponse): NextResponse {
 }
 
 /**
- * Keeps signed-out visitors out of the workspace, and signed-in users off the
- * login and sign-up pages. The landing page at / is public for everyone, and
- * the login page is only ever reached from its buttons: a signed-out visitor
- * who opens /app is sent to the landing page, not to /login.
+ * Keeps signed-out visitors out of the workspace and the admin panel. The
+ * landing page at / is public for everyone, and the login page is only ever
+ * reached from its buttons: a signed-out visitor who opens /app is sent to the
+ * landing page, not to /login. The login and sign-up pages always show their
+ * form, even to someone already signed in (they offer to continue instead),
+ * and signing in there sends an admin to the admin panel.
  *
  * For /app this only checks that a session cookie is present - the API is the
  * authority on it and every endpoint re-checks it, and the workspace clears a
- * cookie the API rejects. For /admin, /login and /signup it asks the API:
- * - /admin opens only for an admin; everyone else gets the ordinary 404 page,
- *   so customers cannot tell it exists.
- * - A signed-in admin who opens /login or /signup goes to the admin panel,
- *   everyone else who is signed in goes to the workspace.
- * - A session the API has ended is cleared, so /login shows the form instead
- *   of bouncing through the workspace.
+ * cookie the API rejects. For /admin it asks the API, and the panel opens only
+ * for an admin; everyone else gets the ordinary 404 page, so customers cannot
+ * tell it exists. A session the API has ended is cleared there too.
  */
 export async function middleware(request: NextRequest) {
   const session = request.cookies.get(SESSION_COOKIE)?.value;
@@ -84,18 +80,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (AUTH_PAGES.includes(pathname) && session) {
-    const access = await sessionAccess(session);
-    if (access === "expired") return forgetSession(NextResponse.next());
-    const url = request.nextUrl.clone();
-    url.pathname = access === "admin" ? "/admin" : "/app";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/admin/:path*", "/login", "/signup"],
+  matcher: ["/app/:path*", "/admin/:path*"],
 };

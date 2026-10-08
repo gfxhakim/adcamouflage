@@ -328,6 +328,11 @@ body {
   animation: intro-failsafe 0s linear 10s forwards;
 }
 
+/* Reached by a hop inside the site, not by opening the link: no intro. */
+html[data-intro="off"] .intro-screen {
+  display: none;
+}
+
 @keyframes intro-failsafe {
   to {
     visibility: hidden;

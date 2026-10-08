@@ -3,9 +3,9 @@
 import { ArrowRight, Loader2, Lock, Mail, OctagonAlert, User } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 
-import { signIn, signUp } from "@/lib/auth";
+import { fetchMe, signIn, signUp, type UserProfile } from "@/lib/auth";
 import NeonCard from "./NeonCard";
 
 type Mode = "signin" | "signup";
@@ -41,10 +41,37 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Someone already signed in on this browser, offered a way straight in. */
+  const [current, setCurrent] = useState<UserProfile | null>(null);
 
   const next = params.get("next");
   const destination = safeDestination(next);
   const otherPage = (mode === "signup" ? "/login" : "/signup") + (next ? `?next=${encodeURIComponent(next)}` : "");
+
+  useEffect(() => {
+    if (mode !== "signin") return;
+    let cancelled = false;
+    fetchMe()
+      .then((profile) => {
+        if (!cancelled) setCurrent(profile);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
+
+  // The API set an httpOnly cookie; a full navigation lets the Next middleware
+  // see it. Admins go to the admin panel, everyone else to the workspace.
+  const enter = useCallback(async () => {
+    window.location.assign(!next && (await isAdmin()) ? "/admin" : destination);
+  }, [destination, next]);
+
+  const continueSignedIn = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    await enter();
+  }, [busy, enter]);
 
   const submit = useCallback(
     async (event: React.FormEvent) => {
@@ -65,29 +92,40 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         } else {
           await signIn(email.trim(), password);
         }
-        // The API set an httpOnly cookie; a full navigation lets the Next
-        // middleware see it and route into the workspace.
-        window.location.assign(!next && (await isAdmin()) ? "/admin" : destination);
+        await enter();
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Something went wrong. Try again.");
         setBusy(false);
       }
     },
-    [busy, destination, displayName, email, mode, next, password],
+    [busy, displayName, email, enter, mode, password],
   );
 
   return (
     <NeonCard padding="lg" radius="xl" className="w-full max-w-md">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-black">
-          {mode === "signup" ? "Create your account" : "Welcome back"}
+          {mode === "signup" ? "Create your account" : "Log in"}
         </h1>
         <p className="mt-1.5 text-sm text-ink-muted">
           {mode === "signup"
             ? "Your assets and outputs are visible only to you."
-            : "Sign in to open your workspace."}
+            : "Sign in to your account, or create a new one below."}
         </p>
       </div>
+
+      {current ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-meta-500/20 bg-meta-50 px-4 py-3">
+          <p className="min-w-0 text-[13px] leading-snug text-ink-muted">
+            You&apos;re signed in as{" "}
+            <span className="break-all font-semibold text-black">{current.email}</span>
+          </p>
+          <button type="button" onClick={continueSignedIn} className="btn-primary !px-4 !py-2" disabled={busy}>
+            Continue
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      ) : null}
 
       <form onSubmit={submit} className="space-y-4" noValidate>
         {mode === "signup" ? (
@@ -179,12 +217,24 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         </button>
       </form>
 
-      <p className="mt-5 text-center text-xs leading-relaxed text-ink-subtle">
-        {mode === "signup" ? "Already have an account? " : "New here? "}
-        <Link href={otherPage} className="font-semibold text-meta-600 hover:underline">
-          {mode === "signup" ? "Sign in" : "Create an account"}
-        </Link>
-      </p>
+      {mode === "signup" ? (
+        <p className="mt-5 text-center text-xs leading-relaxed text-ink-subtle">
+          Already have an account?{" "}
+          <Link href={otherPage} className="font-semibold text-meta-600 hover:underline">
+            Sign in
+          </Link>
+        </p>
+      ) : (
+        // Every start button on the landing page opens this page, so new
+        // visitors need an obvious way to the sign-up form.
+        <div className="mt-6 border-t border-black/[0.07] pt-5 text-center">
+          <p className="mb-3 text-xs text-ink-subtle">New here?</p>
+          <Link href={otherPage} className="btn-ghost w-full !py-3">
+            <User className="h-4 w-4" aria-hidden />
+            Create a new account
+          </Link>
+        </div>
+      )}
     </NeonCard>
   );
 }
