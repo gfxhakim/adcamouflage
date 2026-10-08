@@ -19,13 +19,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from . import __version__
-from .accounts import current_user
+from .accounts import current_user, ensure_admin_account
 from .activity import log_activity
 from .admin_routes import router as admin_router
 from .auth_routes import record_batch
 from .auth_routes import router as auth_router
 from .config import settings
-from .db import User, get_db, init_db
+from .db import User, get_db, get_session_factory, init_db
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .app_settings import currency
@@ -61,6 +61,8 @@ CHUNK_SIZE = 1024 * 1024
 async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     init_db()
+    with get_session_factory()() as db:
+        ensure_admin_account(db)
     store = get_store()
     if not ffmpeg_available():
         logger.error(

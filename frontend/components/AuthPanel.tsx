@@ -19,6 +19,19 @@ function safeDestination(next: string | null): string {
   return next;
 }
 
+/**
+ * Admins land in the admin panel instead of the workspace. The admin API
+ * answers everyone else with a 404, so this tells a customer nothing.
+ */
+async function isAdmin(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/v1/admin/settings", { credentials: "same-origin", cache: "no-store" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function AuthPanel({ mode }: { mode: Mode }) {
   const params = useSearchParams();
   const formId = useId();
@@ -54,13 +67,13 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         }
         // The API set an httpOnly cookie; a full navigation lets the Next
         // middleware see it and route into the workspace.
-        window.location.assign(destination);
+        window.location.assign(!next && (await isAdmin()) ? "/admin" : destination);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Something went wrong. Try again.");
         setBusy(false);
       }
     },
-    [busy, destination, displayName, email, mode, password],
+    [busy, destination, displayName, email, mode, next, password],
   );
 
   return (

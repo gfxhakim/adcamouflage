@@ -392,3 +392,39 @@ def test_public_plans_follow_admin_edits(admin):
                 "apply_to_users": False,
             },
         )
+
+
+def _login(email: str, password: str) -> TestClient:
+    client = TestClient(app)
+    client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    return client
+
+
+def test_admin_password_variable_creates_and_resets_the_admin_login(monkeypatch):
+    from pydantic import SecretStr
+    from sqlalchemy.orm import Session
+
+    from app.accounts import ensure_admin_account
+
+    email = address("owner")
+    monkeypatch.setattr(settings, "admin_emails", [email])
+
+    def boot(password: str) -> None:
+        monkeypatch.setattr(settings, "admin_password", SecretStr(password))
+        with Session(get_engine()) as db:
+            ensure_admin_account(db)
+
+    boot("first-admin-pass")
+    first = _login(email, "first-admin-pass")
+    assert first.get("/api/v1/admin/settings").status_code == 200
+
+    boot("first-admin-pass")  # an unchanged restart keeps the session
+    assert first.get("/api/v1/admin/settings").status_code == 200
+
+    boot("second-admin-pass")
+    assert first.get("/api/v1/admin/settings").status_code == 401
+    assert _login(email, "first-admin-pass").get("/api/v1/admin/settings").status_code == 401
+    assert _login(email, "second-admin-pass").get("/api/v1/admin/settings").status_code == 200
+
+    boot("short")  # too short: ignored, the last good password still works
+    assert _login(email, "second-admin-pass").get("/api/v1/admin/settings").status_code == 200
