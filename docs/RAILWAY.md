@@ -119,6 +119,9 @@ NODE_ENV=production
 If you named the API service something other than `api`, change the hostname to
 match.
 
+`API_ORIGIN` is used while the image builds (Next fixes the proxy target at
+build time), so after changing it, redeploy the `web` service.
+
 ### 4. Deploy
 
 Both services build on push. Open the web service's domain, create the first
@@ -178,6 +181,10 @@ cheaper at sustained load; Railway is easier to operate.
 
 **`api` starts then exits.** Check `ADCAM_SECRET_KEY` is set — the service
 refuses to run without it in production. The deploy log shows the reason.
+
+**`/api/v1/health` on the web domain returns a bare "Internal Server Error".**
+The web service cannot reach the API. Check `API_ORIGIN` is set on `web`, then
+redeploy `web` so the new value is built in.
 
 **`web` returns 502.** `API_ORIGIN` does not resolve. Confirm the API service's
 name matches the hostname, that `PORT=8000` is set on it, and that it is

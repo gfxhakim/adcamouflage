@@ -46,9 +46,11 @@ services:
   web:
     build:
       context: ./frontend
+      args:
+        API_ORIGIN: http://api:8000
     restart: unless-stopped
     environment:
-      # Server-side only, so the backend address is changeable without a rebuild.
+      # Must match build.args above: the proxy target is fixed at build time.
       API_ORIGIN: http://api:8000
       NODE_ENV: production
     depends_on:
