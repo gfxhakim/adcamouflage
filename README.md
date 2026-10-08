@@ -24,9 +24,9 @@ them is a metadata edit — the output is a genuinely new encode.
 
 ### Accounts and access
 
-The site is two things behind one origin: a **landing page** at `/` where
-visitors sign in or create an account, and the **console** at `/app`, which
-requires a session.
+The site is three things behind one origin: a public **landing page** at `/`,
+**log in** and **sign up** pages at `/login` and `/signup`, and the
+**workspace** at `/app`, which requires a session.
 
 - Passwords are hashed with bcrypt (cost 12). Anything over 72 bytes is
   rejected rather than silently truncated, which would make two different long
@@ -344,11 +344,11 @@ adcamouflage/
 │   │   ├── layout.tsx
 │   │   └── globals.css     The synchronised neon border system + design tokens
 │   ├── components/
-│   │   ├── NeonCard.tsx    The rotating-border glass panel every surface is built from
+│   │   ├── ui/gradient-bold-card.tsx  White card with the moving Meta-blue neon rim
+│   │   ├── NeonCard.tsx    Alias of that card, used by every surface
 │   │   ├── UploadZone.tsx  Drag-and-drop with client-side validation
 │   │   ├── AuthPanel.tsx   Sign in / create account
 │   │   ├── OverlayPanel.tsx Overlay image, timing mode, position, opacity
-│   │   ├── NeonDriver.tsx  Keeps the borders rotating where CSS cannot
 │   │   ├── OptionsPanel.tsx
 │   │   ├── JobQueue.tsx / JobCard.tsx
 │   │   ├── ProgressBar.tsx / StatTile.tsx / Header.tsx
@@ -360,7 +360,7 @@ adcamouflage/
 │   ├── start.bat           Windows wrapper around start.py
 │   ├── start.sh            macOS / Linux wrapper around start.py
 │   └── start-docker.sh     One-command Compose launch
-├── middleware.ts           Guards /app, redirects signed-in users to it
+├── middleware.ts           Sends signed-out visitors to /login, signed-in ones past it
 ├── deploy/Caddyfile        TLS + one-origin routing
 ├── docker-compose.yml      Development stack
 ├── docker-compose.prod.yml Production stack with Postgres and Caddy

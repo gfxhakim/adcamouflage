@@ -163,7 +163,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                 )}
               >
                 <span className="flex items-center gap-2 text-sm font-semibold capitalize">
-                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-black0")} aria-hidden />
+                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-ink-subtle")} aria-hidden />
                   {preset}
                 </span>
                 <span className="mt-1 block text-[11px] leading-relaxed opacity-80">{copy.blurb}</span>
@@ -228,7 +228,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                     "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
                     active
                       ? "border-meta-500/50 bg-meta-100 text-meta-600"
-                      : "border-black/10 bg-meta-50 text-black0",
+                      : "border-black/10 bg-meta-50 text-ink-subtle",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -244,7 +244,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                       aria-hidden
                     />
                   </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-black0">
+                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle">
                     {description}
                   </span>
                 </span>

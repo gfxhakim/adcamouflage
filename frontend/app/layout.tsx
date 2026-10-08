@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 
-import NeonDriver from "@/components/NeonDriver";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -29,8 +28,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen">
-        {/* Keeps the neon borders rotating where CSS cannot animate them. */}
-        <NeonDriver />
         {children}
       </body>
     </html>

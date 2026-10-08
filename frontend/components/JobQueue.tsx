@@ -30,12 +30,12 @@ export function JobQueue({
     return (
       <NeonCard tone="muted" padding="lg" radius="xl" className="h-full">
         <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-black/10 bg-meta-50 text-black0">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-black/10 bg-meta-50 text-ink-subtle">
             <Inbox className="h-6 w-6" aria-hidden />
           </span>
           <div>
             <p className="text-sm font-semibold text-ink-muted">No active batch</p>
-            <p className="mt-1 max-w-xs text-xs leading-relaxed text-black0">
+            <p className="mt-1 max-w-xs text-xs leading-relaxed text-ink-subtle">
               Drop your assets on the left, pick a camouflage profile, and the mutation queue will
               appear here with live progress.
             </p>
@@ -66,7 +66,7 @@ export function JobQueue({
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-meta-500" aria-hidden />
                 ) : null}
               </div>
-              <p className="mt-0.5 font-mono text-[11px] text-black0">{batch.batch.id}</p>
+              <p className="mt-0.5 font-mono text-[11px] text-ink-subtle">{batch.batch.id}</p>
             </div>
 
             <div className="flex items-center gap-2">

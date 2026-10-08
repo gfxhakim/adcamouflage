@@ -7,15 +7,18 @@ import {
   Layers3,
   Rocket,
   ScanLine,
+  LockKeyhole,
   ShieldCheck,
-  ShieldHalf,
   Tags,
 } from "lucide-react";
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { cookies } from "next/headers";
+import Link from "next/link";
 
-import AuthPanel from "@/components/AuthPanel";
 import NeonCard from "@/components/NeonCard";
+import SiteHeader from "@/components/SiteHeader";
+
+const SESSION_COOKIE = process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session";
 
 export const metadata: Metadata = {
   title: "AdCamouflage — One master, unlimited unique creatives",
@@ -62,45 +65,28 @@ const PIPELINE = [
 ];
 
 export default function LandingPage() {
+  const signedIn = Boolean(cookies().get(SESSION_COOKIE)?.value);
+  const startHref = signedIn ? "/app" : "/signup";
+
   return (
     <>
-      <header className="border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-meta-500/30 bg-meta-50">
-              <ShieldHalf className="h-5 w-5 text-meta-500" aria-hidden />
-            </span>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold tracking-tight text-black">
-                Ad<span className="text-gradient">Camouflage</span>
-              </p>
-              <p className="hidden text-[11px] text-ink-faint sm:block">
-                Media mutation &amp; fingerprint stripping
-              </p>
-            </div>
-          </div>
-          <a href="#signin" className="btn-primary !px-4 !py-2 !text-sm">
-            Sign in
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </a>
-        </div>
-      </header>
+      <SiteHeader signedIn={signedIn} />
 
-      <main className="mx-auto max-w-7xl px-4 pb-20 pt-10 sm:px-6 lg:px-8">
-        {/* Hero + sign-in ------------------------------------------------ */}
+      <main className="mx-auto max-w-7xl overflow-x-clip px-4 pb-20 pt-8 sm:px-6 sm:pt-10 lg:px-8">
+        {/* Hero -------------------------------------------------------------- */}
         <section className="relative mb-16">
           <div
             className="pointer-events-none absolute -inset-x-10 -top-28 h-72 animate-float-slow rounded-full bg-meta-500/[0.07] blur-3xl"
             aria-hidden
           />
-          <div className="relative grid items-start gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="relative grid items-center gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-12">
             <div>
               <span className="chip mb-5 !border-meta-500/30 !bg-meta-50 !text-meta-700">
                 <ShieldCheck className="h-3.5 w-3.5 text-meta-500" aria-hidden />
                 Your files stay on your infrastructure
               </span>
 
-              <h1 className="max-w-2xl text-4xl font-extrabold leading-[1.08] tracking-tight text-black sm:text-5xl lg:text-[3.4rem]">
+              <h1 className="max-w-2xl text-[2.1rem] font-extrabold leading-[1.08] tracking-tight text-black sm:text-5xl lg:text-[3.4rem]">
                 One master.
                 <br />
                 <span className="text-gradient">Unlimited unique creatives.</span>
@@ -125,7 +111,19 @@ export default function LandingPage() {
                 ))}
               </ul>
 
-              <p className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link href={startHref} className="btn-primary !px-6 !py-3 !text-base">
+                  <Rocket className="h-4 w-4" aria-hidden />
+                  {signedIn ? "Open your workspace" : "Get started free"}
+                </Link>
+                {signedIn ? null : (
+                  <Link href="/login" className="btn-ghost !px-5 !py-3">
+                    I already have an account
+                  </Link>
+                )}
+              </div>
+
+              <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
                 <span className="inline-flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-meta-500" aria-hidden />
                   Free to create an account
@@ -141,42 +139,49 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <div className="flex justify-center lg:justify-end">
-              <Suspense
-                fallback={
-                  <NeonCard padding="lg" radius="xl" className="w-full max-w-md">
-                    <div className="h-[420px] animate-pulse rounded-lg bg-black/[0.03]" />
-                  </NeonCard>
-                }
-              >
-                <AuthPanel />
-              </Suspense>
-            </div>
+            <NeonCard padding="lg" radius="xl" className="w-full lg:max-w-md lg:justify-self-end">
+              <p className="label">What changes on every render</p>
+              <dl className="mt-4 space-y-3.5">
+                {PROOF.map(({ label, before, after }) => (
+                  <div key={label}>
+                    <dt className="text-xs font-medium text-ink-subtle">{label}</dt>
+                    <dd className="mt-1 flex items-center gap-2 font-mono text-[13px]">
+                      <span className="truncate text-ink-faint line-through decoration-red-400/70">
+                        {before}
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                      <span className="truncate font-semibold text-meta-700">{after}</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-5 border-t border-black/10 pt-4 text-[11px] leading-relaxed text-ink-faint">
+                Every job ships with a verifiable report — hashes before and after, which mutations
+                were applied, and how many provenance tags remain.
+              </p>
+            </NeonCard>
           </div>
         </section>
 
-        {/* Proof --------------------------------------------------------- */}
+        {/* Workspace + overlay ------------------------------------------- */}
         <section className="mb-16 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <NeonCard padding="lg" radius="xl">
-            <p className="label">What changes on every render</p>
-            <dl className="mt-4 space-y-3.5">
-              {PROOF.map(({ label, before, after }) => (
-                <div key={label}>
-                  <dt className="text-xs font-medium text-ink-subtle">{label}</dt>
-                  <dd className="mt-1 flex items-center gap-2 font-mono text-[13px]">
-                    <span className="truncate text-ink-faint line-through decoration-red-400/70">
-                      {before}
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                    <span className="truncate font-semibold text-meta-700">{after}</span>
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-5 border-t border-black/10 pt-4 text-[11px] leading-relaxed text-ink-faint">
-              Every job ships with a verifiable report — hashes before and after, which mutations
-              were applied, and how many provenance tags remain.
+            <span className="mb-4 inline-grid h-10 w-10 place-items-center rounded-xl border border-black/10 bg-meta-50 text-meta-500">
+              <LockKeyhole className="h-5 w-5" aria-hidden />
+            </span>
+            <p className="label">Your own workspace</p>
+            <h2 className="mt-3 text-xl font-bold tracking-tight text-black">
+              Every upload belongs to your account
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+              Sign in to a private workspace where you load assets, tune the camouflage, add an
+              overlay and watch the render queue. Batches, outputs and download links are visible
+              only to you, and everything is purged on a retention timer.
             </p>
+            <Link href={startHref} className="btn-primary mt-5 !px-5">
+              {signedIn ? "Open your workspace" : "Create your account"}
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
           </NeonCard>
 
           <NeonCard tone="slow" padding="lg" radius="xl">
@@ -252,10 +257,10 @@ export default function LandingPage() {
               <p className="max-w-md text-sm text-ink-muted">
                 It takes a minute. Your assets and outputs are visible only to your account.
               </p>
-              <a href="#signin" className="btn-primary !px-6 !py-3 !text-base">
+              <Link href={startHref} className="btn-primary !px-6 !py-3 !text-base">
                 <Rocket className="h-4 w-4" aria-hidden />
-                Get started
-              </a>
+                {signedIn ? "Open your workspace" : "Get started"}
+              </Link>
             </div>
           </NeonCard>
         </section>

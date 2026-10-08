@@ -148,7 +148,7 @@ export function UploadZone({
               <span className="block text-sm font-semibold text-black">
                 {dragging ? "Release to queue these assets" : "Drop videos or images here"}
               </span>
-              <span className="mt-1 block text-xs text-black0">
+              <span className="mt-1 block text-xs text-ink-subtle">
                 or click to browse · up to {maxFiles} files · {maxSizeMb}MB each
               </span>
             </span>
@@ -236,7 +236,7 @@ export function UploadZone({
                     <span className="block truncate text-xs font-medium text-black">
                       {file.name}
                     </span>
-                    <span className="block text-[11px] text-black0">
+                    <span className="block text-[11px] text-ink-subtle">
                       {formatBytes(file.size)} · {video ? "video" : "image"}
                     </span>
                   </span>
@@ -244,7 +244,7 @@ export function UploadZone({
                     type="button"
                     disabled={disabled}
                     onClick={() => onFilesChange(files.filter((_, i) => i !== index))}
-                    className="shrink-0 rounded-md p-1.5 text-black0 opacity-0 transition-all hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-30"
+                    className="shrink-0 rounded-md p-1.5 text-ink-subtle opacity-0 transition-all hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-30"
                     aria-label={`Remove ${file.name}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
