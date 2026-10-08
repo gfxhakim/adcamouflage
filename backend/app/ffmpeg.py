@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import signal
 import subprocess
 import threading
 from dataclasses import dataclass, field
@@ -302,12 +303,36 @@ def run_ffmpeg(
                     pass
 
     if returncode != 0:
-        detail = "".join(stderr_chunks).strip().splitlines()
-        message = detail[-1] if detail else f"exit code {returncode}"
+        message = describe_ffmpeg_exit(returncode, "".join(stderr_chunks))
         raise MediaError(f"ffmpeg failed: {message}")
 
     if on_progress:
         on_progress(1.0, stage)
+
+
+def describe_ffmpeg_exit(returncode: int, stderr: str) -> str:
+    """Explain a failed ffmpeg run in one line, even when it printed nothing.
+
+    A negative return code means ffmpeg was killed by a signal and never got to
+    write an error. SIGKILL there is almost always the kernel's out-of-memory
+    killer, which is worth saying plainly instead of leaving the reason blank.
+    """
+
+    lines = stderr.strip().splitlines()
+    if lines:
+        return lines[-1][-300:]
+    if returncode < 0:
+        try:
+            name = signal.Signals(-returncode).name
+        except ValueError:
+            name = f"signal {-returncode}"
+        if -returncode == signal.SIGKILL:
+            return (
+                f"ffmpeg was killed ({name}), most likely because the server ran out of memory; "
+                "try fewer renders at once or give the service more RAM"
+            )
+        return f"ffmpeg was killed ({name})"
+    return f"ffmpeg exited with code {returncode} and no error output"
 
 
 def open_ffmpeg_writer(args: Sequence[str]) -> subprocess.Popen[bytes]:
