@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
+import LandingNav from "@/components/LandingNav";
 import NeonCard from "@/components/NeonCard";
 import SiteHeader from "@/components/SiteHeader";
 
@@ -71,10 +72,11 @@ export default function LandingPage() {
   return (
     <>
       <SiteHeader signedIn={signedIn} />
+      <LandingNav />
 
-      <main className="mx-auto max-w-7xl overflow-x-clip px-4 pb-20 pt-8 sm:px-6 sm:pt-10 lg:px-8">
+      <main className="mx-auto max-w-7xl overflow-x-clip px-4 pb-28 pt-8 sm:px-6 md:pb-20 md:pt-28 lg:px-8">
         {/* Hero -------------------------------------------------------------- */}
-        <section className="relative mb-16">
+        <section id="home" className="relative mb-16 scroll-mt-20 md:scroll-mt-36">
           <div
             className="pointer-events-none absolute -inset-x-10 -top-28 h-72 animate-float-slow rounded-full bg-meta-500/[0.07] blur-3xl"
             aria-hidden
@@ -164,7 +166,7 @@ export default function LandingPage() {
         </section>
 
         {/* Workspace + overlay ------------------------------------------- */}
-        <section className="mb-16 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section id="features" className="mb-16 grid scroll-mt-20 gap-6 md:scroll-mt-36 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <NeonCard padding="lg" radius="xl">
             <span className="mb-4 inline-grid h-10 w-10 place-items-center rounded-xl border border-black/10 bg-meta-50 text-meta-500">
               <LockKeyhole className="h-5 w-5" aria-hidden />
@@ -221,7 +223,7 @@ export default function LandingPage() {
         </section>
 
         {/* Pipeline ------------------------------------------------------ */}
-        <section className="mb-16">
+        <section id="how-it-works" className="mb-16 scroll-mt-20 md:scroll-mt-36">
           <h2 className="mb-5 text-sm font-semibold tracking-tight text-black">
             How a file moves through the engine
           </h2>
@@ -248,7 +250,7 @@ export default function LandingPage() {
         </section>
 
         {/* Closing CTA --------------------------------------------------- */}
-        <section className="mb-4">
+        <section id="get-started" className="mb-4 scroll-mt-20 md:scroll-mt-36">
           <NeonCard padding="lg" radius="xl">
             <div className="flex flex-col items-center gap-4 py-6 text-center">
               <h2 className="max-w-lg text-2xl font-bold tracking-tight text-black">
