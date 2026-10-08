@@ -321,3 +321,20 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Landing intro (components/IntroScreen.tsx) ------------------------------ */
+html[data-intro-seen] .intro-screen {
+  display: none;
+}
+
+/* If scripts never run, the intro still gets out of the way. */
+.intro-screen {
+  animation: intro-failsafe 0s linear 6s forwards;
+}
+
+@keyframes intro-failsafe {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}

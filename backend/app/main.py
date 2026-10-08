@@ -28,7 +28,8 @@ from .config import settings
 from .db import User, get_db, init_db
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
-from .plans import check_allowance
+from .app_settings import currency
+from .plans import check_allowance, get_plans
 from .queue import cancel_asset, enqueue_asset, queue_depth, worker_mode
 from .schemas import (
     PRESET_DEFAULTS,
@@ -140,6 +141,19 @@ async def health() -> HealthReport:
         active_jobs=active,
         queue_depth=queue_depth(),
     )
+
+
+@app.get("/api/v1/plans", tags=["meta"])
+def public_plans(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """The plans as the admin panel has them, for the public pricing section."""
+
+    return {
+        "currency": currency(db),
+        "plans": [
+            {"id": p.id, "label": p.label, "monthly_quota": p.monthly_quota, "price": p.price}
+            for p in get_plans(db).values()
+        ],
+    }
 
 
 @app.get("/api/v1/presets", tags=["meta"])

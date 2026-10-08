@@ -362,3 +362,33 @@ def test_analytics_report_revenue_and_upgrade_candidates(admin, sample_image):
 
     overview = admin.get("/api/v1/admin/overview").json()
     assert overview["mrr"] >= 19 and overview["hit_limit_this_month"] >= 1
+
+
+def test_public_plans_follow_admin_edits(admin):
+    visitor = TestClient(app)
+    listed = visitor.get("/api/v1/plans")
+    assert listed.status_code == 200, listed.text
+    body = listed.json()
+    assert body["currency"]
+    assert [p["id"] for p in body["plans"]] == ["free", "starter", "pro", "unlimited"]
+    assert "users" not in body["plans"][0]
+
+    original = next(p for p in body["plans"] if p["id"] == "starter")
+    try:
+        edited = admin.put(
+            "/api/v1/admin/plans/starter",
+            json={"label": "Starter", "monthly_quota": 150, "price": 25, "apply_to_users": False},
+        )
+        assert edited.status_code == 200, edited.text
+        starter = next(p for p in visitor.get("/api/v1/plans").json()["plans"] if p["id"] == "starter")
+        assert starter["monthly_quota"] == 150 and starter["price"] == 25
+    finally:
+        admin.put(
+            "/api/v1/admin/plans/starter",
+            json={
+                "label": original["label"],
+                "monthly_quota": original["monthly_quota"],
+                "price": original["price"],
+                "apply_to_users": False,
+            },
+        )
