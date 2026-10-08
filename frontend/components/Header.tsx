@@ -1,11 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { Activity, CircleAlert, LogOut, ShieldHalf, User as UserIcon, Waves } from "lucide-react";
+import { Activity, CircleAlert, Gauge, LogOut, ShieldHalf, User as UserIcon, Waves } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { signOut, type UserProfile } from "@/lib/auth";
+import { usageText } from "@/lib/format";
 import type { HealthReport } from "@/lib/types";
 
 interface HeaderProps {
@@ -79,6 +80,23 @@ export function Header({ health, healthError, user }: HeaderProps) {
             )}
             {statusLabel}
           </span>
+
+          {user && (user.monthly_quota !== null || user.plan_expired) ? (
+            <span
+              className={clsx(
+                "chip hidden whitespace-nowrap sm:inline-flex",
+                user.plan_expired ||
+                  (user.monthly_quota !== null && user.used_this_month >= user.monthly_quota)
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : "",
+              )}
+              title={`${user.plan_label} plan: files used this month`}
+            >
+              <Gauge className="h-3.5 w-3.5" aria-hidden />
+              {user.plan_expired ? "Plan expired" : `${usageText(user.used_this_month, user.monthly_quota)} files`}
+            </span>
+          ) : null}
+
 
           {user ? (
             <div className="flex items-center gap-2">

@@ -6,6 +6,15 @@ export interface UserProfile {
   display_name: string | null;
   created_at: string;
   last_login_at: string | null;
+  plan: string;
+  plan_label: string;
+  /** Files per calendar month; null means unlimited. */
+  monthly_quota: number | null;
+  used_this_month: number;
+  plan_expires_at: string | null;
+  plan_expired: boolean;
+  /** A message from the admin for every signed-in user; empty for none. */
+  announcement: string;
 }
 
 export interface BatchSummary {

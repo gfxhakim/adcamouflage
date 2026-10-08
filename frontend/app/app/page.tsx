@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   Cpu,
+  Megaphone,
   FileStack,
   ImagePlus,
   Layers3,
@@ -233,6 +234,12 @@ export default function WorkspacePage() {
         setUploading(false);
         setUploadProgress(0);
       }
+      // Keeps the plan usage readout in the header current.
+      void fetchMe()
+        .then((profile) => {
+          if (profile && mountedRef.current) setUser(profile);
+        })
+        .catch(() => undefined);
     }
   }, [files, options, overlayImage, refresh, uploading]);
 
@@ -323,6 +330,13 @@ export default function WorkspacePage() {
             {limits?.retention_hours ?? 24} hours.
           </p>
         </section>
+
+        {user?.announcement ? (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-meta-500/30 bg-meta-50 px-4 py-3">
+            <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-meta-600" aria-hidden />
+            <p className="whitespace-pre-line text-sm leading-relaxed text-meta-900">{user.announcement}</p>
+          </div>
+        ) : null}
 
         {/* Stats --------------------------------------------------------- */}
         <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

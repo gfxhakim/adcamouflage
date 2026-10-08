@@ -18,6 +18,12 @@ export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   const { pathname, search } = request.nextUrl;
 
+  // The admin panel is never advertised: a signed-out visitor gets the normal
+  // 404 page rather than a redirect to sign-in that would reveal it exists.
+  if (pathname.startsWith("/admin") && !hasSession) {
+    return NextResponse.rewrite(new URL("/not-found", request.url));
+  }
+
   if (pathname.startsWith("/app") && !hasSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -36,5 +42,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup"],
+  matcher: ["/app/:path*", "/admin/:path*", "/login", "/signup"],
 };

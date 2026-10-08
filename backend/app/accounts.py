@@ -149,7 +149,32 @@ def _load_user(token: str | None, db: Session) -> User | None:
     # A password change bumps token_version, invalidating older sessions.
     if int(payload.get("ver", -1)) != user.token_version:
         raise AuthError("Your session has ended. Sign in again.")
+
+    _touch_last_seen(user, db)
     return user
+
+
+LAST_SEEN_RESOLUTION = timedelta(minutes=5)
+
+
+def _touch_last_seen(user: User, db: Session) -> None:
+    """Note when the user was last active, at most one write every few minutes."""
+
+    now = datetime.now(timezone.utc)
+    seen = user.last_seen_at
+    if seen is not None and seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    if seen is not None and now - seen < LAST_SEEN_RESOLUTION:
+        return
+    try:
+        user.last_seen_at = now
+        db.commit()
+    except Exception:  # noqa: BLE001 - a missed timestamp must not fail the request
+        db.rollback()
+
+
+def is_admin(user: User) -> bool:
+    return bool(user.is_admin) or user.email in settings.admin_emails
 
 
 def current_user(
@@ -161,6 +186,18 @@ def current_user(
     user = _load_user(session_cookie, db)
     if user is None:
         raise AuthError("Sign in to continue.")
+    return user
+
+
+def require_admin(user: User = Depends(current_user)) -> User:
+    """Require a signed-in admin.
+
+    Everyone else gets the same 404 as a route that does not exist, so the
+    admin API is not discoverable by customers poking at the network tab.
+    """
+
+    if not is_admin(user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     return user
 
 
