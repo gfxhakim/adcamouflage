@@ -129,6 +129,18 @@ account, and you are live.
 
 ## After launch
 
+**Turn on the admin panel.** On the `api` service open **Variables → New
+Variable**, add `ADCAM_ADMIN_EMAILS` with the email you sign in with (several
+emails can be separated by commas), and let it redeploy. Then sign in on the web
+domain: an **Admin** button appears in the workspace header, or go straight to
+`/admin`. From there you can see every user and their activity, put people on a
+plan, set a monthly file limit or end date, reset their usage, suspend them, or
+make other admins.
+
+New sign-ups start on the plan named by `ADCAM_DEFAULT_PLAN` (`free`, 10 files a
+month, unless you change it). Accounts created before the admin panel existed
+stay unlimited until you move them onto a plan.
+
 **Close sign-ups** once your team is in — set `ADCAM_ALLOW_REGISTRATION=false`
 on the `api` service and redeploy. Existing users keep signing in; registration
 returns 403.

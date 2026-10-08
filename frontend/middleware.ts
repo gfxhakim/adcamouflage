@@ -6,7 +6,7 @@ const SESSION_COOKIE = process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session"
 const AUTH_PAGES = ["/login", "/signup"];
 
 /**
- * Keeps signed-out visitors out of the workspace, and signed-in users off the
+ * Keeps signed-out visitors out of the workspace and admin panel, and signed-in users off the
  * login and sign-up pages. The landing page at / is public for everyone.
  *
  * This only checks that a session cookie is present - it deliberately does not
@@ -18,7 +18,7 @@ export function middleware(request: NextRequest) {
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   const { pathname, search } = request.nextUrl;
 
-  if (pathname.startsWith("/app") && !hasSession) {
+  if ((pathname.startsWith("/app") || pathname.startsWith("/admin")) && !hasSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + search)}`;
@@ -36,5 +36,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login", "/signup"],
+  matcher: ["/app/:path*", "/admin/:path*", "/login", "/signup"],
 };

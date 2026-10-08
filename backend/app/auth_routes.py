@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from .accounts import (
     AuthError,
+    is_admin,
     clear_session_cookie,
     create_session_token,
     current_user,
@@ -27,8 +28,10 @@ from .accounts import (
     validate_password,
     verify_password,
 )
+from .activity import log_activity
 from .config import settings
 from .db import BatchRecord, User, get_db
+from .plans import PLANS, apply_plan, default_plan, plan_expired, used_this_month
 
 logger = logging.getLogger(__name__)
 
@@ -107,15 +110,30 @@ class UserProfile(BaseModel):
     display_name: str | None
     created_at: datetime
     last_login_at: datetime | None
+    is_admin: bool = False
+    plan: str = "unlimited"
+    plan_label: str = "Unlimited"
+    monthly_quota: int | None = None
+    used_this_month: int = 0
+    plan_expires_at: datetime | None = None
+    plan_expired: bool = False
 
     @classmethod
-    def of(cls, user: User) -> "UserProfile":
+    def of(cls, user: User, db: Session) -> "UserProfile":
+        plan = PLANS.get(user.plan)
         return cls(
             id=user.id,
             email=user.email,
             display_name=user.display_name,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
+            is_admin=is_admin(user),
+            plan=user.plan,
+            plan_label=plan.label if plan else user.plan,
+            monthly_quota=user.monthly_quota,
+            used_this_month=used_this_month(db, user),
+            plan_expires_at=user.plan_expires_at,
+            plan_expired=plan_expired(user),
         )
 
 
@@ -148,6 +166,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         display_name=(payload.display_name or "").strip() or None,
         last_login_at=datetime.now(timezone.utc),
     )
+    apply_plan(user, default_plan().id)
     db.add(user)
     try:
         db.commit()
@@ -160,7 +179,8 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     db.refresh(user)
     set_session_cookie(response, create_session_token(user))
     logger.info("registered user %s", user.id)
-    return UserProfile.of(user)
+    log_activity(db, user.id, "signup", f"Signed up on the {user.plan} plan")
+    return UserProfile.of(user, db)
 
 
 @router.post("/login", response_model=UserProfile)
@@ -190,7 +210,8 @@ def login(
     db.refresh(user)
 
     set_session_cookie(response, create_session_token(user))
-    return UserProfile.of(user)
+    log_activity(db, user.id, "login", "Signed in")
+    return UserProfile.of(user, db)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -201,8 +222,8 @@ def logout(response: Response) -> Response:
 
 
 @router.get("/me", response_model=UserProfile)
-def me(user: User = Depends(current_user)) -> UserProfile:
-    return UserProfile.of(user)
+def me(user: User = Depends(current_user), db: Session = Depends(get_db)) -> UserProfile:
+    return UserProfile.of(user, db)
 
 
 @router.post("/password", response_model=UserProfile)
@@ -223,7 +244,8 @@ def change_password(
     db.refresh(user)
 
     set_session_cookie(response, create_session_token(user))
-    return UserProfile.of(user)
+    log_activity(db, user.id, "password", "Changed password")
+    return UserProfile.of(user, db)
 
 
 @router.get("/batches", response_model=list[BatchSummary])
@@ -258,7 +280,8 @@ def record_batch(db: Session, batch_id: str, user_id: int, asset_count: int, opt
 
     try:
         payload = options.model_dump() if hasattr(options, "model_dump") else dict(options or {})
-        preset = str(payload.get("preset", "balanced"))
+        raw_preset = payload.get("preset", "balanced")
+        preset = str(getattr(raw_preset, "value", raw_preset))
         db.add(
             BatchRecord(
                 id=batch_id,
@@ -272,3 +295,6 @@ def record_batch(db: Session, batch_id: str, user_id: int, asset_count: int, opt
     except Exception:  # noqa: BLE001 - history must never fail a submission
         db.rollback()
         logger.warning("could not record batch %s", batch_id, exc_info=True)
+        return
+    noun = "file" if asset_count == 1 else "files"
+    log_activity(db, user_id, "batch", f"Started a batch of {asset_count} {noun} ({preset})")

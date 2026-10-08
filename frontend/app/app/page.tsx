@@ -233,6 +233,12 @@ export default function WorkspacePage() {
         setUploading(false);
         setUploadProgress(0);
       }
+      // Keeps the plan usage readout in the header current.
+      void fetchMe()
+        .then((profile) => {
+          if (profile && mountedRef.current) setUser(profile);
+        })
+        .catch(() => undefined);
     }
   }, [files, options, overlayImage, refresh, uploading]);
 
