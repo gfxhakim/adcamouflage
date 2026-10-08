@@ -18,7 +18,7 @@ export default function NotFound() {
             </p>
           </div>
           <Link href="/" className="btn-primary">
-            Back to the dashboard
+            Back to home
           </Link>
         </div>
       </NeonCard>

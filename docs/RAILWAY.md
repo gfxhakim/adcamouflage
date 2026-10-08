@@ -120,7 +120,8 @@ If you named the API service something other than `api`, change the hostname to
 match.
 
 `API_ORIGIN` is used while the image builds (Next fixes the proxy target at
-build time), so after changing it, redeploy the `web` service.
+build time) and while the site runs (the login pages use it to recognise the
+admin), so after changing it, redeploy the `web` service.
 
 ### 4. Deploy
 
@@ -141,7 +142,12 @@ Variable** and add:
 
 Let it redeploy, then sign in on the web domain's `/login` page with that email
 and password: admins land straight in the admin panel instead of the
-workspace. You can also type `/admin` after the address (bookmark it). Nothing in the app
+workspace. If you are already signed in as the admin, opening `/login` takes you
+to the panel too. You can also type `/admin` after the address (bookmark it).
+If the site keeps sending you to the workspace, check that both variables are
+on the `api` service (not `web`), that the api service redeployed after you
+added them, and that you signed in with the first admin email. If you are
+signed in with another account, sign out in the workspace first. Nothing in the app
 links to it: customers who try `/admin` see the normal "page not found" screen,
 and the admin API answers them with a plain 404. It has four tabs:
 
