@@ -54,7 +54,7 @@ export default async function LandingPage() {
 
   return (
     <>
-      <SiteHeader nav={<LandingNav variant="header" />} />
+      <SiteHeader floating nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />
       <CursorRing />
 

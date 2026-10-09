@@ -39,7 +39,7 @@ export function Hero({ startHref }: { startHref: string }) {
   return (
     <section
       id="home"
-      className="relative isolate flex min-h-[max(calc(100svh-4rem),760px)] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
+      className="relative isolate flex min-h-[max(100svh,820px)] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
     >
       <MatrixWords
         words={WORDS}

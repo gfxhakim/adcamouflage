@@ -35,7 +35,7 @@ function sectionId(url: string) {
 }
 
 /**
- * A white glass pill that jumps between sections of a page.
+ * A dark, shining glass pill that jumps between sections of a page.
  * Desktop: sits in the site header. Phone and tablet: docked at the bottom, icons with labels.
  * The active item follows the scroll position and slides between items.
  */
@@ -114,18 +114,10 @@ export function GlassmorphismNavBar({
     <nav
       aria-label="Page sections"
       className={cn(
-        "pointer-events-auto flex items-center rounded-full p-1",
+        "glass-shine pointer-events-auto flex items-center rounded-full p-1",
         docked ? "w-full max-w-lg justify-between gap-0" : "justify-center gap-1",
-        "border border-meta-500/15 bg-white/[0.88]",
-        "shadow-[0_8px_28px_-10px_rgb(8_102_255_/_0.35),0_1px_2px_rgb(0_0_0_/_0.04)]",
-        "transition-shadow duration-300",
-        "hover:shadow-[0_0_0_1px_rgb(8_102_255_/_0.12),0_12px_40px_-8px_rgb(8_102_255_/_0.55),0_0_24px_-6px_rgb(8_102_255_/_0.45)]",
         !docked && className,
       )}
-      style={{
-        backdropFilter: "blur(20px) saturate(180%)",
-        WebkitBackdropFilter: "blur(20px) saturate(180%)",
-      }}
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -145,7 +137,7 @@ export function GlassmorphismNavBar({
               docked
                 ? "min-w-0 flex-1 flex-col gap-0.5 px-0.5 py-1.5 text-[10px] tracking-tight sm:text-xs"
                 : "px-3.5 py-1.5 text-sm xl:px-4",
-              isActive ? "text-meta-600" : "text-ink-muted hover:text-meta-500",
+              isActive ? "text-white" : "text-white/70 hover:text-meta-200",
             )}
           >
             {docked ? <Icon className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden /> : null}
@@ -154,11 +146,11 @@ export function GlassmorphismNavBar({
             {isActive && (
               <motion.div
                 layoutId={`lamp-${variant}`}
-                className="absolute inset-0 -z-10 w-full rounded-full bg-meta-50"
+                className="absolute inset-0 -z-10 w-full rounded-full bg-meta-500/45 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.25)]"
                 initial={false}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
-                <div className="absolute -top-1 left-1/2 h-1 w-8 -translate-x-1/2 rounded-t-full bg-meta-500">
+                <div className="absolute -top-1 left-1/2 h-1 w-8 -translate-x-1/2 rounded-t-full bg-meta-300">
                   <div className="absolute -left-2 -top-2 h-6 w-12 rounded-full bg-meta-500/20 blur-md" />
                   <div className="absolute -top-1 h-6 w-8 rounded-full bg-meta-500/20 blur-md" />
                   <div className="absolute left-2 top-0 h-4 w-4 rounded-full bg-meta-500/20 blur-sm" />
