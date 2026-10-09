@@ -19,7 +19,7 @@ export default function Page() {
           className="pointer-events-none absolute inset-x-0 top-0 mx-auto h-72 max-w-3xl animate-float-slow rounded-full bg-meta-500/[0.07] blur-3xl"
           aria-hidden
         />
-        <BrandLogoFull className="relative mb-6 w-28 sm:w-36" />
+        <BrandLogoFull className="relative mb-6 w-32 sm:w-40" />
         <Suspense
           fallback={
             <NeonCard padding="lg" radius="xl" className="w-full max-w-md">
