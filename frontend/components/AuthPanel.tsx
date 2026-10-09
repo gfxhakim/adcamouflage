@@ -102,9 +102,9 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   );
 
   return (
-    <NeonCard padding="lg" radius="xl" className="w-full max-w-md">
+    <NeonCard glow padding="lg" radius="xl" className="w-full max-w-md">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-black">
+        <h1 className="font-display text-4xl font-normal leading-tight text-black">
           {mode === "signup" ? "Create your account" : "Log in"}
         </h1>
         <p className="mt-1.5 text-sm text-ink-muted">

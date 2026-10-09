@@ -104,7 +104,7 @@ export default function PlanPage() {
       <main className="relative mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         <section className="mb-6 flex flex-col gap-1 sm:mb-8">
           <p className="label">My plan</p>
-          <h1 className="text-2xl font-bold tracking-tight text-black sm:text-3xl">Plan & usage</h1>
+          <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">Plan & usage</h1>
           <p className="max-w-2xl text-sm text-ink-muted">
             Everything about your subscription in one place: what you pay, what you have used, and what
             is left until your allowance resets.
@@ -124,7 +124,7 @@ export default function PlanPage() {
         ) : (
           <div className="space-y-6">
             {/* Plan hero ------------------------------------------------- */}
-            <NeonCard padding="lg" radius="xl">
+            <NeonCard glow padding="lg" radius="xl">
               <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">

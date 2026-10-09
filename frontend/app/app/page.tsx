@@ -322,7 +322,7 @@ export default function WorkspacePage() {
         {/* Intro ------------------------------------------------------- */}
         <section className="mb-6 flex flex-col gap-1 sm:mb-8">
           <p className="label">Workspace</p>
-          <h1 className="text-2xl font-bold tracking-tight text-black sm:text-3xl">
+          <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">
             {user ? `Welcome back${user.display_name ? `, ${user.display_name}` : ""}` : "Your workspace"}
           </h1>
           <p className="max-w-2xl text-sm text-ink-muted">
@@ -398,7 +398,7 @@ export default function WorkspacePage() {
         {/* Console ------------------------------------------------------- */}
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
           <div className="space-y-6">
-            <NeonCard padding="lg" radius="xl" id="upload">
+            <NeonCard glow padding="lg" radius="xl" id="upload">
               <div className="mb-5 flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-meta-500" aria-hidden />
                 <h2 className="text-sm font-semibold tracking-tight text-black">

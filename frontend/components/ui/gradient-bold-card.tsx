@@ -6,6 +6,11 @@ export type BlobTone = "default" | "slow" | "success" | "danger" | "muted";
 
 export interface GradientBlobCardProps extends HTMLAttributes<HTMLElement> {
   children?: ReactNode;
+  /**
+   * Light the animated neon rim. Reserved for the one card that matters most on
+   * a screen; every other card is a plain white card that glows blue on hover.
+   */
+  glow?: boolean;
   /** Colour and pace of the travelling blob. `danger` is the only non-blue tone. */
   tone?: BlobTone;
   /** Lift the card and brighten the rim on hover. */
@@ -35,7 +40,7 @@ const RADIUS: Record<NonNullable<GradientBlobCardProps["radius"]>, string> = {
 };
 
 /**
- * A white glass card with a moving neon border.
+ * A white card. With `glow`, it gets a moving neon border.
  *
  * Adapted from the GradientBlobCard demo: a bold gradient blob, blurred, sits
  * behind a white surface inset by a few pixels, so only the rim shows it as the
@@ -46,6 +51,7 @@ const RADIUS: Record<NonNullable<GradientBlobCardProps["radius"]>, string> = {
  */
 export function GradientBlobCard({
   children,
+  glow = false,
   tone = "default",
   interactive = false,
   padding = "md",
@@ -63,6 +69,20 @@ export function GradientBlobCard({
     "--blob-radius": RADIUS[radius],
     ...(borderWidth ? { "--blob-border": `${borderWidth}px` } : {}),
   } as CSSProperties;
+
+  if (!glow) {
+    return (
+      <Component
+        {...rest}
+        data-tone={tone === "default" ? undefined : tone}
+        data-interactive={interactive ? "true" : undefined}
+        className={cn("plain-card", className)}
+        style={{ ...vars, ...style }}
+      >
+        <div className={cn("plain-surface", PADDING[padding], innerClassName)}>{children}</div>
+      </Component>
+    );
+  }
 
   return (
     <Component
