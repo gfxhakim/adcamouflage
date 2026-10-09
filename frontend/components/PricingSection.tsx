@@ -61,8 +61,8 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
     <div>
       <div className="mx-auto mb-8 max-w-2xl text-center sm:mb-10">
         <p className="label">Pricing</p>
-        <h2 className="mt-3 text-2xl font-bold tracking-tight text-black sm:text-3xl">
-          Pick the volume you run. <span className="text-gradient">Get the whole engine.</span>
+        <h2 className="mt-3 font-display text-4xl font-normal leading-[1.05] text-black sm:text-5xl">
+          Pick the volume you run. <em className="italic text-meta-500">Get the whole engine.</em>
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-muted">
           Every plan has every feature. Plans only change how many files you can process each
@@ -85,6 +85,7 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
               transition={{ duration: 0.55, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
             >
               <NeonCard
+                glow={popular}
                 interactive
                 padding="lg"
                 radius="xl"
@@ -93,7 +94,7 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
                 innerClassName="flex w-full flex-col"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-lg font-bold tracking-tight text-black">{plan.label}</h3>
+                  <h3 className="font-display text-2xl font-normal text-black">{plan.label}</h3>
                   {popular ? (
                     <span className="chip !border-meta-500/30 !bg-meta-500 !text-white">
                       <Sparkles className="h-3 w-3" aria-hidden />

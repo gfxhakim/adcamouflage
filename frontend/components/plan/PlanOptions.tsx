@@ -73,6 +73,7 @@ export function PlanOptions({ plans, currentId, expired, currency, pending, onRe
           return (
             <NeonCard
               key={plan.id}
+              glow={isCurrent}
               tone={isCurrent ? "default" : "muted"}
               interactive={!isCurrent}
               padding="md"
