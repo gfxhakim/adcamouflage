@@ -53,6 +53,24 @@ module.exports = {
           "0%, 100%": { transform: "translate3d(0, 0, 0)" },
           "50%": { transform: "translate3d(0, -14px, 0)" },
         },
+        "radar-ping": {
+          "0%": { transform: "scale(0.3)", opacity: "1" },
+          "18%": { transform: "scale(1.6)", opacity: "0" },
+          "100%": { transform: "scale(1.6)", opacity: "0" },
+        },
+        eq: {
+          "0%, 100%": { transform: "scaleY(1)" },
+          "50%": { transform: "scaleY(0.45)" },
+        },
+        drift: {
+          "0%": { transform: "translate3d(0, 0, 0)", opacity: "0" },
+          "20%": { opacity: "1" },
+          "100%": { transform: "translate3d(14px, 18px, 0)", opacity: "0" },
+        },
+        marquee: {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-100%)" },
+        },
         "fade-up": {
           from: { opacity: "0", transform: "translate3d(0, 12px, 0)" },
           to: { opacity: "1", transform: "translate3d(0, 0, 0)" },
@@ -62,6 +80,10 @@ module.exports = {
         "neon-sweep": "neon-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite",
         "pulse-glow": "pulse-glow 2.8s ease-in-out infinite",
         "float-slow": "float-slow 9s ease-in-out infinite",
+        "radar-ping": "radar-ping 6s linear infinite",
+        eq: "eq 1.1s ease-in-out infinite",
+        drift: "drift 3.5s linear infinite",
+        marquee: "marquee 28s linear infinite",
         "fade-up": "fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
     },
