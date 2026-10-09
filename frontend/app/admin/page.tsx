@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, BarChart3, LayoutDashboard, Loader2, LogOut, RefreshCw, Settings2, ShieldHalf, Users } from "lucide-react";
+import { ArrowLeft, BarChart3, LayoutDashboard, Loader2, LogOut, RefreshCw, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -10,6 +10,7 @@ import OverviewTab from "@/components/admin/OverviewTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 import UserPanel from "@/components/admin/UserPanel";
 import UsersTab from "@/components/admin/UsersTab";
+import BrandLogo from "@/components/BrandLogo";
 import NotFound from "@/app/not-found";
 import { getOverview, getPlans, type Overview, type PlanInfo } from "@/lib/admin";
 import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
@@ -139,16 +140,8 @@ export default function AdminPage() {
     <>
       <header className="sticky top-0 z-40 border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="AdCamouflage home">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-meta-500/30 bg-meta-50">
-              <ShieldHalf className="h-5 w-5 text-meta-500" aria-hidden />
-            </span>
-            <span className="min-w-0 leading-tight">
-              <span className="block text-sm font-semibold tracking-tight text-black">
-                Ad<span className="text-gradient">Camouflage</span>
-              </span>
-              <span className="hidden text-[11px] text-ink-subtle sm:block">Admin panel</span>
-            </span>
+          <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">
+            <BrandLogo caption="Admin panel" captionClassName="hidden sm:block" />
           </Link>
           <nav className="flex items-center gap-2">
             <button type="button" className="btn-ghost !px-2.5 !py-2" onClick={refreshAll} aria-label="Refresh">

@@ -1,8 +1,9 @@
 "use client";
 
-import { ShieldHalf } from "lucide-react";
 import Link from "next/link";
 import { useRef } from "react";
+
+import BrandLogo from "@/components/BrandLogo";
 
 const COLUMNS = [
   {
@@ -60,11 +61,8 @@ export function SiteFooter() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div>
-            <Link href="/" className="inline-flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-meta-500">
-                <ShieldHalf className="h-5 w-5 text-white" aria-hidden />
-              </span>
-              <span className="text-lg font-semibold tracking-tight">AdCamouflage</span>
+            <Link href="/" className="inline-flex" aria-label="BluCloacking home">
+              <BrandLogo onDark />
             </Link>
             <p className="mt-4 max-w-xs text-sm text-white/55">
               Turn one winning creative into fresh, unique files.
