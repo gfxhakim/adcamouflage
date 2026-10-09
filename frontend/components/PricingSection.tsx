@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
 import Link from "next/link";
 
-import NeonCard from "@/components/NeonCard";
+import { Headline, SectionTag } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 export interface PublicPlan {
@@ -59,18 +59,24 @@ function quotaText(quota: number | null) {
 export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps) {
   return (
     <div>
-      <div className="mx-auto mb-8 max-w-2xl text-center sm:mb-10">
-        <p className="label">Pricing</p>
-        <h2 className="mt-3 font-display text-4xl font-normal leading-[1.05] text-black sm:text-5xl">
-          Pick the volume you run. <em className="italic text-meta-500">Get the whole engine.</em>
-        </h2>
-        <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
+        <div>
+          <SectionTag index="06" dark>
+            Pricing
+          </SectionTag>
+          <Headline
+            dark
+            text="Pick the volume you run. | [Get the whole engine.]"
+            className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
+          />
+        </div>
+        <p className="text-sm leading-relaxed text-white/65">
           Every plan has every feature. Plans only change how many files you can process each
           month. Start free, no card needed.
         </p>
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {plans.map((plan, index) => {
           const popular = plan.id === POPULAR;
           const free = plan.price === 0;
@@ -78,72 +84,77 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
           return (
             <motion.div
               key={plan.id}
-              className="flex"
-              initial={{ opacity: 0, y: 24 }}
+              className={cn(
+                "group relative flex flex-col rounded-3xl border p-6 transition-colors duration-300",
+                popular
+                  ? "border-meta-500 bg-gradient-to-b from-meta-900 to-black shadow-[0_0_0_1px_rgba(8,102,255,0.4),0_30px_80px_-30px_rgba(8,102,255,0.8)] xl:-my-3"
+                  : "border-white/10 bg-white/[0.04] hover:border-meta-500/50",
+              )}
+              initial={{ opacity: 0, y: 32 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
-              transition={{ duration: 0.55, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.7, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
             >
-              <NeonCard
-                glow={popular}
-                interactive
-                padding="lg"
-                radius="xl"
-                tone={popular ? "default" : "slow"}
-                className={cn("flex w-full", popular && "xl:-my-3")}
-                innerClassName="flex w-full flex-col"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-display text-2xl font-normal text-black">{plan.label}</h3>
-                  {popular ? (
-                    <span className="chip !border-meta-500/30 !bg-meta-500 !text-white">
-                      <Sparkles className="h-3 w-3" aria-hidden />
-                      Most popular
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1.5 min-h-[2.5rem] text-xs leading-relaxed text-ink-subtle">
-                  {BLURBS[plan.id] ?? ""}
-                </p>
-
-                <p className="mt-5 flex items-baseline gap-1.5">
-                  <span className="text-4xl font-extrabold tracking-tight text-black">
-                    {price(plan.price, currency)}
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[11px] text-white/45">0{index + 1}</span>
+                {popular ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-black">
+                    <Sparkles className="h-3 w-3 text-meta-500" aria-hidden />
+                    Most popular
                   </span>
-                  <span className="text-sm text-ink-faint">/ month</span>
-                </p>
-                <p className="mt-2 text-sm font-semibold text-meta-600">
-                  {quotaText(plan.monthly_quota)}
-                </p>
+                ) : null}
+              </div>
+              <h3 className="mt-4 text-2xl font-semibold tracking-tight text-white">{plan.label}</h3>
+              <p className="mt-1 min-h-[2.5rem] text-xs leading-relaxed text-white/55">
+                {BLURBS[plan.id] ?? ""}
+              </p>
 
-                <ul className="mt-5 flex-1 space-y-2.5 border-t border-black/10 pt-5">
-                  {INCLUDED.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-sm text-ink-muted">
-                      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
-                        <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
-                      </span>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
+              <p className="mt-6 flex items-baseline gap-1.5">
+                <span className="text-5xl font-semibold tracking-[-0.05em] text-white">
+                  {price(plan.price, currency)}
+                </span>
+                <span className="text-sm text-white/45">/mo</span>
+              </p>
+              <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-meta-400" aria-hidden />
+                {quotaText(plan.monthly_quota)}
+              </p>
 
-                <Link
-                  href={ctaHref}
+              <ul className="mt-6 flex-1 space-y-2.5 border-t border-white/10 pt-6">
+                {INCLUDED.map((feature) => (
+                  <li key={feature} className="flex items-start gap-2.5 text-sm text-white/75">
+                    <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
+                      <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                    </span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+
+              <Link
+                href={ctaHref}
+                className={cn(
+                  "group/btn mt-7 flex w-full items-center justify-between rounded-full py-1.5 pl-5 pr-1.5 text-sm font-semibold transition-colors",
+                  popular ? "bg-white text-black hover:bg-meta-50" : "bg-white/[0.08] text-white hover:bg-white/[0.14]",
+                )}
+              >
+                {free ? "Start free" : `Choose ${plan.label}`}
+                <span
                   className={cn(
-                    "mt-6 w-full justify-center",
-                    popular ? "btn-primary !py-3" : "btn-ghost !py-3",
+                    "grid h-8 w-8 place-items-center rounded-full transition-transform group-hover/btn:rotate-[-45deg]",
+                    popular ? "bg-meta-500 text-white" : "bg-white/10 text-white",
                   )}
                 >
-                  {free ? "Start free" : `Choose ${plan.label}`}
                   <ArrowRight className="h-4 w-4" aria-hidden />
-                </Link>
-              </NeonCard>
+                </span>
+              </Link>
             </motion.div>
           );
         })}
       </div>
 
-      <p className="mt-6 text-center text-[11px] text-ink-faint">
+      <p className="mt-8 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-white/45">
+        <span className="h-1.5 w-1.5 rounded-full bg-meta-500" aria-hidden />
         Every uploaded file and every extra variant counts as one file. Usage resets on the 1st of
         each month.
       </p>
