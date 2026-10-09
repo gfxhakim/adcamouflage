@@ -68,15 +68,18 @@ export function BrandLogo({
   );
 }
 
-/** The full stacked logo (shield above the name), for the login and sign-up pages. */
+/** The full stacked logo (shield above the name) on its dark tile, for the login and sign-up pages. */
 export function BrandLogoFull({ className }: { className?: string }) {
   return (
     <img
-      src="/brand/blucloacking-logo.png"
+      src="/brand/blucloacking-logo-dark.jpg"
       alt="BluCloacking"
-      width={600}
-      height={565}
-      className={cn("h-auto w-40", className)}
+      width={640}
+      height={640}
+      className={cn(
+        "h-auto w-40 rounded-3xl shadow-[0_18px_50px_-14px_rgba(8,102,255,0.55)] ring-1 ring-meta-500/30",
+        className,
+      )}
     />
   );
 }
