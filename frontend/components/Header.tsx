@@ -8,7 +8,6 @@ import {
   Gauge,
   LayoutGrid,
   LogOut,
-  ShieldHalf,
   User as UserIcon,
   Waves,
 } from "lucide-react";
@@ -16,6 +15,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import BrandLogo from "@/components/BrandLogo";
 import { signOut, type UserProfile } from "@/lib/auth";
 import { usageText } from "@/lib/format";
 import type { HealthReport } from "@/lib/types";
@@ -70,17 +70,8 @@ export function Header({ health, healthError, user }: HeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="AdCamouflage home">
-          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-meta-500/40 bg-gradient-to-br from-meta-100 via-transparent to-meta-200">
-            <ShieldHalf className="h-5 w-5 text-meta-500" aria-hidden />
-            <span className="absolute inset-0 animate-pulse-glow rounded-xl shadow-meta-sm" aria-hidden />
-          </span>
-          <div className="hidden leading-tight sm:block">
-            <p className="text-sm font-semibold tracking-tight text-black">
-              Ad<span className="text-gradient">Camouflage</span>
-            </p>
-            <p className="text-[11px] text-ink-subtle">Workspace</p>
-          </div>
+        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">
+          <BrandLogo caption="Workspace" captionClassName="hidden sm:block" />
         </Link>
 
         <div className="flex items-center gap-2">

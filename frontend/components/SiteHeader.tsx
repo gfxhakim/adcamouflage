@@ -1,7 +1,8 @@
-import { ArrowRight, ShieldHalf } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import BrandLogo from "@/components/BrandLogo";
 import { cn } from "@/lib/utils";
 
 interface SiteHeaderProps {
@@ -25,25 +26,16 @@ export function SiteHeader({ minimal = false, nav }: SiteHeaderProps) {
         <Link
           href="/"
           className="flex min-w-0 items-center gap-3 justify-self-start"
-          aria-label="AdCamouflage home"
+          aria-label="BluCloacking home"
         >
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-meta-500/30 bg-meta-50">
-            <ShieldHalf className="h-5 w-5 text-meta-500" aria-hidden />
-          </span>
-          <span className="min-w-0 leading-tight">
-            <span className="block text-sm font-semibold tracking-tight text-black">
-              Ad<span className="text-gradient">Camouflage</span>
-            </span>
-            <span
-              className={cn(
-                "hidden text-[11px] text-ink-faint sm:block",
-                // Make room for the nav on smaller laptops.
-                nav && "lg:hidden xl:block",
-              )}
-            >
-              Media mutation &amp; fingerprint stripping
-            </span>
-          </span>
+          <BrandLogo
+            caption="Media mutation & fingerprint stripping"
+            captionClassName={cn(
+              "hidden sm:block",
+              // Make room for the nav on smaller laptops.
+              nav && "lg:hidden xl:block",
+            )}
+          />
         </Link>
 
         {nav}
