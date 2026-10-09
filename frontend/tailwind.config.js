@@ -67,6 +67,10 @@ module.exports = {
           "20%": { opacity: "1" },
           "100%": { transform: "translate3d(14px, 18px, 0)", opacity: "0" },
         },
+        shine: {
+          "0%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "-150% 50%" },
+        },
         marquee: {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-100%)" },
@@ -83,6 +87,7 @@ module.exports = {
         "radar-ping": "radar-ping 6s linear infinite",
         eq: "eq 1.1s ease-in-out infinite",
         drift: "drift 3.5s linear infinite",
+        shine: "shine 5s linear infinite",
         marquee: "marquee 28s linear infinite",
         "fade-up": "fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
