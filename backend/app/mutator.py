@@ -31,7 +31,7 @@ import numpy as np
 from PIL import Image
 
 from .config import settings
-from .ffmpeg import MediaError, MediaInfo, open_ffmpeg_writer, probe, run_ffmpeg
+from .ffmpeg import MediaError, MediaInfo, describe_ffmpeg_exit, open_ffmpeg_writer, probe, run_ffmpeg
 from .schemas import AssetKind, MutationOptions, OverlayMode, OverlaySettings
 from .scrub import bitstream_filter_args, scrub_container
 
@@ -781,7 +781,8 @@ def _deep_scramble_video(
             code = writer.wait()
             if code != 0:
                 raise MutationError(
-                    "deep scramble encoder failed: " + stderr.decode("utf-8", "replace").strip()[-300:]
+                    "deep scramble encoder failed: "
+                    + describe_ffmpeg_exit(code, stderr.decode("utf-8", "replace"))
                 )
         if index == 0:
             raise MutationError(f"no decodable frames in {source.name}")
