@@ -435,6 +435,8 @@ All backend settings are environment variables prefixed `ADCAM_`. See
 | `ADCAM_API_KEY` | unset | When set, every mutating endpoint requires `X-API-Key`. |
 | `ADCAM_DATABASE_URL` | SQLite in the storage root | `postgresql+psycopg://…` in production. |
 | `ADCAM_ALLOW_REGISTRATION` | `true` | `false` closes sign-ups; existing users still sign in. |
+| `ADCAM_ADMIN_EMAILS` | — | Comma-separated sign-in emails that can open the admin panel at `/admin`. |
+| `ADCAM_DEFAULT_PLAN` | `free` | Plan for new sign-ups: `free` (10 files/month), `starter` (100), `pro` (500), `unlimited`. |
 | `ADCAM_COOKIE_SECURE` | `false` | `true` in production. Required if `SAMESITE=none`. |
 | `API_ORIGIN` | `http://127.0.0.1:8000` | Where Next proxies `/api`. Read at build time, so changing it needs a rebuild. |
 | `ADCAM_CORS_ORIGINS` | `localhost:3000` | Comma-separated. |

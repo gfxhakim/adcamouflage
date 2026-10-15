@@ -21,6 +21,8 @@ os.environ.setdefault("ADCAM_INLINE_WORKER", "1")
 os.environ.setdefault("ADCAM_REDIS_URL", "redis://127.0.0.1:6399/15")
 os.environ.setdefault("ADCAM_SECRET_KEY", "test-secret-key-for-signing-only")
 os.environ.setdefault("ADCAM_INLINE_WORKER_CONCURRENCY", "2")
+# Pipeline tests run many batches as one user; quota tests opt into limits.
+os.environ.setdefault("ADCAM_DEFAULT_PLAN", "unlimited")
 
 from app.config import settings  # noqa: E402
 from app.ffmpeg import ffmpeg_available  # noqa: E402

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -71,6 +71,16 @@ class Settings(BaseSettings):
     min_password_length: int = 10
     session_ttl_hours: int = 24 * 14
 
+    # Comma-separated sign-in emails that are always admins. This is how the
+    # first admin gets in; more can then be promoted from the admin panel.
+    admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Optional password for the first ADCAM_ADMIN_EMAILS address. When set, that
+    # account is created (or its password reset) on every start, so the owner
+    # can sign in without signing up first. See accounts.ensure_admin_account.
+    admin_password: SecretStr | None = None
+    # Plan given to new sign-ups (see app/plans.py for the list).
+    default_plan: str = "free"
+
     # Session cookie. When the API and the web UI sit on different domains the
     # cookie must be SameSite=None and Secure, or the browser drops it.
     cookie_name: str = "adcam_session"
@@ -102,6 +112,15 @@ class Settings(BaseSettings):
                 if isinstance(parsed, list):
                     return [str(origin).strip() for origin in parsed if str(origin).strip()]
             return [origin.strip() for origin in candidate.split(",") if origin.strip()]
+        return value
+
+    @field_validator("admin_emails", mode="before")
+    @classmethod
+    def _split_admin_emails(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [email.strip().lower() for email in value.split(",") if email.strip()]
+        if isinstance(value, list):
+            return [str(email).strip().lower() for email in value if str(email).strip()]
         return value
 
     @field_validator("storage_root", mode="before")

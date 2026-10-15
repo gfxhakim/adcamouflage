@@ -10,10 +10,12 @@ import bcrypt
 import jwt
 from fastapi import Cookie, Depends, HTTPException, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import User, get_db
+from .plans import apply_plan
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +151,32 @@ def _load_user(token: str | None, db: Session) -> User | None:
     # A password change bumps token_version, invalidating older sessions.
     if int(payload.get("ver", -1)) != user.token_version:
         raise AuthError("Your session has ended. Sign in again.")
+
+    _touch_last_seen(user, db)
     return user
+
+
+LAST_SEEN_RESOLUTION = timedelta(minutes=5)
+
+
+def _touch_last_seen(user: User, db: Session) -> None:
+    """Note when the user was last active, at most one write every few minutes."""
+
+    now = datetime.now(timezone.utc)
+    seen = user.last_seen_at
+    if seen is not None and seen.tzinfo is None:
+        seen = seen.replace(tzinfo=timezone.utc)
+    if seen is not None and now - seen < LAST_SEEN_RESOLUTION:
+        return
+    try:
+        user.last_seen_at = now
+        db.commit()
+    except Exception:  # noqa: BLE001 - a missed timestamp must not fail the request
+        db.rollback()
+
+
+def is_admin(user: User) -> bool:
+    return bool(user.is_admin) or user.email in settings.admin_emails
 
 
 def current_user(
@@ -161,6 +188,63 @@ def current_user(
     user = _load_user(session_cookie, db)
     if user is None:
         raise AuthError("Sign in to continue.")
+    return user
+
+
+def ensure_admin_account(db: Session) -> None:
+    """Give the first ADCAM_ADMIN_EMAILS address a working login from ADCAM_ADMIN_PASSWORD.
+
+    Runs on every API start. The account is created if it is missing, so nobody
+    can sign up with the admin's email first, and its password is reset whenever
+    it no longer matches the variable: the variable always wins, which makes it
+    the way to recover a forgotten admin password.
+    """
+
+    secret = settings.admin_password.get_secret_value() if settings.admin_password else ""
+    if not secret or not settings.admin_emails:
+        return
+    try:
+        email = validate_email(settings.admin_emails[0])
+        password = validate_password(secret)
+    except AuthError as exc:
+        logger.error("ADCAM_ADMIN_PASSWORD was not applied: %s", exc.detail)
+        return
+
+    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is None:
+        user = User(email=email, password_hash=hash_password(password), display_name="Admin")
+        # No file limit, but on the free plan so the owner is not counted as revenue.
+        apply_plan(db, user, "free")
+        user.monthly_quota = None
+        db.add(user)
+        change = "created"
+    elif not verify_password(password, user.password_hash):
+        user.password_hash = hash_password(password)
+        user.token_version += 1  # sign out sessions made with the old password
+        change = "password updated"
+    else:
+        change = ""
+    user.is_admin = True
+    user.is_active = True
+    try:
+        db.commit()
+    except IntegrityError:
+        # Another API process created it at the same moment; that one wins.
+        db.rollback()
+        return
+    if change:
+        logger.info("admin account %s for %s", change, email)
+
+
+def require_admin(user: User = Depends(current_user)) -> User:
+    """Require a signed-in admin.
+
+    Everyone else gets the same 404 as a route that does not exist, so the
+    admin API is not discoverable by customers poking at the network tab.
+    """
+
+    if not is_admin(user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     return user
 
 

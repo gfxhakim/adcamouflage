@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   Cpu,
+  Megaphone,
   FileStack,
   ImagePlus,
   Layers3,
@@ -19,6 +20,7 @@ import OverlayPanel from "@/components/OverlayPanel";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
 import OptionsPanel from "@/components/OptionsPanel";
+import PlanSummary from "@/components/plan/PlanSummary";
 import ProgressBar from "@/components/ProgressBar";
 import StatTile from "@/components/StatTile";
 import UploadZone from "@/components/UploadZone";
@@ -107,11 +109,11 @@ export default function WorkspacePage() {
         if (cancelled || !mountedRef.current) return;
         // The middleware already gated this route on the cookie being present.
         // If the API rejects it (expired, or signed with an old secret), clear
-        // it first: otherwise /login would see the cookie and bounce back here.
+        // it first, then go back to the landing page to sign in again.
         if (!profile) {
           void signOut()
             .catch(() => undefined)
-            .finally(() => window.location.assign("/login?next=%2Fapp"));
+            .finally(() => window.location.assign("/"));
           return;
         }
         setUser(profile);
@@ -233,6 +235,12 @@ export default function WorkspacePage() {
         setUploading(false);
         setUploadProgress(0);
       }
+      // Keeps the plan usage readout in the header current.
+      void fetchMe()
+        .then((profile) => {
+          if (profile && mountedRef.current) setUser(profile);
+        })
+        .catch(() => undefined);
     }
   }, [files, options, overlayImage, refresh, uploading]);
 
@@ -314,7 +322,7 @@ export default function WorkspacePage() {
         {/* Intro ------------------------------------------------------- */}
         <section className="mb-6 flex flex-col gap-1 sm:mb-8">
           <p className="label">Workspace</p>
-          <h1 className="text-2xl font-bold tracking-tight text-black sm:text-3xl">
+          <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">
             {user ? `Welcome back${user.display_name ? `, ${user.display_name}` : ""}` : "Your workspace"}
           </h1>
           <p className="max-w-2xl text-sm text-ink-muted">
@@ -323,6 +331,15 @@ export default function WorkspacePage() {
             {limits?.retention_hours ?? 24} hours.
           </p>
         </section>
+
+        {user?.announcement ? (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-meta-500/30 bg-meta-50 px-4 py-3">
+            <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-meta-600" aria-hidden />
+            <p className="whitespace-pre-line text-sm leading-relaxed text-meta-900">{user.announcement}</p>
+          </div>
+        ) : null}
+
+        {user ? <PlanSummary user={user} /> : null}
 
         {/* Stats --------------------------------------------------------- */}
         <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -381,7 +398,7 @@ export default function WorkspacePage() {
         {/* Console ------------------------------------------------------- */}
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
           <div className="space-y-6">
-            <NeonCard padding="lg" radius="xl" id="upload">
+            <NeonCard glow padding="lg" radius="xl" id="upload">
               <div className="mb-5 flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-meta-500" aria-hidden />
                 <h2 className="text-sm font-semibold tracking-tight text-black">

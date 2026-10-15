@@ -19,13 +19,17 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from . import __version__
-from .accounts import current_user
+from .accounts import current_user, ensure_admin_account
+from .activity import log_activity
+from .admin_routes import router as admin_router
 from .auth_routes import record_batch
 from .auth_routes import router as auth_router
 from .config import settings
-from .db import User, get_db, init_db
+from .db import User, get_db, get_session_factory, init_db
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
+from .app_settings import currency
+from .plans import check_allowance, get_plans
 from .queue import cancel_asset, enqueue_asset, queue_depth, worker_mode
 from .schemas import (
     PRESET_DEFAULTS,
@@ -43,6 +47,7 @@ from .schemas import (
 )
 from .security import require_api_key, sign_download, verify_download
 from .storage import StorageError, classify, get_store, resolve_within, sanitize_filename
+from .subscription_routes import router as subscription_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -57,6 +62,8 @@ CHUNK_SIZE = 1024 * 1024
 async def lifespan(app: FastAPI):
     settings.ensure_dirs()
     init_db()
+    with get_session_factory()() as db:
+        ensure_admin_account(db)
     store = get_store()
     if not ffmpeg_available():
         logger.error(
@@ -85,6 +92,8 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(subscription_router)
 
 # Credentials must be allowed for the session cookie to reach the API from
 # the browser; with credentials on, the origin list cannot be a wildcard.
@@ -92,7 +101,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
@@ -136,6 +145,19 @@ async def health() -> HealthReport:
         active_jobs=active,
         queue_depth=queue_depth(),
     )
+
+
+@app.get("/api/v1/plans", tags=["meta"])
+def public_plans(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """The plans as the admin panel has them, for the public pricing section."""
+
+    return {
+        "currency": currency(db),
+        "plans": [
+            {"id": p.id, "label": p.label, "monthly_quota": p.monthly_quota, "price": p.price}
+            for p in get_plans(db).values()
+        ],
+    }
 
 
 @app.get("/api/v1/presets", tags=["meta"])
@@ -223,6 +245,13 @@ async def create_batch(
         raise HTTPException(status_code=422, detail=f"Invalid options payload: {exc}") from exc
 
     resolved = parsed.resolved()
+
+    # Checked before anything is written, so a user over their plan never
+    # leaves files on disk. Every file counts once per variant.
+    refusal = check_allowance(db, user, len(files) * resolved.variants)
+    if refusal:
+        log_activity(db, user.id, "blocked", refusal)
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=refusal)
 
     if overlay_image is not None and overlay_image.filename:
         overlay_name = sanitize_filename(overlay_image.filename)

@@ -20,6 +20,8 @@ from sqlalchemy import (
     create_engine,
     event,
     func,
+    inspect,
+    text,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
@@ -54,6 +56,23 @@ class User(Base):
     # validating - this is what makes "sign out everywhere" work.
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # --- admin & subscription ------------------------------------------------
+    # Admins can open /admin. ADCAM_ADMIN_EMAILS also grants it, which is how
+    # the very first admin is created.
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # A label from plans.PLANS; the quota below is what is actually enforced.
+    plan: Mapped[str] = mapped_column(String(32), default="unlimited", nullable=False)
+    # Files a user may process per calendar month. None means unlimited.
+    monthly_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # After this moment the user cannot start new batches until it is extended.
+    plan_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Usage is counted from the later of this and the start of the month, so an
+    # admin can hand back a user's allowance mid-month.
+    usage_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Private notes the admin keeps about this customer.
+    admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     batches: Mapped[list["BatchRecord"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -83,6 +102,34 @@ class BatchRecord(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="batches")
+
+
+class AppSetting(Base):
+    """Settings an admin changes from the panel, stored as JSON per key."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class ActivityEvent(Base):
+    """One line in the admin activity feed: a sign-up, sign-in, batch or change."""
+
+    __tablename__ = "activity"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
 
 
 _engine: Engine | None = None
@@ -134,10 +181,42 @@ def get_session_factory() -> sessionmaker[Session]:
     return _SessionFactory
 
 
-def init_db() -> None:
-    """Create any missing tables. Safe to call on every start."""
+# Columns added to tables that already exist in deployed databases. create_all
+# only creates missing tables, so these are added by hand on start. Each entry
+# is (table, column, SQL type and default).
+_ADDED_COLUMNS: list[tuple[str, str, str]] = [
+    ("users", "is_admin", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    # Accounts that existed before plans were introduced keep working as they
+    # did: unlimited, until an admin moves them onto a plan.
+    ("users", "plan", "VARCHAR(32) NOT NULL DEFAULT 'unlimited'"),
+    ("users", "monthly_quota", "INTEGER"),
+    ("users", "plan_expires_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "usage_reset_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "last_seen_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "admin_notes", "TEXT"),
+]
 
-    Base.metadata.create_all(bind=get_engine())
+
+def _add_missing_columns(engine: Engine) -> None:
+    for table, column, ddl in _ADDED_COLUMNS:
+        existing = {col["name"] for col in inspect(engine).get_columns(table)}
+        if column in existing:
+            continue
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            logger.info("added column %s.%s", table, column)
+        except Exception:  # noqa: BLE001 - another process may have just added it
+            if column not in {col["name"] for col in inspect(engine).get_columns(table)}:
+                raise
+
+
+def init_db() -> None:
+    """Create any missing tables and columns. Safe to call on every start."""
+
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    _add_missing_columns(engine)
     logger.info("database ready at %s", settings.resolved_database_url.split("@")[-1])
 
 
