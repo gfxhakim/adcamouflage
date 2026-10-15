@@ -1,13 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { Archive, Inbox, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, Inbox, RefreshCw, Trash2 } from "lucide-react";
 
 import { absoluteUrl } from "@/lib/api";
 import type { BatchStatus } from "@/lib/types";
 import JobCard from "./JobCard";
 import NeonCard from "./NeonCard";
 import ProgressBar from "./ProgressBar";
+import RenderLoader from "./RenderLoader";
 
 interface JobQueueProps {
   batch: BatchStatus | null;
@@ -57,16 +58,16 @@ export function JobQueue({
       >
         <div className="p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
+                {!allDone ? <RenderLoader size={26} /> : null}
                 <p className="text-sm font-semibold text-black">
                   {allDone ? "Batch complete" : "Mutating assets"}
                 </p>
-                {polling ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-meta-500" aria-hidden />
-                ) : null}
               </div>
-              <p className="mt-0.5 font-mono text-[11px] text-ink-subtle">{batch.batch.id}</p>
+              <p className="mt-0.5 break-all font-mono text-[11px] text-ink-subtle">
+                {batch.batch.id}
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
