@@ -72,6 +72,51 @@ body {
   background: rgb(8 102 255 / 0.6);
 }
 
+/* Range sliders -----------------------------------------------------------
+   Give the thumb one consistent, on-brand look across browsers, and a larger,
+   comfortable hit area on touch devices. The per-input track styling (height,
+   gradient) is left untouched, so the desktop look does not change. */
+input[type="range"] {
+  touch-action: pan-y;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--meta-500);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(8 102 255 / 0.5);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--meta-500);
+  box-shadow: 0 1px 3px rgb(8 102 255 / 0.5);
+  cursor: pointer;
+}
+input[type="range"]:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+input[type="range"]:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}
+/* Fine pointers (mouse) can keep a trim thumb; touch gets a bigger target. */
+@media (pointer: coarse) {
+  input[type="range"]::-webkit-slider-thumb {
+    height: 22px;
+    width: 22px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 22px;
+    width: 22px;
+  }
+}
+
 @layer components {
   /* ----------------------------------------------------------------------
      .blob-card - white cards with a moving Meta-blue neon rim.

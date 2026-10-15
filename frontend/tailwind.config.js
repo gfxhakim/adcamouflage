@@ -75,6 +75,14 @@ module.exports = {
           "0%": { backgroundPosition: "100% 50%" },
           "100%": { backgroundPosition: "-150% 50%" },
         },
+        "render-scan": {
+          "0%": { backgroundPosition: "140% 50%" },
+          "100%": { backgroundPosition: "-160% 50%" },
+        },
+        "render-pulse": {
+          "0%, 100%": { opacity: "0.72", transform: "scale(1)" },
+          "50%": { opacity: "1", transform: "scale(1.04)" },
+        },
         marquee: {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-100%)" },
@@ -93,6 +101,8 @@ module.exports = {
         drift: "drift 3.5s linear infinite",
         "logo-float": "logo-float 4s ease-in-out infinite",
         shine: "shine 5s linear infinite",
+        "render-scan": "render-scan 1.6s ease-in-out infinite",
+        "render-pulse": "render-pulse 1.8s ease-in-out infinite",
         marquee: "marquee 28s linear infinite",
         "fade-up": "fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
