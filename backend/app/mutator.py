@@ -736,6 +736,20 @@ def _deep_scramble_video(
         drift_field = rng.normal(0.0, 1.0, size=(field_h, field_w, 3)).astype(np.float32)
         amplitude = float(np.clip(plan.noise_strength * 0.55 + 1.2, 1.0, 12.0))
 
+        # Full-resolution scratch buffers, allocated once and reused for every
+        # frame. The per-frame maths below writes into these in place rather
+        # than allocating a fresh array at each step; on an HD/4K clip that is
+        # the difference between a steady footprint and a spike of ~8 full-frame
+        # float arrays per frame, which is what was OOM-killing the worker on
+        # larger uploads. Two float32 buffers are the minimum: warpAffine cannot
+        # read and write the same array, so it needs a distinct destination.
+        # ``scratch`` first holds the noise field (consumed into ``work``) and
+        # is then reused as the warp destination. The arithmetic and its order
+        # are unchanged, so the encoded output is byte-for-byte identical.
+        scratch = np.empty((height, width, 3), dtype=np.float32)
+        work = np.empty((height, width, 3), dtype=np.float32)
+        out_u8 = np.empty((height, width, 3), dtype=np.uint8)
+
         index = 0
         assert writer.stdin is not None
         try:
@@ -746,28 +760,40 @@ def _deep_scramble_video(
 
                 phase = math.sin(index * 0.11) * 0.5 + 0.5
                 field = base_field * phase + drift_field * (1.0 - phase)
-                noise = cv2.resize(field, (width, height), interpolation=cv2.INTER_CUBIC) * amplitude
+                # noise = resize(field) * amplitude
+                cv2.resize(field, (width, height), dst=scratch, interpolation=cv2.INTER_CUBIC)
+                scratch *= amplitude
 
-                mutated = frame.astype(np.float32) + noise
+                # mutated = frame.astype(float32) + noise  (uint8 -> float32 is exact)
+                work[:] = frame
+                work += scratch
 
                 # Sub-pixel translation: invisible to a viewer, fatal to any
-                # matcher that assumes a stable pixel grid.
+                # matcher that assumes a stable pixel grid. warpAffine reads from
+                # ``work`` and writes into ``scratch`` (the noise is spent by now).
                 dx = math.sin(index * 0.037 + plan.seed % 7) * 0.7
                 dy = math.cos(index * 0.029 + plan.seed % 5) * 0.7
                 matrix = np.array([[1.0, 0.0, dx], [0.0, 1.0, dy]], dtype=np.float32)
-                mutated = cv2.warpAffine(
-                    mutated,
+                cv2.warpAffine(
+                    work,
                     matrix,
                     (width, height),
+                    dst=scratch,
                     flags=cv2.INTER_LINEAR,
                     borderMode=cv2.BORDER_REFLECT_101,
                 )
 
                 gamma = 1.0 + math.sin(index * 0.013) * 0.012
-                mutated = np.clip(mutated, 0, 255)
-                mutated = np.power(mutated / 255.0, gamma) * 255.0
+                # mutated = power(clip(mutated)/255, gamma) * 255, then clip again
+                np.clip(scratch, 0, 255, out=scratch)
+                scratch /= 255.0
+                np.power(scratch, gamma, out=scratch)
+                scratch *= 255.0
+                np.clip(scratch, 0, 255, out=scratch)
 
-                writer.stdin.write(np.clip(mutated, 0, 255).astype(np.uint8).tobytes())
+                # float32 -> uint8 assignment truncates exactly like astype(uint8)
+                out_u8[:] = scratch
+                writer.stdin.write(out_u8.tobytes())
 
                 index += 1
                 if on_progress and total_frames > 0 and index % 15 == 0:
