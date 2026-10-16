@@ -168,7 +168,10 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? clsx("bg-gradient-to-br shadow-meta-sm", copy.accent)
+                    ? clsx(
+                        "bg-gradient-to-br shadow-meta-sm dark:border-meta-500/50 dark:from-meta-500/20 dark:to-meta-500/10 dark:text-meta-100",
+                        copy.accent,
+                      )
                     : "border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] text-ink-muted dark:text-slate-300 hover:border-black/20 dark:hover:border-white/15 hover:bg-white/[0.05]",
                 )}
               >
@@ -201,7 +204,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
           onChange={(event) => set("intensity", Number(event.target.value))}
           className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, rgb(30 41 59) ${options.intensity}%)`,
+            backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, var(--track-empty, rgb(30 41 59)) ${options.intensity}%)`,
           }}
         />
         <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint dark:text-slate-500">

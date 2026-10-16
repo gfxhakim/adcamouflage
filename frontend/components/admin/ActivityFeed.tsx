@@ -4,7 +4,7 @@ import type { ActivityEvent } from "@/lib/admin";
 import { timeAgo } from "@/lib/format";
 
 const KINDS: Record<string, { icon: LucideIcon; tone: string }> = {
-  signup: { icon: UserPlus, tone: "text-emerald-600 bg-emerald-50" },
+  signup: { icon: UserPlus, tone: "text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10" },
   login: { icon: LogIn, tone: "text-meta-600 dark:text-meta-300 bg-meta-50 dark:bg-meta-500/10" },
   batch: { icon: Rocket, tone: "text-meta-600 dark:text-meta-300 bg-meta-50 dark:bg-meta-500/10" },
   plan_request: { icon: Crown, tone: "text-meta-700 dark:text-meta-300 bg-meta-100 dark:bg-meta-500/20" },

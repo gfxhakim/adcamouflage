@@ -349,11 +349,10 @@ export default function WorkspacePage() {
   const engineBlocked = Boolean(health) && !health?.ffmpeg;
 
   return (
-    <>
-      <Header health={health} healthError={healthError} user={user} />
+    <div className="deck min-h-screen">
+      <Header health={health} healthError={healthError} user={user} onDark />
 
-      <div className="deck min-h-screen">
-        <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
           {/* Left rail — section navigator (desktop) ------------------- */}
           <nav className="deck-rail" aria-label="Workspace sections">
             <span
@@ -594,9 +593,8 @@ export default function WorkspacePage() {
                 </p>
               </div>
             </footer>
-          </main>
-        </div>
+        </main>
       </div>
-    </>
+    </div>
   );
 }

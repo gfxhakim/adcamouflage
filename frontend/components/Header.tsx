@@ -25,6 +25,8 @@ interface HeaderProps {
   health?: HealthReport | null;
   healthError?: string | null;
   user?: UserProfile | null;
+  /** Render for a dark surface (the Command Deck workspace shell). */
+  onDark?: boolean;
 }
 
 const NAV = [
@@ -32,7 +34,7 @@ const NAV = [
   { href: "/app/plan", label: "My plan", icon: Crown },
 ];
 
-export function Header({ health, healthError, user }: HeaderProps) {
+export function Header({ health, healthError, user, onDark = false }: HeaderProps) {
   const [signingOut, setSigningOut] = useState(false);
   const pathname = usePathname();
   const showEngine = health !== undefined || healthError !== undefined;
@@ -71,7 +73,7 @@ export function Header({ health, healthError, user }: HeaderProps) {
     <header className="sticky top-0 z-40 border-b border-black/[0.07] dark:border-white/10 bg-white/[0.85] dark:bg-slate-900/85 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">
-          <BrandLogo caption="Workspace" captionClassName="hidden sm:block" />
+          <BrandLogo caption="Workspace" captionClassName="hidden sm:block" onDark={onDark} />
         </Link>
 
         <div className="flex items-center gap-2">

@@ -519,6 +519,7 @@ html[data-intro="off"] .intro-screen {
   --deck-ink-muted: #aab4c6;
   --deck-ink-faint: #717d92;
   --deck-line: 255 255 255;       /* border base: rgb(var(--deck-line) / a) */
+  --track-empty: rgb(148 163 184 / 0.28); /* unfilled range-slider track on dark */
 
   color-scheme: dark;
   color: var(--deck-ink);
@@ -722,4 +723,21 @@ html[data-intro="off"] .intro-screen {
   font-weight: 600;
   letter-spacing: 0.1em;
   color: var(--meta-400);
+}
+
+/* Anchor jumps (the deck rail links) clear the sticky header. */
+html {
+  scroll-padding-top: 5.5rem;
+}
+
+/* The danger button on the dark deck (JobQueue "delete batch" etc.). */
+.deck .btn-danger {
+  border-color: rgb(239 68 68 / 0.45);
+  background: rgb(239 68 68 / 0.14);
+  color: #fca5a5;
+}
+.deck .btn-danger:hover:not(:disabled) {
+  border-color: rgb(239 68 68 / 0.65);
+  background: rgb(239 68 68 / 0.22);
+  color: #fecaca;
 }
