@@ -214,6 +214,27 @@ async def _persist_upload(upload: UploadFile, destination: Path) -> int:
     return written
 
 
+async def _store_overlay(upload: UploadFile) -> str:
+    """Validate and persist one overlay image; return its stored filename."""
+
+    overlay_name = sanitize_filename(upload.filename or "overlay")
+    if classify(overlay_name, upload.content_type) is not AssetKind.IMAGE:
+        raise HTTPException(
+            status_code=422,
+            detail="The overlay must be an image (PNG, JPG or WEBP). PNG keeps transparency.",
+        )
+    stored = f"overlay_{new_id('ov')}{Path(overlay_name).suffix.lower()}"
+    destination = resolve_within(settings.uploads_dir, stored)
+    try:
+        written = await _persist_upload(upload, destination)
+    except StorageError as exc:
+        raise HTTPException(status_code=422, detail=f"Overlay image rejected: {exc}") from exc
+    if written == 0:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail="An overlay image was empty.")
+    return stored
+
+
 @app.post(
     "/api/v1/batches",
     response_model=BatchCreated,
@@ -227,6 +248,10 @@ async def create_batch(
     overlay_image: Annotated[
         UploadFile | None,
         File(description="Optional image composited onto every asset in the batch."),
+    ] = None,
+    overlay_images: Annotated[
+        list[UploadFile] | None,
+        File(description="Additional overlay images, one per layer in options.overlays, in order."),
     ] = None,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -254,28 +279,36 @@ async def create_batch(
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=refusal)
 
     if overlay_image is not None and overlay_image.filename:
-        overlay_name = sanitize_filename(overlay_image.filename)
-        if classify(overlay_name, overlay_image.content_type) is not AssetKind.IMAGE:
-            raise HTTPException(
-                status_code=422,
-                detail="The overlay must be an image (PNG, JPG or WEBP). PNG keeps transparency.",
-            )
-        stored_overlay = f"overlay_{new_id('ov')}{Path(overlay_name).suffix.lower()}"
-        destination = resolve_within(settings.uploads_dir, stored_overlay)
-        try:
-            written = await _persist_upload(overlay_image, destination)
-        except StorageError as exc:
-            raise HTTPException(status_code=422, detail=f"Overlay image rejected: {exc}") from exc
-        if written == 0:
-            destination.unlink(missing_ok=True)
-            raise HTTPException(status_code=422, detail="The overlay image was empty.")
-        resolved.overlay.image_filename = stored_overlay
+        resolved.overlay.image_filename = await _store_overlay(overlay_image)
         resolved.overlay.enabled = True
     elif resolved.overlay.enabled and not resolved.overlay.image_filename:
         raise HTTPException(
             status_code=422,
             detail="Overlay is switched on but no overlay image was attached.",
         )
+
+    # Additional, independently placed overlays. The frontend sends one image
+    # per layer in options.overlays, in the same order.
+    extra_images = [img for img in (overlay_images or []) if img is not None and img.filename]
+    if extra_images:
+        if len(extra_images) != len(resolved.overlays):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Received {len(extra_images)} overlay image(s) for "
+                    f"{len(resolved.overlays)} overlay layer(s); attach exactly one per layer."
+                ),
+            )
+        for layer, image in zip(resolved.overlays, extra_images):
+            layer.image_filename = await _store_overlay(image)
+            layer.enabled = True
+    else:
+        for layer in resolved.overlays:
+            if layer.enabled and not layer.image_filename:
+                raise HTTPException(
+                    status_code=422,
+                    detail="An overlay layer is switched on but no image was attached for it.",
+                )
 
     batch = Batch(options=resolved, user_id=user.id)
 
@@ -453,6 +486,28 @@ async def download_asset(
         filename=_output_filename(asset),
         media_type="application/octet-stream",
     )
+
+
+@app.get("/api/v1/assets/{asset_id}/poster", tags=["assets"])
+async def download_poster(
+    asset_id: str,
+    token: Annotated[str, Query(description="Signed download token.")],
+    user: User = Depends(current_user),
+) -> FileResponse:
+    if not verify_download(token, asset_id):
+        raise HTTPException(status_code=403, detail="This poster link is invalid or has expired.")
+
+    asset = get_store().get_asset(asset_id)
+    if asset is None or not asset.poster_filename:
+        raise HTTPException(status_code=404, detail="No poster frame is available for this asset.")
+    _owned_batch(asset.batch_id, user)
+
+    path = resolve_within(settings.outputs_dir, asset.poster_filename)
+    if not path.exists():
+        raise HTTPException(status_code=410, detail="The poster image has been purged by the retention policy.")
+
+    stem = Path(asset.original_filename).stem or "asset"
+    return FileResponse(path, filename=f"{stem}_poster.jpg", media_type="image/jpeg")
 
 
 def _build_archive(batch_id: str, assets: list[AssetJob], destination: Path) -> Path:

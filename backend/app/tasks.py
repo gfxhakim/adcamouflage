@@ -141,6 +141,9 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
 
     output = report.output_path
     token = sign_download(asset.id)
+    poster_url = (
+        f"/api/v1/assets/{asset.id}/poster?token={token}" if report.poster_filename else None
+    )
     store.update_asset(
         asset_id,
         status=JobStatus.COMPLETED,
@@ -149,6 +152,8 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
         output_filename=output.name,
         output_size_bytes=output.stat().st_size,
         download_url=f"/api/v1/assets/{asset.id}/download?token={token}",
+        poster_filename=report.poster_filename,
+        poster_url=poster_url,
         applied=report.applied,
         metrics=report.metrics,
         finished_at=datetime.now(timezone.utc),

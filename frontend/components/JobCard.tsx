@@ -178,6 +178,17 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   </a>
                 ) : null}
 
+                {asset.poster_url ? (
+                  <a
+                    href={absoluteUrl(asset.poster_url)}
+                    className="btn-ghost !px-3 !py-1.5 !text-xs"
+                    download
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" aria-hidden />
+                    Thumbnail
+                  </a>
+                ) : null}
+
                 {sizeDelta ? <span className="chip !text-[10px]">size {sizeDelta}</span> : null}
 
                 {typeof metrics.dhash_distance === "number" ? (

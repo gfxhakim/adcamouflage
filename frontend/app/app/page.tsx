@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   Cpu,
+  Film,
   Megaphone,
   FileStack,
   ImagePlus,
@@ -16,7 +17,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Header from "@/components/Header";
-import OverlayPanel from "@/components/OverlayPanel";
+import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
+import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
 import OptionsPanel from "@/components/OptionsPanel";
@@ -39,9 +41,15 @@ import type {
   BatchStatus,
   HealthReport,
   MutationOptions,
-  OverlaySettings,
+  OverlayLayer,
+  PosterSettings,
   PresetCatalogue,
 } from "@/lib/types";
+
+/** A queued file is treated as a video by its extension (matches the API's own classifier). */
+function isVideoFile(file: File): boolean {
+  return /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(file.name) || file.type.startsWith("video/");
+}
 
 const DEFAULT_OPTIONS: MutationOptions = {
   preset: "balanced",
@@ -71,6 +79,11 @@ const DEFAULT_OPTIONS: MutationOptions = {
     intro_seconds: 3,
     ranges: [],
   },
+  overlays: [],
+  poster: { enabled: false, timestamp: 0 },
+  quality: "auto",
+  keep_resolution: false,
+  upscale_to: null,
 };
 
 const POLL_INTERVAL_MS = 1200;
@@ -78,7 +91,7 @@ const HEALTH_INTERVAL_MS = 15000;
 
 export default function WorkspacePage() {
   const [files, setFiles] = useState<File[]>([]);
-  const [overlayImage, setOverlayImage] = useState<File | null>(null);
+  const [overlayLayers, setOverlayLayers] = useState<OverlayLayer[]>([createOverlayLayer()]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [options, setOptions] = useState<MutationOptions>(DEFAULT_OPTIONS);
   const [catalogue, setCatalogue] = useState<PresetCatalogue | null>(null);
@@ -209,12 +222,22 @@ export default function WorkspacePage() {
     setPollError(null);
 
     try {
+      // Only layers with an image are sent; each image rides alongside its
+      // layer settings, in order.
+      const activeLayers = overlayLayers.filter((layer) => layer.image);
+      const payload: MutationOptions = {
+        ...options,
+        overlays: activeLayers.map((layer) => ({ ...layer.settings, enabled: true })),
+      };
+      const overlayImages = activeLayers.map((layer) => layer.image as File);
+
       const created = await createBatch(
         files,
-        options,
+        payload,
         setUploadProgress,
         undefined,
-        overlayImage,
+        null,
+        overlayImages,
       );
       batchIdRef.current = created.batch_id;
       setFiles([]);
@@ -242,7 +265,7 @@ export default function WorkspacePage() {
         })
         .catch(() => undefined);
     }
-  }, [files, options, overlayImage, refresh, uploading]);
+  }, [files, options, overlayLayers, refresh, uploading]);
 
   const handleCancel = useCallback(
     async (assetId: string) => {
@@ -299,17 +322,23 @@ export default function WorkspacePage() {
     [options],
   );
 
+  // First queued video, used by the poster picker as a scrub preview.
+  const firstVideo = useMemo(() => files.find(isVideoFile) ?? null, [files]);
+
   // Mirrors the API's own validation, so an avoidable 422 never leaves the page.
   const overlayProblem = useMemo(() => {
-    const overlay = options.overlay;
-    if (!overlayImage) return null;
-    if (overlay.mode === "ranges") {
-      if (overlay.ranges.length === 0) return "Add at least one frame range for the overlay.";
-      const bad = overlay.ranges.findIndex((r) => r.end_frame < r.start_frame);
-      if (bad >= 0) return `Overlay range ${bad + 1} ends before it starts.`;
+    const active = overlayLayers.filter((layer) => layer.image);
+    for (let i = 0; i < active.length; i += 1) {
+      const { settings } = active[i];
+      const prefix = active.length > 1 ? `Logo ${i + 1}: ` : "";
+      if (settings.mode === "ranges") {
+        if (settings.ranges.length === 0) return `${prefix}add at least one frame range.`;
+        const bad = settings.ranges.findIndex((r) => r.end_frame < r.start_frame);
+        if (bad >= 0) return `${prefix}range ${bad + 1} ends before it starts.`;
+      }
     }
     return null;
-  }, [options.overlay, overlayImage]);
+  }, [overlayLayers]);
 
   const outputsReady = batch?.completed ?? 0;
   const engineBlocked = Boolean(health) && !health?.ffmpeg;
@@ -438,10 +467,24 @@ export default function WorkspacePage() {
                 <span className="chip !text-[10px]">optional</span>
               </div>
               <OverlayPanel
-                overlay={options.overlay}
-                onChange={(overlay: OverlaySettings) => setOptions({ ...options, overlay })}
-                image={overlayImage}
-                onImageChange={setOverlayImage}
+                layers={overlayLayers}
+                onChange={setOverlayLayers}
+                disabled={uploading}
+              />
+            </NeonCard>
+
+            <NeonCard padding="lg" radius="xl" id="poster">
+              <div className="mb-5 flex items-center gap-2">
+                <Film className="h-4 w-4 text-meta-500" aria-hidden />
+                <h2 className="text-sm font-semibold tracking-tight text-black">
+                  Poster frame
+                </h2>
+                <span className="chip !text-[10px]">optional</span>
+              </div>
+              <PosterPicker
+                poster={options.poster}
+                onChange={(poster: PosterSettings) => setOptions({ ...options, poster })}
+                video={firstVideo}
                 disabled={uploading}
               />
             </NeonCard>

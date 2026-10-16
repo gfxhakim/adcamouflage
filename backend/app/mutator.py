@@ -32,7 +32,14 @@ from PIL import Image
 
 from .config import settings
 from .ffmpeg import MediaError, MediaInfo, describe_ffmpeg_exit, open_ffmpeg_writer, probe, run_ffmpeg
-from .schemas import AssetKind, MutationOptions, OverlayMode, OverlaySettings
+from .schemas import (
+    QUALITY_TIER_CRF,
+    AssetKind,
+    MutationOptions,
+    OverlayMode,
+    OverlaySettings,
+    QualityTier,
+)
 from .scrub import bitstream_filter_args, scrub_container
 
 logger = logging.getLogger(__name__)
@@ -63,6 +70,7 @@ class MutationReport:
     output_path: Path
     applied: list[str] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)
+    poster_filename: str | None = None
 
 
 # --------------------------------------------------------------------------
@@ -227,6 +235,19 @@ def build_plan(
         plan.out_width = _even(width)
         plan.out_height = _even(height)
 
+    # Output-fidelity dimensions. These only change the *delivered* size; the
+    # micro-crop resample above still recomputes every pixel. "Keep resolution"
+    # scales back to the source size, and "upscale" lifts a low-res source up to
+    # a chosen height (never down). Neither is an evasion control.
+    if width and height:
+        if options.upscale_to and height < options.upscale_to:
+            factor = options.upscale_to / float(height)
+            plan.out_width = _even(int(round(width * factor)))
+            plan.out_height = _even(options.upscale_to)
+        elif options.keep_resolution:
+            plan.out_width = _even(width)
+            plan.out_height = _even(height)
+
     if options.frame_rate_stagger:
         if options.target_fps:
             plan.fps = float(options.target_fps)
@@ -264,6 +285,17 @@ def build_plan(
     plan.crf = rng.randint(19, 24)
     plan.gop = rng.choice((48, 50, 60, 72, 90, 120))
     plan.jpeg_quality = rng.randint(88, 96) if intensity < 70 else rng.randint(80, 92)
+
+    # A chosen quality tier pins the rate-control to a fixed value. This only
+    # narrows the engine's own randomised CRF to a user preference; it adds no
+    # hash-varying behaviour.
+    if options.quality is not QualityTier.AUTO:
+        plan.crf = QUALITY_TIER_CRF[options.quality]
+        plan.jpeg_quality = {
+            QualityTier.HIGH: 95,
+            QualityTier.BALANCED: 90,
+            QualityTier.COMPACT: 82,
+        }[options.quality]
     return plan
 
 
@@ -416,18 +448,23 @@ def overlay_enable_expression(
     return "+".join(windows)
 
 
-def build_overlay_filtergraph(
-    overlay: OverlaySettings,
+def build_multi_overlay_filtergraph(
+    layers: list[OverlaySettings],
     plan: MutationPlan,
     info: MediaInfo,
     *,
     pre: list[str],
     post: list[str],
     duration: float,
-    overlay_input: int,
+    first_input: int,
     trim_head: float = 0.0,
 ) -> str:
-    """The complete -filter_complex graph for a render that has an overlay."""
+    """-filter_complex graph compositing one or more overlays in order.
+
+    For a single layer this is the same graph the engine has always produced
+    (labels ``base``/``ovl0``/``composited``/``vout``); each extra layer adds
+    another ``scale``+``overlay`` stage chained onto the last.
+    """
 
     source_fps = info.video.fps if info.video else 30.0
     width = plan.out_width or (info.video.width if info.video else 0)
@@ -435,37 +472,39 @@ def build_overlay_filtergraph(
     pre_chain = ",".join(pre) if pre else "null"
     post_chain = ",".join(post) if post else "null"
 
-    # Width as a share of the output frame; -1 keeps the aspect ratio, and
-    # rounding to an even width avoids chroma subsampling artefacts.
-    overlay_width = max(2, int(round(width * overlay.scale_percent / 100.0))) if width else 120
-    if overlay_width % 2:
-        overlay_width += 1
+    parts = [f"[0:v]{pre_chain}[base]"]
+    current = "base"
+    for i, layer in enumerate(layers):
+        # Width as a share of the output frame; -1 keeps aspect, and an even
+        # width avoids chroma-subsampling artefacts.
+        overlay_width = max(2, int(round(width * layer.scale_percent / 100.0))) if width else 120
+        if overlay_width % 2:
+            overlay_width += 1
 
-    overlay_chain = [
-        f"scale={overlay_width}:-1:flags=lanczos",
-        # rgba first, so an opacity below 1 has an alpha channel to act on and
-        # a logo with its own transparency is preserved.
-        "format=rgba",
-    ]
-    if overlay.opacity < 1.0:
-        overlay_chain.append(f"colorchannelmixer=aa={overlay.opacity:.3f}")
+        chain = [
+            f"scale={overlay_width}:-1:flags=lanczos",
+            # rgba first, so an opacity below 1 has an alpha channel to act on
+            # and a logo with its own transparency is preserved.
+            "format=rgba",
+        ]
+        if layer.opacity < 1.0:
+            chain.append(f"colorchannelmixer=aa={layer.opacity:.3f}")
 
-    x_expression, y_expression = overlay_position_expressions(overlay)
-    overlay_args = [f"x={x_expression}", f"y={y_expression}"]
+        x_expression, y_expression = overlay_position_expressions(layer)
+        overlay_args = [f"x={x_expression}", f"y={y_expression}"]
+        enable = overlay_enable_expression(layer, source_fps, duration, trim_head)
+        if enable is not None:
+            overlay_args.append(f"enable='{enable}'")
+        # The overlay is a still (one frame); hold it rather than ending early.
+        overlay_args.append("eof_action=repeat")
 
-    enable = overlay_enable_expression(overlay, source_fps, duration, trim_head)
-    if enable is not None:
-        overlay_args.append(f"enable='{enable}'")
-    # Hold the last overlay frame rather than ending the output early; the
-    # overlay is a still, so it has exactly one frame.
-    overlay_args.append("eof_action=repeat")
+        output_label = "composited" if i == len(layers) - 1 else f"step{i}"
+        parts.append(f"[{first_input + i}:v]{','.join(chain)}[ovl{i}]")
+        parts.append(f"[{current}][ovl{i}]overlay={':'.join(overlay_args)}[{output_label}]")
+        current = output_label
 
-    return (
-        f"[0:v]{pre_chain}[base];"
-        f"[{overlay_input}:v]{','.join(overlay_chain)}[ovl];"
-        f"[base][ovl]overlay={':'.join(overlay_args)}[composited];"
-        f"[composited]{post_chain}[vout]"
-    )
+    parts.append(f"[composited]{post_chain}[vout]")
+    return ";".join(parts)
 
 
 def composite_overlay_on_image(
@@ -527,20 +566,92 @@ def _still_overlay_origin(
     return x, y
 
 
-def overlay_is_active(options: MutationOptions) -> bool:
-    return bool(options.overlay and options.overlay.enabled and options.overlay.image_filename)
+def resolve_overlay_images(options: MutationOptions) -> list[tuple[OverlaySettings, Path]]:
+    """Every overlay layer with a stored image, in composite order."""
+
+    resolved: list[tuple[OverlaySettings, Path]] = []
+    for layer in options.effective_overlays():
+        name = Path(layer.image_filename or "").name
+        if not name:
+            continue
+        candidate = settings.uploads_dir / name
+        if candidate.exists():
+            resolved.append((layer, candidate))
+    return resolved
 
 
-def resolve_overlay_image(options: MutationOptions) -> Path | None:
-    """Locate the stored overlay image, or None when there is not one."""
+# Containers whose cover art a remux can embed as an mp4/mov-style poster.
+_POSTER_EMBED_CONTAINERS = {"mp4", "mov", "m4v"}
 
-    if not overlay_is_active(options):
+
+def generate_poster(
+    source: Path,
+    target: Path,
+    options: MutationOptions,
+    info: MediaInfo,
+    container: str,
+) -> str | None:
+    """Pick the thumbnail/poster frame for ``target``.
+
+    Extracts the user's chosen frame from the *source* (clamped to its
+    duration) into a sidecar JPG next to the output and, for containers that
+    support cover art, embeds it so players show that frame. Best-effort: a
+    failed embed keeps the sidecar and never fails the render.
+
+    Returns the sidecar filename, or None when no poster was requested.
+    """
+
+    if not options.poster.enabled:
         return None
-    name = Path(options.overlay.image_filename or "").name
-    if not name:
+
+    duration = info.duration or 0.0
+    timestamp = max(0.0, float(options.poster.timestamp))
+    if duration > 0.1:
+        timestamp = min(timestamp, max(duration - 0.05, 0.0))
+
+    poster_path = target.with_name(f"{target.stem}.poster.jpg")
+    try:
+        run_ffmpeg(
+            ["-ss", f"{timestamp:.3f}", "-i", str(source), "-frames:v", "1", "-q:v", "3", str(poster_path)],
+            stage="poster",
+        )
+    except MediaError:
+        logger.warning("poster extraction failed for %s", source.name, exc_info=True)
         return None
-    candidate = settings.uploads_dir / name
-    return candidate if candidate.exists() else None
+    if not poster_path.exists() or poster_path.stat().st_size == 0:
+        return None
+
+    if container in _POSTER_EMBED_CONTAINERS:
+        embedded = target.with_name(f"{target.stem}.poster{target.suffix}")
+        try:
+            run_ffmpeg(
+                [
+                    "-i",
+                    str(target),
+                    "-i",
+                    str(poster_path),
+                    "-map",
+                    "0",
+                    "-map",
+                    "1",
+                    "-c",
+                    "copy",
+                    "-disposition:v:1",
+                    "attached_pic",
+                    str(embedded),
+                ],
+                stage="poster",
+            )
+            if embedded.exists() and embedded.stat().st_size > 0:
+                embedded.replace(target)
+            else:
+                embedded.unlink(missing_ok=True)
+        except MediaError:
+            # A container that rejects cover art still gets the sidecar.
+            logger.info("poster embed skipped for %s", target.name, exc_info=True)
+            embedded.unlink(missing_ok=True)
+
+    return poster_path.name
 
 
 def _fps_expression(fps: float) -> str:
@@ -870,7 +981,7 @@ def mutate_video(
 
         pre_filters, post_filters = build_video_filter_stages(plan, info)
         audio_filters = build_audio_filters(plan, info)
-        overlay_path = resolve_overlay_image(options)
+        overlays = resolve_overlay_images(options)
 
         effective_duration = max(info.duration - plan.trim_head - plan.trim_tail, 0.1)
         seek: list[str] = ["-ss", f"{plan.trim_head:.3f}"] if plan.trim_head else []
@@ -885,22 +996,23 @@ def mutate_video(
         if plan.trim_head or plan.trim_tail:
             args += ["-t", f"{effective_duration:.3f}"]
 
-        if overlay_path is not None:
-            # The overlay is a still image looped for the length of the clip.
-            overlay_input = 2 if take_audio_from_source else 1
-            args += ["-loop", "1", "-framerate", "25", "-i", str(overlay_path)]
-            graph = build_overlay_filtergraph(
-                options.overlay,
+        if overlays:
+            # Each overlay is a still image looped for the length of the clip.
+            first_overlay_input = 2 if take_audio_from_source else 1
+            for _layer, overlay_path in overlays:
+                args += ["-loop", "1", "-framerate", "25", "-i", str(overlay_path)]
+            graph = build_multi_overlay_filtergraph(
+                [layer for layer, _ in overlays],
                 plan,
                 info,
                 pre=pre_filters,
                 post=post_filters,
                 duration=effective_duration,
-                overlay_input=overlay_input,
+                first_input=first_overlay_input,
                 trim_head=plan.trim_head,
             )
             args += ["-filter_complex", graph, "-map", "[vout]"]
-            # -loop makes the overlay input infinite, so the output length has
+            # -loop makes the overlay inputs infinite, so the output length has
             # to come from the video rather than the longest input.
             args += ["-shortest"]
         else:
@@ -957,6 +1069,8 @@ def mutate_video(
 
     scrub_report = scrub_container(target) if options.strip_metadata else {}
 
+    poster_name = generate_poster(source, target, options, info, container)
+
     if plan.crop_x or plan.crop_y:
         applied.append(f"micro-crop {plan.crop_x}px x {plan.crop_y}px -> {plan.out_width}x{plan.out_height}")
     if plan.fps:
@@ -975,18 +1089,16 @@ def mutate_video(
         applied.append(f"audio pitch shifted x{plan.pitch_ratio:.4f} (ASR desync)")
     if info.has_audio and not math.isclose(plan.tempo_ratio, 1.0, abs_tol=1e-4):
         applied.append(f"audio tempo x{plan.tempo_ratio:.4f}")
-    if overlay_path is not None:
-        overlay = options.overlay
-        if overlay.mode is OverlayMode.ALWAYS:
-            when = "every frame"
-        elif overlay.mode is OverlayMode.INTRO:
-            when = f"first {overlay.intro_seconds:g}s"
-        else:
-            when = f"{len(overlay.ranges)} frame range(s)"
-        applied.append(
-            f"image overlay at {overlay.position.value.replace('_', ' ')} "
-            f"({overlay.scale_percent:g}% width, {overlay.opacity:.0%} opacity) on {when}"
-        )
+    for layer, _ in overlays:
+        applied.append(_overlay_applied_line(layer))
+    if options.upscale_to and video.height < options.upscale_to:
+        applied.append(f"upscaled to {plan.out_width}x{plan.out_height}")
+    elif options.keep_resolution:
+        applied.append(f"resolution preserved at {plan.out_width}x{plan.out_height}")
+    if options.quality is not QualityTier.AUTO:
+        applied.append(f"{options.quality.value} quality (crf {plan.crf})")
+    if poster_name:
+        applied.append(f"poster frame set at {options.poster.timestamp:g}s")
     if options.strip_metadata:
         applied.append("container metadata, chapters and encoder tags stripped")
         applied.append("encoder SEI and compressor signatures scrubbed")
@@ -1011,7 +1123,22 @@ def mutate_video(
         if tag.lower() not in STRUCTURAL_CONTAINER_TAGS and value.strip("\x00 ")
     )
     metrics["scrubbed_signatures"] = sum(scrub_report.values())
-    return MutationReport(output_path=target, applied=applied, metrics=metrics)
+    return MutationReport(
+        output_path=target, applied=applied, metrics=metrics, poster_filename=poster_name
+    )
+
+
+def _overlay_applied_line(overlay: OverlaySettings) -> str:
+    if overlay.mode is OverlayMode.ALWAYS:
+        when = "every frame"
+    elif overlay.mode is OverlayMode.INTRO:
+        when = f"first {overlay.intro_seconds:g}s"
+    else:
+        when = f"{len(overlay.ranges)} frame range(s)"
+    return (
+        f"image overlay at {overlay.position.value.replace('_', ' ')} "
+        f"({overlay.scale_percent:g}% width, {overlay.opacity:.0%} opacity) on {when}"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1089,12 +1216,11 @@ def mutate_image(
         working = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB)
         applied.append("hue and saturation drift")
 
-    overlay_path = resolve_overlay_image(options)
-    if overlay_path is not None:
-        working = composite_overlay_on_image(working, overlay_path, options.overlay)
+    for layer, overlay_path in resolve_overlay_images(options):
+        working = composite_overlay_on_image(working, overlay_path, layer)
         applied.append(
-            f"image overlay at {options.overlay.position.value.replace('_', ' ')} "
-            f"({options.overlay.scale_percent:g}% width, {options.overlay.opacity:.0%} opacity)"
+            f"image overlay at {layer.position.value.replace('_', ' ')} "
+            f"({layer.scale_percent:g}% width, {layer.opacity:.0%} opacity)"
         )
 
     if plan.sharpen:
