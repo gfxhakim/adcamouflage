@@ -72,6 +72,27 @@ def bitstream_filter_args(video_codec: str) -> list[str]:
     return []
 
 
+def _read_file_mutable(path: Path) -> bytearray | None:
+    """Read ``path`` into a single mutable buffer.
+
+    ``bytearray(path.read_bytes())`` holds two copies of the file at once (the
+    immutable ``bytes`` and the ``bytearray`` copy of it). Reading straight into
+    a pre-sized buffer keeps only one copy, which matters because this runs on
+    the freshly encoded output while the worker's memory is already at its peak.
+    """
+
+    try:
+        size = path.stat().st_size
+        buffer = bytearray(size)
+        with path.open("rb") as handle:
+            read = handle.readinto(buffer)
+        if read is not None and read != size:
+            del buffer[read:]
+        return buffer
+    except OSError:
+        return None
+
+
 def _read_uint32(buffer: bytes, offset: int) -> int:
     return int.from_bytes(buffer[offset : offset + 4], "big")
 
@@ -83,9 +104,8 @@ def strip_mp4_compressor_names(path: Path) -> int:
     zeros in place; the file length and every box offset stay untouched.
     """
 
-    try:
-        data = bytearray(path.read_bytes())
-    except OSError:
+    data = _read_file_mutable(path)
+    if data is None:
         logger.warning("could not open %s for container scrubbing", path)
         return 0
 
@@ -163,9 +183,8 @@ def strip_matroska_app_tags(path: Path) -> int:
     preserved (EBML strings are explicitly allowed to be zero-padded).
     """
 
-    try:
-        data = bytearray(path.read_bytes())
-    except OSError:
+    data = _read_file_mutable(path)
+    if data is None:
         return 0
 
     scrubbed = 0
