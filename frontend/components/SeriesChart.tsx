@@ -37,29 +37,29 @@ export function SeriesChart({ points, unit, summary = "total", height = 112 }: S
 
   return (
     <div>
-      <p className="mb-3 min-h-[1.25rem] text-xs text-ink-muted">
+      <p className="mb-3 min-h-[1.25rem] text-xs text-ink-muted dark:text-slate-300">
         {active ? (
           <>
-            <span className="font-semibold tabular-nums text-black">{active.value}</span> {unit} on{" "}
+            <span className="font-semibold tabular-nums text-black dark:text-slate-100">{active.value}</span> {unit} on{" "}
             {dayLabel(active.day)}
           </>
         ) : (
           <>
-            <span className="font-semibold tabular-nums text-black">{headline}</span>{" "}
+            <span className="font-semibold tabular-nums text-black dark:text-slate-100">{headline}</span>{" "}
             {summary === "total" ? `${unit} in ${points.length} days` : `${unit} on the busiest day`}
           </>
         )}
       </p>
 
       <div
-        className="relative flex items-end gap-[2px] border-b border-black/10"
+        className="relative flex items-end gap-[2px] border-b border-black/10 dark:border-white/10"
         style={{ height }}
         role="img"
         aria-label={`${unit} per day over ${points.length} days, ${headline} ${summary === "total" ? "in total" : "at peak"}`}
         onMouseLeave={() => setHover(null)}
       >
         {/* Recessive guide at the halfway mark. */}
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-black/[0.06]" />
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-black/[0.06] dark:border-white/10" />
         {points.map((point, index) => (
           <button
             type="button"
@@ -73,7 +73,7 @@ export function SeriesChart({ points, unit, summary = "total", height = 112 }: S
             <span
               className={
                 "block w-full rounded-t-[4px] transition-colors " +
-                (hover === index ? "bg-meta-700" : point.value ? "bg-meta-500" : "bg-black/10")
+                (hover === index ? "bg-meta-700 dark:bg-meta-300" : point.value ? "bg-meta-500" : "bg-black/10 dark:bg-white/10")
               }
               style={{ height: point.value ? `${Math.max(3, (point.value / peak) * 100)}%` : "2px" }}
             />
@@ -81,7 +81,7 @@ export function SeriesChart({ points, unit, summary = "total", height = 112 }: S
         ))}
       </div>
 
-      <div className="mt-1.5 flex justify-between text-[10px] text-ink-faint">
+      <div className="mt-1.5 flex justify-between text-[10px] text-ink-faint dark:text-slate-500">
         <span>{points[0] ? dayLabel(points[0].day) : ""}</span>
         <span>peak {peak === 1 && headline === 0 ? 0 : peak}</span>
         <span>today</span>

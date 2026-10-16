@@ -74,20 +74,20 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
           icon: AlertTriangle,
           text: people(overview.hit_limit_this_month, "user hit their limit", "users hit their limit") + " this month",
           hint: "Good upgrade candidates",
-          tone: "text-red-600 bg-red-50",
+          tone: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10",
         },
         {
           icon: Gauge,
           text:
             people(overview.near_limit, "user has", "users have") + " used 80% or more of their limit",
           hint: "May need a bigger plan soon",
-          tone: "text-amber-700 bg-amber-50",
+          tone: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10",
         },
         {
           icon: CalendarClock,
           text: people(overview.expiring_soon, "plan ends", "plans end") + " in the next 7 days",
           hint: "Remind them to renew",
-          tone: "text-meta-700 bg-meta-50",
+          tone: "text-meta-700 dark:text-meta-300 bg-meta-50 dark:bg-meta-500/10",
         },
       ]
     : [];
@@ -127,20 +127,20 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
         <div className="space-y-6">
           <NeonCard padding="lg" radius="xl">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-black">Needs your attention</h2>
-              <button type="button" className="text-xs font-semibold text-meta-600 hover:underline" onClick={onOpenAnalytics}>
+              <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">Needs your attention</h2>
+              <button type="button" className="text-xs font-semibold text-meta-600 dark:text-meta-300 hover:underline" onClick={onOpenAnalytics}>
                 See who
               </button>
             </div>
             <ul className="space-y-2">
               {attention.map((item) => (
-                <li key={item.text} className="flex items-center gap-3 rounded-xl border border-black/[0.06] p-3">
+                <li key={item.text} className="flex items-center gap-3 rounded-xl border border-black/[0.06] dark:border-white/10 p-3">
                   <span className={clsx("grid h-9 w-9 shrink-0 place-items-center rounded-lg", item.tone)}>
                     <item.icon className="h-4 w-4" aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm text-black">{item.text}</p>
-                    <p className="text-xs text-ink-faint">{item.hint}</p>
+                    <p className="text-sm text-black dark:text-slate-100">{item.text}</p>
+                    <p className="text-xs text-ink-faint dark:text-slate-500">{item.hint}</p>
                   </div>
                 </li>
               ))}
@@ -150,7 +150,7 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
           <NeonCard padding="lg" radius="xl" tone="slow">
             <div className="mb-4 flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-meta-500" aria-hidden />
-              <h2 className="text-sm font-semibold tracking-tight text-black">Files processed per day</h2>
+              <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">Files processed per day</h2>
             </div>
             {overview ? (
               <SeriesChart points={overview.daily.map((d) => ({ day: d.day, value: d.files }))} unit="files" />
@@ -162,15 +162,15 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
           <NeonCard padding="lg" radius="xl" tone={healthError || health?.status === "degraded" ? "danger" : "muted"}>
             <div className="mb-3 flex items-center gap-2">
               <Cpu className="h-4 w-4 text-meta-500" aria-hidden />
-              <h2 className="text-sm font-semibold tracking-tight text-black">System</h2>
+              <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">System</h2>
               <span
                 className={clsx(
                   "chip ml-auto",
                   healthError
-                    ? "!border-red-300 !bg-red-50 !text-red-700"
+                    ? "!border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300"
                     : health?.status === "ok"
                       ? "!border-emerald-300 !bg-emerald-50 !text-emerald-700"
-                      : "!border-amber-300 !bg-amber-50 !text-amber-700",
+                      : "!border-amber-300 dark:!border-amber-500/40 !bg-amber-50 dark:!bg-amber-500/10 !text-amber-700 dark:!text-amber-300",
                 )}
               >
                 {healthError ? "Offline" : health ? (health.status === "ok" ? "Healthy" : "Degraded") : "Checking"}
@@ -184,8 +184,8 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
                 ["Job queue", health ? (health.redis ? "Connected" : health.worker_mode) : "—"],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <dt className="text-ink-faint">{label}</dt>
-                  <dd className="font-medium text-black">{value}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">{label}</dt>
+                  <dd className="font-medium text-black dark:text-slate-100">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -195,7 +195,7 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
         <NeonCard padding="lg" radius="xl">
           <div className="mb-3 flex items-center gap-2">
             <Activity className="h-4 w-4 text-meta-500" aria-hidden />
-            <h2 className="text-sm font-semibold tracking-tight text-black">Live activity</h2>
+            <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">Live activity</h2>
           </div>
           <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Filter activity">
             {FEED_FILTERS.map((filter) => (
@@ -205,7 +205,7 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
                 onClick={() => setKind(filter.id)}
                 className={clsx(
                   "chip transition-colors",
-                  kind === filter.id && "!border-meta-500/50 !bg-meta-50 !text-meta-700",
+                  kind === filter.id && "!border-meta-500/50 !bg-meta-50 dark:!bg-meta-500/10 !text-meta-700 dark:!text-meta-300",
                 )}
                 aria-pressed={kind === filter.id}
               >

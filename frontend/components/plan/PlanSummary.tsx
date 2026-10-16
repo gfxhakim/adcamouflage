@@ -22,21 +22,21 @@ export function PlanSummary({ user }: { user: UserProfile }) {
     <NeonCard tone={low ? "danger" : "slow"} padding="md" radius="lg" className="mb-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-meta-500/30 bg-meta-50 text-meta-600">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-meta-500/30 bg-meta-50 dark:bg-meta-500/10 text-meta-600 dark:text-meta-300">
             <Crown className="h-5 w-5" aria-hidden />
           </span>
           <div className="min-w-0">
             <p className="label">Your plan</p>
-            <p className="text-base font-semibold tracking-tight text-black">
+            <p className="text-base font-semibold tracking-tight text-black dark:text-slate-100">
               {user.plan_label}
-              {user.plan_expired ? <span className="ml-2 text-xs font-medium text-red-700">expired</span> : null}
+              {user.plan_expired ? <span className="ml-2 text-xs font-medium text-red-700 dark:text-red-300">expired</span> : null}
             </p>
           </div>
         </div>
 
         <div className="min-w-0 flex-1 sm:max-w-sm">
           <UsageMeter used={user.used_this_month} quota={quota} />
-          <p className={clsx("mt-1 flex items-center gap-1.5 text-[11px]", low ? "text-red-700" : "text-ink-subtle")}>
+          <p className={clsx("mt-1 flex items-center gap-1.5 text-[11px]", low ? "text-red-700 dark:text-red-300" : "text-ink-subtle dark:text-slate-400")}>
             <CalendarClock className="h-3 w-3" aria-hidden />
             {user.plan_expired
               ? "Renew your plan to keep processing files."

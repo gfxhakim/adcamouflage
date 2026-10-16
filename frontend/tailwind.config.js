@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // Dark "Command Deck" theme is scoped to the workspace and admin shells:
+  // a `.deck` wrapper turns on every `dark:` variant beneath it, so the
+  // landing, auth and plan pages keep their light look untouched.
+  darkMode: ["selector", ".deck"],
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",

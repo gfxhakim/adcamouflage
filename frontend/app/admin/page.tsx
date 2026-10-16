@@ -124,7 +124,7 @@ export default function AdminPage() {
   // --- gate --------------------------------------------------------------
   if (!checked) {
     return (
-      <div className="grid min-h-screen place-items-center text-ink-faint">
+      <div className="deck grid min-h-screen place-items-center text-slate-500">
         <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
       </div>
     );
@@ -135,13 +135,14 @@ export default function AdminPage() {
   }
 
   const currency = overview?.currency ?? "USD";
+  const activeTab = TABS.find((t) => t.id === tab);
 
   return (
-    <>
-      <header className="sticky top-0 z-40 border-b border-black/[0.07] bg-white/[0.85] backdrop-blur-xl">
+    <div className="deck min-h-screen">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">
-            <BrandLogo caption="Admin panel" captionClassName="hidden sm:block" />
+            <BrandLogo caption="Admin · Command deck" captionClassName="hidden sm:block" onDark />
           </Link>
           <nav className="flex items-center gap-2">
             <button type="button" className="btn-ghost !px-2.5 !py-2" onClick={refreshAll} aria-label="Refresh">
@@ -159,7 +160,8 @@ export default function AdminPage() {
           </nav>
         </div>
 
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Phones keep the section controls as a scrollable tab row. */}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:hidden">
           <div className="-mb-px flex gap-1 overflow-x-auto" role="tablist" aria-label="Admin sections">
             {TABS.map((item) => (
               <button
@@ -171,8 +173,8 @@ export default function AdminPage() {
                 className={clsx(
                   "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors",
                   tab === item.id
-                    ? "border-meta-500 text-meta-600"
-                    : "border-transparent text-ink-muted hover:text-black",
+                    ? "border-meta-500 text-meta-300"
+                    : "border-transparent text-slate-400 hover:text-slate-100",
                 )}
               >
                 <item.icon className="h-4 w-4" aria-hidden />
@@ -183,32 +185,60 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        {error ? (
-          <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
-        ) : null}
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+        {/* Left rail — section switcher (desktop) ---------------------- */}
+        <nav className="deck-rail" role="tablist" aria-label="Admin sections">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === item.id}
+              data-active={tab === item.id}
+              onClick={() => openTab(item.id)}
+              className="deck-rail-btn"
+              title={item.label}
+              aria-label={item.label}
+            >
+              <item.icon className="h-4 w-4" aria-hidden />
+            </button>
+          ))}
+        </nav>
 
-        {tab === "overview" ? (
-          <OverviewTab
-            overview={overview}
-            refreshKey={refreshKey}
-            onSelectUser={setSelected}
-            onOpenAnalytics={() => openTab("analytics")}
-          />
-        ) : tab === "users" ? (
-          <UsersTab
-            plans={plans}
-            currency={currency}
-            refreshKey={refreshKey}
-            onSelectUser={setSelected}
-            onChanged={() => void loadShared()}
-          />
-        ) : tab === "analytics" ? (
-          <AnalyticsTab refreshKey={refreshKey} onSelectUser={setSelected} />
-        ) : (
-          <SettingsTab plans={plans} onPlansChanged={refreshAll} />
-        )}
-      </main>
+        <main className="min-w-0 flex-1">
+          <div className="mb-5 flex items-center gap-2">
+            {activeTab ? <activeTab.icon className="h-4 w-4 text-meta-300" aria-hidden /> : null}
+            <h1 className="font-display text-2xl font-normal leading-tight text-slate-50 sm:text-3xl">
+              {activeTab?.label}
+            </h1>
+          </div>
+
+          {error ? (
+            <p className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>
+          ) : null}
+
+          {tab === "overview" ? (
+            <OverviewTab
+              overview={overview}
+              refreshKey={refreshKey}
+              onSelectUser={setSelected}
+              onOpenAnalytics={() => openTab("analytics")}
+            />
+          ) : tab === "users" ? (
+            <UsersTab
+              plans={plans}
+              currency={currency}
+              refreshKey={refreshKey}
+              onSelectUser={setSelected}
+              onChanged={() => void loadShared()}
+            />
+          ) : tab === "analytics" ? (
+            <AnalyticsTab refreshKey={refreshKey} onSelectUser={setSelected} />
+          ) : (
+            <SettingsTab plans={plans} onPlansChanged={refreshAll} />
+          )}
+        </main>
+      </div>
 
       {selected !== null ? (
         <UserPanel
@@ -221,6 +251,6 @@ export default function AdminPage() {
           onDeleted={refreshAll}
         />
       ) : null}
-    </>
+    </div>
   );
 }

@@ -64,11 +64,11 @@ export function PosterPicker({ poster, onChange, video, disabled = false }: Post
           onChange={(event) => setEnabled(event.target.checked)}
         />
         <span className="min-w-0">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-black">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-black dark:text-slate-100">
             <ImageDown className="h-3.5 w-3.5 text-meta-500" aria-hidden />
             Pick the thumbnail frame
           </span>
-          <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle">
+          <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle dark:text-slate-400">
             Choose which frame players show as the poster. Applied to every video in the batch,
             clamped to each clip&apos;s length.
           </span>
@@ -78,7 +78,7 @@ export function PosterPicker({ poster, onChange, video, disabled = false }: Post
       {poster.enabled ? (
         video && src ? (
           <div className="space-y-3">
-            <div className="overflow-hidden rounded-xl border border-black/10 bg-black">
+            <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-black">
               {/* The user's own clip, used only to preview the chosen frame. */}
               <video
                 ref={videoRef}
@@ -100,7 +100,7 @@ export function PosterPicker({ poster, onChange, video, disabled = false }: Post
                 <label htmlFor="poster-scrub" className="label">
                   Thumbnail time
                 </label>
-                <span className="font-mono text-xs text-meta-600">
+                <span className="font-mono text-xs text-meta-600 dark:text-meta-300">
                   {formatTime(poster.timestamp)}
                   {duration ? ` / ${formatTime(duration)}` : ""}
                 </span>
@@ -114,13 +114,13 @@ export function PosterPicker({ poster, onChange, video, disabled = false }: Post
                 value={Math.min(poster.timestamp, duration || poster.timestamp)}
                 disabled={disabled || !duration}
                 onChange={(event) => setTimestamp(Number(event.target.value))}
-                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
         ) : (
-          <p className="flex items-start gap-2 rounded-lg border border-black/[0.08] bg-black/[0.02] px-3 py-2.5 text-[11px] leading-relaxed text-ink-subtle">
-            <Clapperboard className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />
+          <p className="flex items-start gap-2 rounded-lg border border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] px-3 py-2.5 text-[11px] leading-relaxed text-ink-subtle dark:text-slate-400">
+            <Clapperboard className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint dark:text-slate-500" aria-hidden />
             Queue a video above to scrub and pick its thumbnail frame. The time you choose is
             applied to every video in the batch.
           </p>

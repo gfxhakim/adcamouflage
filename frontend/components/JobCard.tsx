@@ -31,11 +31,11 @@ const TONE_BY_STATUS: Record<AssetJob["status"], NeonTone> = {
 };
 
 const STATUS_TEXT: Record<AssetJob["status"], string> = {
-  queued: "text-ink-subtle",
+  queued: "text-ink-subtle dark:text-slate-400",
   processing: "text-meta-500",
-  completed: "text-meta-600",
-  failed: "text-red-600",
-  cancelled: "text-ink-subtle",
+  completed: "text-meta-600 dark:text-meta-300",
+  failed: "text-red-600 dark:text-red-400",
+  cancelled: "text-ink-subtle dark:text-slate-400",
 };
 
 function StatusIcon({ status }: { status: AssetJob["status"] }) {
@@ -70,8 +70,8 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
         <div className="flex items-start gap-3">
           <span
             className={clsx(
-              "grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-black/10 bg-meta-50",
-              asset.kind === "video" ? "text-meta-600" : "text-meta-500",
+              "grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10",
+              asset.kind === "video" ? "text-meta-600 dark:text-meta-300" : "text-meta-500",
             )}
           >
             {asset.kind === "video" ? (
@@ -84,15 +84,15 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-black">
+                <p className="truncate text-sm font-medium text-black dark:text-slate-100">
                   {asset.original_filename}
                   {asset.variants_total > 1 ? (
-                    <span className="ml-1.5 font-mono text-[11px] text-meta-600">
+                    <span className="ml-1.5 font-mono text-[11px] text-meta-600 dark:text-meta-300">
                       v{asset.variant_index + 1}
                     </span>
                   ) : null}
                 </p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-subtle">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-subtle dark:text-slate-400">
                   <span>{formatBytes(asset.size_bytes)}</span>
                   {metrics.source_resolution ? (
                     <>
@@ -129,7 +129,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   <button
                     type="button"
                     onClick={() => onCancel(asset.id)}
-                    className="rounded-md p-1 text-ink-subtle transition-colors hover:bg-red-50 hover:text-red-600"
+                    className="rounded-md p-1 text-ink-subtle dark:text-slate-400 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
                     aria-label={`Cancel ${asset.original_filename}`}
                   >
                     <X className="h-3.5 w-3.5" aria-hidden />
@@ -152,14 +152,14 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   }
                   label={`${asset.original_filename} progress`}
                 />
-                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-ink-subtle">
+                <span className="w-10 shrink-0 text-right font-mono text-[11px] text-ink-subtle dark:text-slate-400">
                   {Math.round(asset.progress)}%
                 </span>
               </div>
             ) : null}
 
             {asset.error ? (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-700">
+              <p className="mt-3 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:text-red-300">
                 {asset.error}
               </p>
             ) : null}
@@ -193,7 +193,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
 
                 {typeof metrics.dhash_distance === "number" ? (
                   <span className="chip !text-[10px]" title="Perceptual hash distance from the original">
-                    <Fingerprint className="h-3 w-3 text-meta-600" aria-hidden />
+                    <Fingerprint className="h-3 w-3 text-meta-600 dark:text-meta-300" aria-hidden />
                     pHash Δ {metrics.dhash_distance}
                   </span>
                 ) : null}
@@ -201,7 +201,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                 <button
                   type="button"
                   onClick={() => setExpanded((value) => !value)}
-                  className="ml-auto flex items-center gap-1 text-[11px] font-medium text-ink-subtle transition-colors hover:text-meta-500"
+                  className="ml-auto flex items-center gap-1 text-[11px] font-medium text-ink-subtle dark:text-slate-400 transition-colors hover:text-meta-500"
                   aria-expanded={expanded}
                 >
                   {expanded ? "Hide" : "Report"}
@@ -214,12 +214,12 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
             ) : null}
 
             {expanded && asset.status === "completed" ? (
-              <div className="mt-3 space-y-3 rounded-lg border border-black/[0.08] bg-meta-50/60 p-3">
+              <div className="mt-3 space-y-3 rounded-lg border border-black/[0.08] dark:border-white/10 bg-meta-50/60 dark:bg-meta-500/10 p-3">
                 <div>
                   <p className="label mb-1.5">Applied mutations</p>
                   <ul className="space-y-1">
                     {asset.applied.map((entry) => (
-                      <li key={entry} className="flex gap-2 text-[11px] text-ink-subtle">
+                      <li key={entry} className="flex gap-2 text-[11px] text-ink-subtle dark:text-slate-400">
                         <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-meta-500" aria-hidden />
                         {entry}
                       </li>
@@ -229,49 +229,49 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
 
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                   <div className="col-span-2 flex justify-between gap-2">
-                    <dt className="text-ink-subtle">Source SHA-256</dt>
-                    <dd className="truncate font-mono text-ink-subtle">
+                    <dt className="text-ink-subtle dark:text-slate-400">Source SHA-256</dt>
+                    <dd className="truncate font-mono text-ink-subtle dark:text-slate-400">
                       {shortHash(metrics.source_sha256, 16)}
                     </dd>
                   </div>
                   <div className="col-span-2 flex justify-between gap-2">
-                    <dt className="text-ink-subtle">Output SHA-256</dt>
-                    <dd className="truncate font-mono text-meta-600">
+                    <dt className="text-ink-subtle dark:text-slate-400">Output SHA-256</dt>
+                    <dd className="truncate font-mono text-meta-600 dark:text-meta-300">
                       {shortHash(metrics.output_sha256, 16)}
                     </dd>
                   </div>
                   {metrics.source_fps ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-ink-subtle">Frame rate</dt>
-                      <dd className="font-mono text-ink-muted">
+                      <dt className="text-ink-subtle dark:text-slate-400">Frame rate</dt>
+                      <dd className="font-mono text-ink-muted dark:text-slate-300">
                         {metrics.source_fps} → {metrics.output_fps}
                       </dd>
                     </div>
                   ) : null}
                   {typeof metrics.residual_exif_tags === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-ink-subtle">EXIF left</dt>
-                      <dd className="font-mono text-meta-600">{metrics.residual_exif_tags}</dd>
+                      <dt className="text-ink-subtle dark:text-slate-400">EXIF left</dt>
+                      <dd className="font-mono text-meta-600 dark:text-meta-300">{metrics.residual_exif_tags}</dd>
                     </div>
                   ) : null}
                   {metrics.residual_tags ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-ink-subtle">Provenance tags</dt>
-                      <dd className="font-mono text-meta-600">
+                      <dt className="text-ink-subtle dark:text-slate-400">Provenance tags</dt>
+                      <dd className="font-mono text-meta-600 dark:text-meta-300">
                         {metrics.residual_tags.length}
                       </dd>
                     </div>
                   ) : null}
                   {typeof metrics.scrubbed_signatures === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-ink-subtle">Signatures wiped</dt>
-                      <dd className="font-mono text-ink-muted">{metrics.scrubbed_signatures}</dd>
+                      <dt className="text-ink-subtle dark:text-slate-400">Signatures wiped</dt>
+                      <dd className="font-mono text-ink-muted dark:text-slate-300">{metrics.scrubbed_signatures}</dd>
                     </div>
                   ) : null}
                   {typeof metrics.seed === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-ink-subtle">Seed</dt>
-                      <dd className="font-mono text-ink-muted">{metrics.seed}</dd>
+                      <dt className="text-ink-subtle dark:text-slate-400">Seed</dt>
+                      <dd className="font-mono text-ink-muted dark:text-slate-300">{metrics.seed}</dd>
                     </div>
                   ) : null}
                 </dl>

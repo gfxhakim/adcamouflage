@@ -114,7 +114,7 @@ export function OverlayPanel({ layers, onChange, disabled = false }: OverlayPane
         </button>
       ) : null}
 
-      <p className="flex items-start gap-2 text-[11px] leading-relaxed text-ink-faint">
+      <p className="flex items-start gap-2 text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
         <Layers3 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
         Each overlay is composited before the grain pass, so logos pick up the same per-frame
         noise as the rest of the picture. Add up to {MAX_LAYERS}.
@@ -189,7 +189,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
   const invalidRange = settings.ranges.findIndex((r) => r.end_frame < r.start_frame);
 
   return (
-    <div className="rounded-xl border border-black/[0.08] bg-black/[0.015] p-3 sm:p-4">
+    <div className="rounded-xl border border-black/[0.08] dark:border-white/10 bg-black/[0.015] dark:bg-white/[0.04] p-3 sm:p-4">
       {total > 1 ? (
         <div className="mb-3 flex items-center justify-between">
           <span className="label">Logo {index + 1}</span>
@@ -198,7 +198,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
               type="button"
               onClick={onRemove}
               disabled={disabled}
-              className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-red-50 hover:text-red-600"
+              className="rounded-md p-1.5 text-ink-faint dark:text-slate-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
               aria-label={`Remove logo ${index + 1}`}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -231,22 +231,22 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
         }}
       >
         {image && preview ? (
-          <div className="flex items-center gap-3 rounded-xl border border-meta-500/40 bg-meta-50 p-3">
+          <div className="flex items-center gap-3 rounded-xl border border-meta-500/40 bg-meta-50 dark:bg-meta-500/10 p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
               alt="Overlay preview"
-              className="h-14 w-14 shrink-0 rounded-lg border border-black/10 bg-white object-contain p-1"
+              className="h-14 w-14 shrink-0 rounded-lg border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 object-contain p-1"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-black">{image.name}</p>
-              <p className="text-[11px] text-ink-subtle">{formatBytes(image.size)}</p>
+              <p className="truncate text-xs font-semibold text-black dark:text-slate-100">{image.name}</p>
+              <p className="text-[11px] text-ink-subtle dark:text-slate-400">{formatBytes(image.size)}</p>
             </div>
             <button
               type="button"
               disabled={disabled}
               onClick={() => onChange({ image: null, settings: { ...settings, enabled: false } })}
-              className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-red-50 hover:text-red-600"
+              className="rounded-md p-1.5 text-ink-faint dark:text-slate-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
               aria-label="Remove the overlay image"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -256,16 +256,16 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
           <label
             htmlFor={inputId}
             className={clsx(
-              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-black/20 px-4 py-6 text-center transition-colors",
-              dragging && "border-meta-500 bg-meta-50",
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-black/20 dark:border-white/15 px-4 py-6 text-center transition-colors",
+              dragging && "border-meta-500 bg-meta-50 dark:bg-meta-500/10",
               disabled && "cursor-not-allowed opacity-50",
             )}
           >
-            <span className="grid h-10 w-10 place-items-center rounded-lg border border-black/10 bg-meta-50 text-meta-500">
+            <span className="grid h-10 w-10 place-items-center rounded-lg border border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10 text-meta-500">
               <Upload className="h-4 w-4" aria-hidden />
             </span>
-            <span className="text-xs font-semibold text-black">Add a logo or badge</span>
-            <span className="text-[11px] text-ink-faint">
+            <span className="text-xs font-semibold text-black dark:text-slate-100">Add a logo or badge</span>
+            <span className="text-[11px] text-ink-faint dark:text-slate-500">
               PNG with transparency works best · drop it here or click
             </span>
             <input
@@ -284,7 +284,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
       </div>
 
       {problem ? (
-        <p className="mt-3 flex items-start justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+        <p className="mt-3 flex items-start justify-between gap-2 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
           {problem}
           <button type="button" onClick={() => setProblem(null)} aria-label="Dismiss">
             <X className="h-3 w-3" aria-hidden />
@@ -311,15 +311,15 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                       "rounded-lg border p-2.5 text-left transition-all",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                       active
-                        ? "border-meta-500/50 bg-meta-50 text-black"
-                        : "border-black/[0.08] bg-black/[0.02] text-ink-subtle hover:border-black/20",
+                        ? "border-meta-500/50 bg-meta-50 dark:bg-meta-500/10 text-black dark:text-slate-100"
+                        : "border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] text-ink-subtle dark:text-slate-400 hover:border-black/20 dark:hover:border-white/15",
                     )}
                   >
                     <span className="flex items-center gap-1.5 text-xs font-semibold">
                       <Icon className={clsx("h-3.5 w-3.5", active ? "text-meta-500" : "")} aria-hidden />
                       {label}
                     </span>
-                    <span className="mt-1 block text-[11px] leading-snug text-ink-faint">{blurb}</span>
+                    <span className="mt-1 block text-[11px] leading-snug text-ink-faint dark:text-slate-500">{blurb}</span>
                   </button>
                 );
               })}
@@ -332,7 +332,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                 <label htmlFor={`${inputId}-intro`} className="label">
                   Intro length
                 </label>
-                <span className="font-mono text-xs text-meta-600">{settings.intro_seconds}s</span>
+                <span className="font-mono text-xs text-meta-600 dark:text-meta-300">{settings.intro_seconds}s</span>
               </div>
               <input
                 id={`${inputId}-intro`}
@@ -343,7 +343,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                 value={settings.intro_seconds}
                 disabled={disabled}
                 onChange={(event) => setSetting("intro_seconds", Number(event.target.value))}
-                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] accent-meta-500"
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500"
               />
             </div>
           ) : null}
@@ -364,14 +364,14 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
               </div>
 
               {settings.ranges.length === 0 ? (
-                <p className="rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                <p className="rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
                   Add at least one range, or the batch will be rejected.
                 </p>
               ) : (
                 <ul className="space-y-2">
                   {settings.ranges.map((range, i) => (
                     <li key={i} className="flex items-center gap-2">
-                      <span className="w-6 shrink-0 font-mono text-[11px] text-ink-faint">
+                      <span className="w-6 shrink-0 font-mono text-[11px] text-ink-faint dark:text-slate-500">
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <input
@@ -385,7 +385,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                           updateRange(i, { start_frame: Math.max(0, Number(event.target.value)) })
                         }
                       />
-                      <span className="shrink-0 text-[11px] text-ink-faint">to</span>
+                      <span className="shrink-0 text-[11px] text-ink-faint dark:text-slate-500">to</span>
                       <input
                         type="number"
                         min={0}
@@ -401,7 +401,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                         type="button"
                         onClick={() => removeRange(i)}
                         disabled={disabled}
-                        className="shrink-0 rounded-md p-1.5 text-ink-faint transition-colors hover:bg-red-50 hover:text-red-600"
+                        className="shrink-0 rounded-md p-1.5 text-ink-faint dark:text-slate-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
                         aria-label={`Remove range ${i + 1}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -412,7 +412,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
               )}
 
               {invalidRange >= 0 ? (
-                <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                <p className="mt-2 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-300">
                   Range {invalidRange + 1} ends before it starts.
                 </p>
               ) : null}
@@ -440,13 +440,13 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                         active
                           ? "border-meta-500 bg-meta-500 shadow-meta-sm"
-                          : "border-black/10 bg-black/[0.02] hover:border-meta-500/50",
+                          : "border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] hover:border-meta-500/50",
                       )}
                     >
                       <span
                         className={clsx(
                           "mx-auto block h-1.5 w-1.5 rounded-full",
-                          active ? "bg-white" : "bg-black/20",
+                          active ? "bg-white" : "bg-black/20 dark:bg-white/20",
                         )}
                         aria-hidden
                       />
@@ -461,7 +461,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                     <label htmlFor={`${inputId}-scale`} className="label">
                       Size
                     </label>
-                    <span className="font-mono text-xs text-meta-600">
+                    <span className="font-mono text-xs text-meta-600 dark:text-meta-300">
                       {settings.scale_percent}% of width
                     </span>
                   </div>
@@ -474,7 +474,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                     value={settings.scale_percent}
                     disabled={disabled}
                     onChange={(event) => setSetting("scale_percent", Number(event.target.value))}
-                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] accent-meta-500"
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500"
                   />
                 </div>
 
@@ -483,7 +483,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                     <label htmlFor={`${inputId}-opacity`} className="label">
                       Opacity
                     </label>
-                    <span className="font-mono text-xs text-meta-600">
+                    <span className="font-mono text-xs text-meta-600 dark:text-meta-300">
                       {Math.round(settings.opacity * 100)}%
                     </span>
                   </div>
@@ -496,7 +496,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                     value={Math.round(settings.opacity * 100)}
                     disabled={disabled}
                     onChange={(event) => setSetting("opacity", Number(event.target.value) / 100)}
-                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] accent-meta-500"
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500"
                   />
                 </div>
 
@@ -529,7 +529,7 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                   </div>
                 </div>
 
-                <label className="flex items-center gap-2 text-[11px] text-ink-subtle">
+                <label className="flex items-center gap-2 text-[11px] text-ink-subtle dark:text-slate-400">
                   <input
                     type="checkbox"
                     className="accent-meta-500"

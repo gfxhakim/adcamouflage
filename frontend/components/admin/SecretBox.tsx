@@ -20,7 +20,7 @@ export function SecretBox({ value, note }: { value: string; note: string }) {
   return (
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 select-all break-all rounded-lg bg-white px-3 py-2 font-mono text-sm text-black">
+        <code className="min-w-0 flex-1 select-all break-all rounded-lg bg-white dark:bg-slate-900 px-3 py-2 font-mono text-sm text-black dark:text-slate-100">
           {value}
         </code>
         <button type="button" className="btn-ghost !p-2" onClick={copy} aria-label="Copy">

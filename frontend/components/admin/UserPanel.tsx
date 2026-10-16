@@ -212,11 +212,11 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
         onClick={onClose}
       />
 
-      <div className="relative h-full w-full overflow-y-auto bg-white sm:max-w-xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.07] bg-white px-4 py-3">
+      <div className="relative h-full w-full overflow-y-auto bg-white dark:bg-slate-900 sm:max-w-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-black/[0.07] dark:border-white/10 bg-white dark:bg-slate-900 px-4 py-3">
           <div className="min-w-0">
             <p className="label">User</p>
-            <p className="truncate text-sm font-semibold text-black">{user?.email ?? "Loading…"}</p>
+            <p className="truncate text-sm font-semibold text-black dark:text-slate-100">{user?.email ?? "Loading…"}</p>
           </div>
           <button type="button" onClick={onClose} className="btn-ghost !p-2" aria-label="Close">
             <X className="h-4 w-4" aria-hidden />
@@ -225,9 +225,9 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
 
         <div className="p-3 sm:p-4">
         {!detail ? (
-          <div className="grid place-items-center py-20 text-ink-faint">
+          <div className="grid place-items-center py-20 text-ink-faint dark:text-slate-500">
             {error ? (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             ) : (
               <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             )}
@@ -237,50 +237,50 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
             {/* Summary ---------------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone={user!.is_active ? "default" : "danger"}>
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="chip !border-meta-500/30 !bg-meta-50 !text-meta-700">
+                <span className="chip !border-meta-500/30 !bg-meta-50 dark:!bg-meta-500/10 !text-meta-700 dark:!text-meta-300">
                   {user!.plan_label} · {formatMoney(user!.price, currency)}/mo
                 </span>
-                {user!.is_admin ? <span className="chip !border-amber-300 !bg-amber-50 !text-amber-700">Admin</span> : null}
-                {!user!.is_active ? <span className="chip !border-red-300 !bg-red-50 !text-red-700">Suspended</span> : null}
-                {user!.plan_expired ? <span className="chip !border-red-300 !bg-red-50 !text-red-700">Plan expired</span> : null}
+                {user!.is_admin ? <span className="chip !border-amber-300 dark:!border-amber-500/40 !bg-amber-50 dark:!bg-amber-500/10 !text-amber-700 dark:!text-amber-300">Admin</span> : null}
+                {!user!.is_active ? <span className="chip !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Suspended</span> : null}
+                {user!.plan_expired ? <span className="chip !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Plan expired</span> : null}
               </div>
-              {user!.display_name ? <p className="mt-2 text-sm text-black">{user!.display_name}</p> : null}
+              {user!.display_name ? <p className="mt-2 text-sm text-black dark:text-slate-100">{user!.display_name}</p> : null}
               <UsageMeter className="mt-3" used={user!.used_this_month} quota={user!.monthly_quota} />
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 <div>
-                  <dt className="text-ink-faint">Joined</dt>
-                  <dd className="text-black">{formatDate(user!.created_at)}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">Joined</dt>
+                  <dd className="text-black dark:text-slate-100">{formatDate(user!.created_at)}</dd>
                 </div>
                 <div>
-                  <dt className="text-ink-faint">Last active</dt>
-                  <dd className="text-black">{timeAgo(user!.last_seen_at ?? user!.last_login_at)}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">Last active</dt>
+                  <dd className="text-black dark:text-slate-100">{timeAgo(user!.last_seen_at ?? user!.last_login_at)}</dd>
                 </div>
                 <div>
-                  <dt className="text-ink-faint">Batches</dt>
-                  <dd className="text-black tabular-nums">{user!.batch_count}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">Batches</dt>
+                  <dd className="text-black tabular-nums dark:text-slate-100">{user!.batch_count}</dd>
                 </div>
                 <div>
-                  <dt className="text-ink-faint">Files, all time</dt>
-                  <dd className="text-black tabular-nums">{user!.files_total}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">Files, all time</dt>
+                  <dd className="text-black tabular-nums dark:text-slate-100">{user!.files_total}</dd>
                 </div>
                 <div className="col-span-2">
-                  <dt className="text-ink-faint">Plan ends</dt>
-                  <dd className="text-black">{user!.plan_expires_at ? formatDate(user!.plan_expires_at) : "No end date"}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">Plan ends</dt>
+                  <dd className="text-black dark:text-slate-100">{user!.plan_expires_at ? formatDate(user!.plan_expires_at) : "No end date"}</dd>
                 </div>
               </dl>
             </NeonCard>
 
             {error ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+              <p className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{error}</p>
             ) : null}
             {notice ? (
-              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{notice}</p>
+              <p className="rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p>
             ) : null}
 
             {/* Subscription ------------------------------------------------ */}
             {form ? (
               <NeonCard padding="md" radius="lg" tone="slow">
-                <h3 className="mb-3 text-sm font-semibold text-black">Subscription</h3>
+                <h3 className="mb-3 text-sm font-semibold text-black dark:text-slate-100">Subscription</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="label">Plan</span>
@@ -314,7 +314,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
                       type="number"
                       min={0}
                       inputMode="numeric"
-                      className="field mt-1 disabled:bg-black/[0.03] disabled:text-ink-faint"
+                      className="field mt-1 disabled:bg-black/[0.03] dark:disabled:bg-white/[0.04] disabled:text-ink-faint dark:disabled:text-slate-500"
                       value={form.unlimited ? "" : form.quota}
                       placeholder={form.unlimited ? "Unlimited" : "e.g. 100"}
                       disabled={form.unlimited}
@@ -322,7 +322,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
                     />
                   </label>
 
-                  <label className="flex items-center gap-2 self-end pb-2 text-sm text-black">
+                  <label className="flex items-center gap-2 self-end pb-2 text-sm text-black dark:text-slate-100">
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-meta-500"
@@ -351,7 +351,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
                   ) : null}
                 </div>
 
-                <div className="mt-4 border-t border-black/[0.06] pt-4">
+                <div className="mt-4 border-t border-black/[0.06] dark:border-white/10 pt-4">
                   <p className="label mb-2">Renew (adds to the end date)</p>
                   <div className="flex flex-wrap gap-2">
                     {(
@@ -376,7 +376,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
                     ))}
                   </div>
                 </div>
-                <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
+                <p className="mt-3 text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
                   Every uploaded file counts as one, and each extra variant counts again. The count starts over on the
                   1st of each month.
                 </p>
@@ -385,7 +385,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
 
             {/* Notes ------------------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone="muted">
-              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-black">
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-black dark:text-slate-100">
                 <StickyNote className="h-4 w-4 text-meta-500" aria-hidden />
                 Private notes
               </h3>
@@ -409,7 +409,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
 
             {/* Account actions --------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone="muted">
-              <h3 className="mb-3 text-sm font-semibold text-black">Account</h3>
+              <h3 className="mb-3 text-sm font-semibold text-black dark:text-slate-100">Account</h3>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn-ghost" disabled={busy !== null} onClick={() => void issuePassword()}>
                   <KeyRound className="h-4 w-4" aria-hidden />
@@ -521,19 +521,19 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
 
             {/* History ----------------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone="muted">
-              <h3 className="mb-2 text-sm font-semibold text-black">Recent batches</h3>
+              <h3 className="mb-2 text-sm font-semibold text-black dark:text-slate-100">Recent batches</h3>
               {detail.batches.length === 0 ? (
-                <p className="py-3 text-xs text-ink-faint">No batches yet.</p>
+                <p className="py-3 text-xs text-ink-faint dark:text-slate-500">No batches yet.</p>
               ) : (
-                <ul className="divide-y divide-black/[0.06]">
+                <ul className="divide-y divide-black/[0.06] dark:divide-white/10">
                   {detail.batches.map((batch) => (
                     <li key={batch.id} className="flex items-center justify-between gap-3 py-2 text-xs">
-                      <span className="text-black">
+                      <span className="text-black dark:text-slate-100">
                         <span className="font-semibold tabular-nums">{batch.asset_count}</span>{" "}
                         {batch.asset_count === 1 ? "file" : "files"}
-                        <span className="text-ink-faint"> · {batch.preset}</span>
+                        <span className="text-ink-faint dark:text-slate-500"> · {batch.preset}</span>
                       </span>
-                      <time className="text-ink-faint" dateTime={batch.created_at} title={new Date(batch.created_at).toLocaleString()}>
+                      <time className="text-ink-faint dark:text-slate-500" dateTime={batch.created_at} title={new Date(batch.created_at).toLocaleString()}>
                         {timeAgo(batch.created_at)}
                       </time>
                     </li>
@@ -543,7 +543,7 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
             </NeonCard>
 
             <NeonCard padding="md" radius="lg" tone="muted">
-              <h3 className="mb-1 text-sm font-semibold text-black">Activity</h3>
+              <h3 className="mb-1 text-sm font-semibold text-black dark:text-slate-100">Activity</h3>
               <ActivityFeed events={detail.activity} hideEmail />
             </NeonCard>
           </div>
