@@ -18,12 +18,12 @@ export function UsageMeter({ used, quota, showLabel = true, className }: UsageMe
   return (
     <div className={clsx("min-w-0", className)}>
       {showLabel ? (
-        <p className="mb-1 text-xs font-medium tabular-nums text-black">
+        <p className="mb-1 text-xs font-medium tabular-nums text-black dark:text-slate-100">
           {usageText(used, quota)}
-          <span className="ml-1 font-normal text-ink-faint">this month</span>
+          <span className="ml-1 font-normal text-ink-faint dark:text-slate-500">this month</span>
         </p>
       ) : null}
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06]">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10">
         <div
           className={clsx("h-full rounded-full transition-all", quota === null ? "bg-meta-200" : tone)}
           style={{ width: quota === null ? "100%" : `${Math.max(ratio * 100, used > 0 ? 4 : 0)}%` }}

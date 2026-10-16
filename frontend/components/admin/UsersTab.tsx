@@ -14,9 +14,9 @@ const PAGE_SIZE = 25;
 export function StatusChips({ user }: { user: AdminUser }) {
   return (
     <span className="flex flex-wrap gap-1">
-      {user.is_admin ? <span className="chip !px-2 !py-0.5 !border-amber-300 !bg-amber-50 !text-amber-700">Admin</span> : null}
-      {!user.is_active ? <span className="chip !px-2 !py-0.5 !border-red-300 !bg-red-50 !text-red-700">Suspended</span> : null}
-      {user.plan_expired ? <span className="chip !px-2 !py-0.5 !border-red-300 !bg-red-50 !text-red-700">Expired</span> : null}
+      {user.is_admin ? <span className="chip !px-2 !py-0.5 !border-amber-300 dark:!border-amber-500/40 !bg-amber-50 dark:!bg-amber-500/10 !text-amber-700 dark:!text-amber-300">Admin</span> : null}
+      {!user.is_active ? <span className="chip !px-2 !py-0.5 !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Suspended</span> : null}
+      {user.plan_expired ? <span className="chip !px-2 !py-0.5 !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Expired</span> : null}
     </span>
   );
 }
@@ -74,10 +74,10 @@ export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged 
   return (
     <>
       <NeonCard padding="none" radius="xl">
-        <div className="space-y-3 border-b border-black/[0.07] p-4 sm:p-5">
+        <div className="space-y-3 border-b border-black/[0.07] dark:border-white/10 p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint dark:text-slate-500" aria-hidden />
               <input
                 type="search"
                 className="field !pl-9"
@@ -127,29 +127,29 @@ export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged 
           </div>
         </div>
 
-        {error ? <p className="m-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p> : null}
+        {error ? <p className="m-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{error}</p> : null}
 
         {!page ? (
-          <div className="grid place-items-center py-16 text-ink-faint">
+          <div className="grid place-items-center py-16 text-ink-faint dark:text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
           </div>
         ) : page.users.length === 0 ? (
-          <p className="py-12 text-center text-sm text-ink-faint">No users match.</p>
+          <p className="py-12 text-center text-sm text-ink-faint dark:text-slate-500">No users match.</p>
         ) : (
           <>
             {/* Phones: one tappable card per user. */}
-            <ul className="divide-y divide-black/[0.06] md:hidden">
+            <ul className="divide-y divide-black/[0.06] dark:divide-white/10 md:hidden">
               {page.users.map((user) => (
                 <li key={user.id}>
                   <button
                     type="button"
                     onClick={() => onSelectUser(user.id)}
-                    className="block w-full px-4 py-3 text-left hover:bg-meta-50/60"
+                    className="block w-full px-4 py-3 text-left hover:bg-meta-50/60 dark:hover:bg-meta-500/10"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-black">{user.email}</p>
-                        <p className="text-xs text-ink-faint">
+                        <p className="truncate text-sm font-semibold text-black dark:text-slate-100">{user.email}</p>
+                        <p className="text-xs text-ink-faint dark:text-slate-500">
                           {user.plan_label} · active {timeAgo(user.last_seen_at ?? user.last_login_at)}
                         </p>
                       </div>
@@ -165,7 +165,7 @@ export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged 
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-black/[0.07] text-[11px] uppercase tracking-[0.12em] text-ink-subtle">
+                  <tr className="border-b border-black/[0.07] dark:border-white/10 text-[11px] uppercase tracking-[0.12em] text-ink-subtle dark:text-slate-400">
                     <th className="px-5 py-2.5 font-semibold">User</th>
                     <th className="px-3 py-2.5 font-semibold">Plan</th>
                     <th className="px-3 py-2.5 font-semibold">This month</th>
@@ -174,13 +174,13 @@ export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged 
                     <th className="px-5 py-2.5 font-semibold">Last active</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-black/[0.05]">
+                <tbody className="divide-y divide-black/[0.05] dark:divide-white/10">
                   {page.users.map((user) => (
-                    <tr key={user.id} className="cursor-pointer hover:bg-meta-50/60" onClick={() => onSelectUser(user.id)}>
+                    <tr key={user.id} className="cursor-pointer hover:bg-meta-50/60 dark:hover:bg-meta-500/10" onClick={() => onSelectUser(user.id)}>
                       <td className="max-w-[280px] px-5 py-3">
                         <button
                           type="button"
-                          className="block max-w-full truncate text-left font-semibold text-black hover:text-meta-600"
+                          className="block max-w-full truncate text-left font-semibold text-black dark:text-slate-100 hover:text-meta-600 dark:hover:text-meta-300"
                           onClick={(event) => {
                             event.stopPropagation();
                             onSelectUser(user.id);
@@ -189,20 +189,20 @@ export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged 
                           {user.email}
                         </button>
                         <div className="mt-0.5 flex items-center gap-2">
-                          {user.display_name ? <span className="truncate text-xs text-ink-faint">{user.display_name}</span> : null}
+                          {user.display_name ? <span className="truncate text-xs text-ink-faint dark:text-slate-500">{user.display_name}</span> : null}
                           <StatusChips user={user} />
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-xs text-black">
+                      <td className="px-3 py-3 text-xs text-black dark:text-slate-100">
                         {user.plan_label}
-                        <span className="block text-ink-faint">{formatMoney(user.price, currency)}/mo</span>
+                        <span className="block text-ink-faint dark:text-slate-500">{formatMoney(user.price, currency)}/mo</span>
                       </td>
                       <td className="w-40 px-3 py-3">
                         <UsageMeter used={user.used_this_month} quota={user.monthly_quota} />
                       </td>
-                      <td className="px-3 py-3 text-xs tabular-nums text-black">{user.batch_count}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-xs text-ink-muted">{timeAgo(user.created_at)}</td>
-                      <td className="whitespace-nowrap px-5 py-3 text-xs text-ink-muted">
+                      <td className="px-3 py-3 text-xs tabular-nums text-black dark:text-slate-100">{user.batch_count}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-xs text-ink-muted dark:text-slate-300">{timeAgo(user.created_at)}</td>
+                      <td className="whitespace-nowrap px-5 py-3 text-xs text-ink-muted dark:text-slate-300">
                         {timeAgo(user.last_seen_at ?? user.last_login_at)}
                       </td>
                     </tr>
@@ -211,7 +211,7 @@ export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged 
               </table>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-black/[0.07] px-4 py-3 text-xs text-ink-muted sm:px-5">
+            <div className="flex items-center justify-between gap-3 border-t border-black/[0.07] dark:border-white/10 px-4 py-3 text-xs text-ink-muted dark:text-slate-300 sm:px-5">
               <span className="flex items-center gap-2">
                 {total === 0 ? "0" : `${offset + 1}–${lastShown}`} of {total}
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}

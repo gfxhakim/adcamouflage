@@ -54,7 +54,7 @@ export function RenderLoader({ size = 30, label, className }: RenderLoaderProps)
         />
       </span>
       {label ? (
-        <span className="text-xs font-semibold text-meta-600">{label}</span>
+        <span className="text-xs font-semibold text-meta-600 dark:text-meta-300">{label}</span>
       ) : null}
     </span>
   );

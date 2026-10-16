@@ -35,7 +35,7 @@ export function ProgressBar({
 
   return (
     <div
-      className={clsx("relative h-1.5 w-full overflow-hidden rounded-full bg-black/[0.08]", className)}
+      className={clsx("relative h-1.5 w-full overflow-hidden rounded-full bg-black/[0.08] dark:bg-white/10", className)}
       role="progressbar"
       aria-valuenow={Math.round(clamped)}
       aria-valuemin={0}

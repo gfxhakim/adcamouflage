@@ -499,3 +499,245 @@ html[data-intro="off"] .intro-screen {
     pointer-events: none;
   }
 }
+
+/* =========================================================================
+   COMMAND DECK — dark control-room theme for the workspace and admin.
+   Everything here is scoped under `.deck`, so the landing, auth and plan
+   pages are untouched. Tailwind `dark:` variants (darkMode: ["selector",
+   ".deck"]) switch on under the same wrapper; this block restyles the shared
+   component classes (.plain-card, .field, .chip, .label, .btn-ghost, .glass)
+   and supplies the deck-only pieces: the left rail and the mono readouts.
+   ========================================================================= */
+.deck {
+  /* Panels read the shared --surface token, so overriding it re-skins every
+     glow card's surface at once. */
+  --surface: 17 23 36;            /* #111724 raised panel */
+  --deck-bg: #070b14;
+  --deck-panel: #111724;
+  --deck-panel-2: #0c111d;        /* recessed fills, inputs */
+  --deck-ink: #e9eefb;
+  --deck-ink-muted: #aab4c6;
+  --deck-ink-faint: #717d92;
+  --deck-line: 255 255 255;       /* border base: rgb(var(--deck-line) / a) */
+  --track-empty: rgb(148 163 184 / 0.28); /* unfilled range-slider track on dark */
+
+  color-scheme: dark;
+  color: var(--deck-ink);
+  background-color: var(--deck-bg);
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -8%, rgb(8 102 255 / 0.16), transparent 62%),
+    linear-gradient(rgb(8 102 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(8 102 255 / 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 54px 54px, 54px 54px;
+  background-attachment: fixed;
+}
+
+.deck ::selection {
+  background: rgb(8 102 255 / 0.4);
+  color: #eaf2ff;
+}
+.deck * {
+  scrollbar-color: rgb(8 102 255 / 0.5) transparent;
+}
+
+/* Plain cards ------------------------------------------------------------ */
+.deck .plain-card {
+  border-color: rgb(var(--deck-line) / 0.08);
+  background: var(--deck-panel);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 18px 40px -26px rgb(0 0 0 / 0.9);
+}
+.deck .plain-card:hover {
+  border-color: rgb(8 102 255 / 0.55);
+  box-shadow:
+    0 0 0 1px rgb(8 102 255 / 0.3),
+    0 20px 46px -16px rgb(8 102 255 / 0.5);
+}
+.deck .plain-card[data-tone="danger"] {
+  border-color: rgb(239 68 68 / 0.4);
+  background: #1a1016;
+}
+.deck .plain-card[data-tone="danger"]:hover {
+  border-color: rgb(239 68 68 / 0.6);
+  box-shadow: 0 20px 46px -16px rgb(239 68 68 / 0.4);
+}
+
+/* Glow cards: surface re-skins via --surface; soften the light-mode rim and
+   drop the neumorphic white shadow so the dark panel does not glow white. */
+.deck .blob-surface {
+  outline-color: rgb(var(--deck-line) / 0.06);
+}
+.deck .blob-card {
+  background: linear-gradient(135deg, #0b2a66, #0a1830 48%, #0b2a66);
+  box-shadow:
+    0 0 0 1px rgb(8 102 255 / 0.12),
+    0 24px 60px -24px rgb(8 102 255 / 0.5);
+}
+.deck .blob-card[data-tone="danger"] {
+  background: linear-gradient(135deg, #3a1410, #1a0d10);
+}
+
+/* Inputs, chips, labels, ghost buttons ----------------------------------- */
+.deck .field {
+  border-color: rgb(var(--deck-line) / 0.14);
+  background: var(--deck-panel-2);
+  color: var(--deck-ink);
+}
+.deck .field::placeholder {
+  color: var(--deck-ink-faint);
+}
+.deck .field:focus {
+  border-color: var(--meta-500);
+}
+.deck .chip {
+  border-color: rgb(var(--deck-line) / 0.12);
+  background: rgb(var(--deck-line) / 0.04);
+  color: var(--deck-ink-muted);
+}
+.deck .label {
+  color: var(--deck-ink-faint);
+}
+.deck .btn-ghost {
+  border-color: rgb(var(--deck-line) / 0.14);
+  background: rgb(var(--deck-line) / 0.04);
+  color: var(--deck-ink);
+}
+.deck .btn-ghost:hover:not(:disabled) {
+  border-color: rgb(8 102 255 / 0.5);
+  background: rgb(8 102 255 / 0.14);
+  color: #cfe0ff;
+}
+.deck .btn:focus-visible {
+  --tw-ring-offset-color: var(--deck-bg);
+}
+.deck .glass {
+  border-color: rgb(var(--deck-line) / 0.1);
+  background: rgb(17 23 36 / 0.82);
+}
+.deck .grid-backdrop {
+  background-image:
+    linear-gradient(rgb(8 102 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(8 102 255 / 0.1) 1px, transparent 1px);
+}
+
+/* The left rail: slim, sticky, icon-first section navigator (desktop only).
+   On phones the deck falls back to the normal stacked flow + top header. */
+.deck-rail {
+  position: sticky;
+  top: 5.25rem;
+  align-self: start;
+  display: none;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 3.5rem;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(var(--deck-line) / 0.08);
+  background: rgb(17 23 36 / 0.7);
+  backdrop-filter: blur(12px);
+}
+@media (min-width: 1024px) {
+  .deck-rail { display: flex; }
+}
+.deck-rail-btn {
+  position: relative;
+  display: grid;
+  height: 2.5rem;
+  width: 2.5rem;
+  place-items: center;
+  border-radius: 0.7rem;
+  border: 1px solid transparent;
+  color: var(--deck-ink-faint);
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.deck-rail-btn:hover {
+  color: #cfe0ff;
+  background: rgb(8 102 255 / 0.12);
+}
+.deck-rail-btn[aria-current="true"],
+.deck-rail-btn[data-active="true"] {
+  color: #fff;
+  border-color: rgb(8 102 255 / 0.5);
+  background: rgb(8 102 255 / 0.2);
+  box-shadow: 0 0 18px -4px rgb(8 102 255 / 0.7);
+}
+.deck-rail-sep {
+  height: 1px;
+  margin: 0.25rem 0.4rem;
+  background: rgb(var(--deck-line) / 0.08);
+}
+
+/* Mono readouts — the control-panel stat strip. */
+.readout {
+  position: relative;
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgb(var(--deck-line) / 0.08);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent),
+    var(--deck-panel-2);
+  overflow: hidden;
+}
+.readout::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--meta-500);
+  opacity: 0.8;
+}
+.readout[data-tone="danger"]::before { background: #f87171; }
+.readout[data-tone="success"]::before { background: #34d399; }
+.readout[data-tone="muted"]::before { background: rgb(var(--deck-line) / 0.2); }
+.readout-k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--deck-ink-faint);
+}
+.readout-v {
+  margin-top: 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--deck-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.readout-h {
+  margin-top: 0.1rem;
+  font-size: 11px;
+  color: var(--deck-ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Section eyebrow for the dense panels: "01 · Load assets" */
+.panel-step {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--meta-400);
+}
+
+/* Anchor jumps (the deck rail links) clear the sticky header. */
+html {
+  scroll-padding-top: 5.5rem;
+}
+
+/* The danger button on the dark deck (JobQueue "delete batch" etc.). */
+.deck .btn-danger {
+  border-color: rgb(239 68 68 / 0.45);
+  background: rgb(239 68 68 / 0.14);
+  color: #fca5a5;
+}
+.deck .btn-danger:hover:not(:disabled) {
+  border-color: rgb(239 68 68 / 0.65);
+  background: rgb(239 68 68 / 0.22);
+  color: #fecaca;
+}

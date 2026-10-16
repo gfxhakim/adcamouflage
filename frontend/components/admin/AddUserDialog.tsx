@@ -50,7 +50,7 @@ export function AddUserDialog({ plans, onClose, onCreated }: AddUserDialogProps)
       <button type="button" className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" aria-label="Close" onClick={onClose} />
       <NeonCard padding="lg" radius="xl" className="relative w-full max-w-md">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-black">Add a user</h2>
+          <h2 className="text-base font-semibold text-black dark:text-slate-100">Add a user</h2>
           <button type="button" onClick={onClose} className="btn-ghost !p-2" aria-label="Close">
             <X className="h-4 w-4" aria-hidden />
           </button>
@@ -58,7 +58,7 @@ export function AddUserDialog({ plans, onClose, onCreated }: AddUserDialogProps)
 
         {password ? (
           <div className="space-y-4">
-            <p className="text-sm text-black">
+            <p className="text-sm text-black dark:text-slate-100">
               <span className="font-semibold">{email}</span> can sign in now with this password:
             </p>
             <SecretBox value={password} note="It is shown only once. Send it to them and ask them to change it after signing in." />
@@ -93,12 +93,12 @@ export function AddUserDialog({ plans, onClose, onCreated }: AddUserDialogProps)
                 ))}
               </select>
             </label>
-            {error ? <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p> : null}
+            {error ? <p className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{error}</p> : null}
             <button type="submit" className="btn-primary w-full" disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <UserPlus className="h-4 w-4" aria-hidden />}
               Create account
             </button>
-            <p className="text-[11px] text-ink-faint">A temporary password is created for them and shown once.</p>
+            <p className="text-[11px] text-ink-faint dark:text-slate-500">A temporary password is created for them and shown once.</p>
           </form>
         )}
       </NeonCard>

@@ -28,8 +28,8 @@ function draftOf(plan: PlanInfo): PlanDraft {
 }
 
 function Feedback({ error, notice }: { error: string | null; notice: string | null }) {
-  if (error) return <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>;
-  if (notice) return <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{notice}</p>;
+  if (error) return <p className="rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">{error}</p>;
+  if (notice) return <p className="rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p>;
   return null;
 }
 
@@ -110,8 +110,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
 
   if (!form || !current) {
     return (
-      <div className="grid place-items-center py-24 text-ink-faint">
-        {error ? <p className="text-sm text-red-600">{error}</p> : <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+      <div className="grid place-items-center py-24 text-ink-faint dark:text-slate-500">
+        {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
       </div>
     );
   }
@@ -121,14 +121,14 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
       <NeonCard padding="lg" radius="xl">
         <div className="mb-4 flex items-center gap-2">
           <Settings2 className="h-4 w-4 text-meta-500" aria-hidden />
-          <h2 className="text-sm font-semibold tracking-tight text-black">App settings</h2>
+          <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">App settings</h2>
         </div>
 
         <div className="space-y-5">
           <label className="flex items-start justify-between gap-4">
             <span>
-              <span className="block text-sm font-semibold text-black">Allow new sign-ups</span>
-              <span className="block text-xs text-ink-faint">
+              <span className="block text-sm font-semibold text-black dark:text-slate-100">Allow new sign-ups</span>
+              <span className="block text-xs text-ink-faint dark:text-slate-500">
                 {current.registration_locked
                   ? "Locked off by ADCAM_ALLOW_REGISTRATION on the server."
                   : "Turn off to stop new accounts. You can still add users by hand."}
@@ -178,7 +178,7 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
               value={form.announcement}
               onChange={(e) => setForm({ ...form, announcement: e.target.value })}
             />
-            <span className="mt-1 block text-[11px] text-ink-faint">Shown at the top of every user&apos;s workspace.</span>
+            <span className="mt-1 block text-[11px] text-ink-faint dark:text-slate-500">Shown at the top of every user&apos;s workspace.</span>
           </label>
 
           <Feedback error={error} notice={notice} />
@@ -193,9 +193,9 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
       <NeonCard padding="lg" radius="xl" tone="slow">
         <div className="mb-1 flex items-center gap-2">
           <Tags className="h-4 w-4 text-meta-500" aria-hidden />
-          <h2 className="text-sm font-semibold tracking-tight text-black">Plans &amp; prices</h2>
+          <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">Plans &amp; prices</h2>
         </div>
-        <p className="mb-4 text-xs text-ink-faint">
+        <p className="mb-4 text-xs text-ink-faint dark:text-slate-500">
           Prices drive the revenue figures. Changing a limit also moves everyone on that plan&apos;s standard limit;
           users you gave a custom number keep it.
         </p>
@@ -206,8 +206,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
             if (!draft) return null;
             const set = (patch: Partial<PlanDraft>) => setDrafts({ ...drafts, [plan.id]: { ...draft, ...patch } });
             return (
-              <div key={plan.id} className="rounded-xl border border-black/[0.08] p-3">
-                <div className="mb-2 flex items-center justify-between text-xs text-ink-faint">
+              <div key={plan.id} className="rounded-xl border border-black/[0.08] dark:border-white/10 p-3">
+                <div className="mb-2 flex items-center justify-between text-xs text-ink-faint dark:text-slate-500">
                   <span className="font-mono">{plan.id}</span>
                   <span>
                     {plan.users} {plan.users === 1 ? "user" : "users"}
@@ -233,7 +233,7 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
                   <label className="block">
                     <span className="label">Files/month</span>
                     <input
-                      className="field mt-1 disabled:bg-black/[0.03]"
+                      className="field mt-1 disabled:bg-black/[0.03] dark:disabled:bg-white/[0.04]"
                       type="number"
                       min={0}
                       inputMode="numeric"
@@ -244,7 +244,7 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
                     />
                   </label>
                   <div className="col-span-2 flex items-end justify-between gap-2 sm:col-span-1">
-                    <label className="flex items-center gap-1.5 pb-2 text-xs text-black">
+                    <label className="flex items-center gap-1.5 pb-2 text-xs text-black dark:text-slate-100">
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-meta-500"

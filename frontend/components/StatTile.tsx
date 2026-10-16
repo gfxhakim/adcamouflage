@@ -25,7 +25,7 @@ export function StatTile({
       <div className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:gap-4 sm:p-5">
         <span
           className={clsx(
-            "grid h-9 w-9 shrink-0 sm:h-11 sm:w-11 place-items-center rounded-xl border border-black/10 bg-meta-50",
+            "grid h-9 w-9 shrink-0 sm:h-11 sm:w-11 place-items-center rounded-xl border border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10",
             accent,
           )}
         >
@@ -33,10 +33,10 @@ export function StatTile({
         </span>
         <div className="min-w-0">
           <p className="label">{label}</p>
-          <p className="mt-1 truncate text-xl font-semibold sm:text-2xl tracking-tight text-black">
+          <p className="mt-1 truncate text-xl font-semibold sm:text-2xl tracking-tight text-black dark:text-slate-100">
             {value}
           </p>
-          {hint ? <p className="mt-0.5 truncate text-xs text-ink-subtle">{hint}</p> : null}
+          {hint ? <p className="mt-0.5 truncate text-xs text-ink-subtle dark:text-slate-400">{hint}</p> : null}
         </div>
       </div>
     </NeonCard>

@@ -168,12 +168,15 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? clsx("bg-gradient-to-br shadow-meta-sm", copy.accent)
-                    : "border-white/[0.08] bg-black/[0.02] text-ink-muted hover:border-black/20 hover:bg-white/[0.05]",
+                    ? clsx(
+                        "bg-gradient-to-br shadow-meta-sm dark:border-meta-500/50 dark:from-meta-500/20 dark:to-meta-500/10 dark:text-meta-100",
+                        copy.accent,
+                      )
+                    : "border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] text-ink-muted dark:text-slate-300 hover:border-black/20 dark:hover:border-white/15 hover:bg-white/[0.05]",
                 )}
               >
                 <span className="flex items-center gap-2 text-sm font-semibold capitalize">
-                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-ink-subtle")} aria-hidden />
+                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-ink-subtle dark:text-slate-400")} aria-hidden />
                   {preset}
                 </span>
                 <span className="mt-1 block text-[11px] leading-relaxed opacity-80">{copy.blurb}</span>
@@ -199,12 +202,12 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
           value={options.intensity}
           disabled={disabled}
           onChange={(event) => set("intensity", Number(event.target.value))}
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
           style={{
-            backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, rgb(30 41 59) ${options.intensity}%)`,
+            backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, var(--track-empty, rgb(30 41 59)) ${options.intensity}%)`,
           }}
         />
-        <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint">
+        <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint dark:text-slate-500">
           <span>Subtle</span>
           <span>Balanced</span>
           <span>Extreme</span>
@@ -229,16 +232,16 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? "border-meta-500/50 bg-meta-50 text-black"
-                    : "border-black/[0.08] bg-black/[0.02] text-ink-subtle hover:border-black/15",
+                    ? "border-meta-500/50 bg-meta-50 dark:bg-meta-500/10 text-black dark:text-slate-100"
+                    : "border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] text-ink-subtle dark:text-slate-400 hover:border-black/15 dark:hover:border-white/15",
                 )}
               >
                 <span
                   className={clsx(
                     "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
                     active
-                      ? "border-meta-500/50 bg-meta-100 text-meta-600"
-                      : "border-black/10 bg-meta-50 text-ink-subtle",
+                      ? "border-meta-500/50 bg-meta-100 dark:bg-meta-500/20 text-meta-600 dark:text-meta-300"
+                      : "border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10 text-ink-subtle dark:text-slate-400",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -249,12 +252,12 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                     <span
                       className={clsx(
                         "h-1.5 w-1.5 rounded-full transition-colors",
-                        active ? "bg-meta-500 shadow-meta-sm" : "bg-black/20",
+                        active ? "bg-meta-500 shadow-meta-sm" : "bg-black/20 dark:bg-white/20",
                       )}
                       aria-hidden
                     />
                   </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle">
+                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle dark:text-slate-400">
                     {description}
                   </span>
                 </span>
@@ -340,7 +343,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
         </div>
       </section>
 
-      <p className="text-[11px] leading-relaxed text-ink-faint">
+      <p className="text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
         A seed makes a render reproducible — the same seed and settings always produce the same
         variant. Leave it empty for fresh entropy on every asset.
       </p>
@@ -365,12 +368,12 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? "border-meta-500/50 bg-meta-50 text-black"
-                    : "border-black/[0.08] bg-black/[0.02] text-ink-subtle hover:border-black/20",
+                    ? "border-meta-500/50 bg-meta-50 dark:bg-meta-500/10 text-black dark:text-slate-100"
+                    : "border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] text-ink-subtle dark:text-slate-400 hover:border-black/20 dark:hover:border-white/15",
                 )}
               >
                 <span className="text-xs font-semibold">{label}</span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-ink-faint">{blurb}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-ink-faint dark:text-slate-500">{blurb}</span>
               </button>
             );
           })}
@@ -405,7 +408,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
             </select>
           </div>
 
-          <label className="flex items-center gap-2 self-end pb-2.5 text-[11px] text-ink-subtle">
+          <label className="flex items-center gap-2 self-end pb-2.5 text-[11px] text-ink-subtle dark:text-slate-400">
             <input
               type="checkbox"
               className="accent-meta-500"
@@ -417,7 +420,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
           </label>
         </div>
 
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
           Quality and resolution control how the finished file looks — the camouflage layers above
           are unchanged. Upscaling and higher quality still count against your plan the same way.
         </p>

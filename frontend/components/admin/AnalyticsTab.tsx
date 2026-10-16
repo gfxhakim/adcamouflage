@@ -21,23 +21,23 @@ interface AnalyticsTabProps {
 function Panel({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <NeonCard padding="lg" radius="xl" tone="muted">
-      <h3 className="text-sm font-semibold tracking-tight text-black">{title}</h3>
-      {hint ? <p className="mb-3 mt-0.5 text-xs text-ink-faint">{hint}</p> : <div className="mb-3" />}
+      <h3 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">{title}</h3>
+      {hint ? <p className="mb-3 mt-0.5 text-xs text-ink-faint dark:text-slate-500">{hint}</p> : <div className="mb-3" />}
       {children}
     </NeonCard>
   );
 }
 
 function UsageList({ users, empty, onSelectUser }: { users: UserUsage[]; empty: string; onSelectUser: (id: number) => void }) {
-  if (users.length === 0) return <p className="py-3 text-xs text-ink-faint">{empty}</p>;
+  if (users.length === 0) return <p className="py-3 text-xs text-ink-faint dark:text-slate-500">{empty}</p>;
   return (
-    <ul className="divide-y divide-black/[0.06]">
+    <ul className="divide-y divide-black/[0.06] dark:divide-white/10">
       {users.map((user) => (
         <li key={user.id}>
-          <button type="button" className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-meta-50/50" onClick={() => onSelectUser(user.id)}>
+          <button type="button" className="flex w-full items-center gap-3 py-2.5 text-left hover:bg-meta-50/50 dark:hover:bg-meta-500/10" onClick={() => onSelectUser(user.id)}>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-semibold text-black">{user.email}</span>
-              <span className="text-[11px] text-ink-faint">{user.plan_label}</span>
+              <span className="block truncate text-xs font-semibold text-black dark:text-slate-100">{user.email}</span>
+              <span className="text-[11px] text-ink-faint dark:text-slate-500">{user.plan_label}</span>
             </span>
             <UsageMeter className="w-28 shrink-0" used={user.used} quota={user.monthly_quota} />
           </button>
@@ -48,17 +48,17 @@ function UsageList({ users, empty, onSelectUser }: { users: UserUsage[]; empty: 
 }
 
 function ExpiryList({ users, empty, onSelectUser }: { users: UserExpiry[]; empty: string; onSelectUser: (id: number) => void }) {
-  if (users.length === 0) return <p className="py-3 text-xs text-ink-faint">{empty}</p>;
+  if (users.length === 0) return <p className="py-3 text-xs text-ink-faint dark:text-slate-500">{empty}</p>;
   return (
-    <ul className="divide-y divide-black/[0.06]">
+    <ul className="divide-y divide-black/[0.06] dark:divide-white/10">
       {users.map((user) => (
         <li key={user.id}>
-          <button type="button" className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:bg-meta-50/50" onClick={() => onSelectUser(user.id)}>
+          <button type="button" className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:bg-meta-50/50 dark:hover:bg-meta-500/10" onClick={() => onSelectUser(user.id)}>
             <span className="min-w-0">
-              <span className="block truncate text-xs font-semibold text-black">{user.email}</span>
-              <span className="text-[11px] text-ink-faint">{user.plan_label}</span>
+              <span className="block truncate text-xs font-semibold text-black dark:text-slate-100">{user.email}</span>
+              <span className="text-[11px] text-ink-faint dark:text-slate-500">{user.plan_label}</span>
             </span>
-            <span className="shrink-0 text-xs text-ink-muted">{formatDate(user.plan_expires_at)}</span>
+            <span className="shrink-0 text-xs text-ink-muted dark:text-slate-300">{formatDate(user.plan_expires_at)}</span>
           </button>
         </li>
       ))}
@@ -90,8 +90,8 @@ export function AnalyticsTab({ refreshKey, onSelectUser }: AnalyticsTabProps) {
 
   if (!data) {
     return (
-      <div className="grid place-items-center py-24 text-ink-faint">
-        {error ? <p className="text-sm text-red-600">{error}</p> : <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
+      <div className="grid place-items-center py-24 text-ink-faint dark:text-slate-500">
+        {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : <Loader2 className="h-5 w-5 animate-spin" aria-hidden />}
       </div>
     );
   }
@@ -104,10 +104,10 @@ export function AnalyticsTab({ refreshKey, onSelectUser }: AnalyticsTabProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-ink-muted">
+        <p className="text-xs text-ink-muted dark:text-slate-300">
           Revenue is worked out from each live account&apos;s plan price. Change prices in Settings.
         </p>
-        <div className="flex gap-1 rounded-xl border border-black/10 bg-white p-1" role="group" aria-label="Period">
+        <div className="flex gap-1 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-slate-900 p-1" role="group" aria-label="Period">
           {PERIODS.map((period) => (
             <button
               key={period}
@@ -116,7 +116,7 @@ export function AnalyticsTab({ refreshKey, onSelectUser }: AnalyticsTabProps) {
               aria-pressed={days === period}
               className={clsx(
                 "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
-                days === period ? "bg-meta-500 text-white" : "text-ink-muted hover:bg-meta-50",
+                days === period ? "bg-meta-500 text-white" : "text-ink-muted dark:text-slate-300 hover:bg-meta-50 dark:hover:bg-meta-500/10",
               )}
             >
               {period} days
@@ -150,15 +150,15 @@ export function AnalyticsTab({ refreshKey, onSelectUser }: AnalyticsTabProps) {
             {data.revenue_by_plan.map((plan) => (
               <li key={plan.id}>
                 <div className="mb-1 flex items-baseline justify-between gap-3 text-xs">
-                  <span className="font-semibold text-black">
+                  <span className="font-semibold text-black dark:text-slate-100">
                     {plan.label}{" "}
-                    <span className="font-normal text-ink-faint">
+                    <span className="font-normal text-ink-faint dark:text-slate-500">
                       · {plan.users} {plan.users === 1 ? "user" : "users"} at {money(plan.price)}
                     </span>
                   </span>
-                  <span className="font-semibold tabular-nums text-black">{money(plan.revenue)}</span>
+                  <span className="font-semibold tabular-nums text-black dark:text-slate-100">{money(plan.revenue)}</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-black/[0.05]">
+                <div className="h-2 overflow-hidden rounded-full bg-black/[0.05] dark:bg-white/10">
                   <div
                     className="h-full rounded-full bg-meta-500"
                     style={{ width: plan.revenue ? `${Math.max(3, (plan.revenue / maxRevenue) * 100)}%` : 0 }}
@@ -171,16 +171,16 @@ export function AnalyticsTab({ refreshKey, onSelectUser }: AnalyticsTabProps) {
 
         <Panel title="This month's usage" hint={`${data.files_this_month} files in ${data.batches_this_month} batches · ${data.avg_files_per_batch} files per batch`}>
           {presetEntries.length === 0 ? (
-            <p className="py-3 text-xs text-ink-faint">No batches yet this month.</p>
+            <p className="py-3 text-xs text-ink-faint dark:text-slate-500">No batches yet this month.</p>
           ) : (
             <ul className="space-y-2">
               {presetEntries.map(([preset, count]) => (
                 <li key={preset} className="flex items-center gap-3 text-xs">
-                  <span className="w-20 shrink-0 capitalize text-black">{preset}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.05]">
+                  <span className="w-20 shrink-0 capitalize text-black dark:text-slate-100">{preset}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/[0.05] dark:bg-white/10">
                     <div className="h-full rounded-full bg-meta-500" style={{ width: `${(count / presetTotal) * 100}%` }} />
                   </div>
-                  <span className="w-16 shrink-0 text-right tabular-nums text-ink-muted">
+                  <span className="w-16 shrink-0 text-right tabular-nums text-ink-muted dark:text-slate-300">
                     {count} · {formatPercent(count / presetTotal)}
                   </span>
                 </li>
@@ -209,7 +209,7 @@ export function AnalyticsTab({ refreshKey, onSelectUser }: AnalyticsTabProps) {
         <UsageList users={data.top_users} empty="No usage yet this month." onSelectUser={onSelectUser} />
       </Panel>
 
-      <p className="flex items-center gap-1.5 text-[11px] text-ink-faint">
+      <p className="flex items-center gap-1.5 text-[11px] text-ink-faint dark:text-slate-500">
         <TrendingUp className="h-3.5 w-3.5" aria-hidden />
         Active users counts people seen in the last 1, 7 and 30 days.
         <Activity className="ml-2 h-3.5 w-3.5" aria-hidden />
