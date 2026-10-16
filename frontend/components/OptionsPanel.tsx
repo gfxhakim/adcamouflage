@@ -8,8 +8,10 @@ import {
   FlipHorizontal2,
   Gauge,
   Layers,
+  Maximize2,
   Palette,
   Scissors,
+  SlidersHorizontal,
   Sparkles,
   Tags,
   Waves,
@@ -17,7 +19,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import type { MutationOptions, PresetCatalogue, PresetId } from "@/lib/types";
+import type { MutationOptions, PresetCatalogue, PresetId, QualityTier } from "@/lib/types";
+import { UPSCALE_HEIGHTS } from "@/lib/types";
 import NeonCard from "./NeonCard";
 
 interface OptionsPanelProps {
@@ -45,6 +48,13 @@ const PRESET_COPY: Record<Exclude<PresetId, "custom">, { blurb: string; accent: 
     accent: "from-meta-300 to-meta-100 text-meta-900 border-meta-700/80",
   },
 };
+
+const QUALITY_TIERS: { id: QualityTier; label: string; blurb: string }[] = [
+  { id: "auto", label: "Auto", blurb: "Let the engine pick the rate." },
+  { id: "high", label: "High", blurb: "Near-lossless, larger files." },
+  { id: "balanced", label: "Balanced", blurb: "Good quality, smaller files." },
+  { id: "compact", label: "Compact", blurb: "Smallest files for fast upload." },
+];
 
 type ToggleKey =
   | "micro_crop"
@@ -334,6 +344,84 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
         A seed makes a render reproducible — the same seed and settings always produce the same
         variant. Leave it empty for fresh entropy on every asset.
       </p>
+
+      <section>
+        <p className="label mb-3 flex items-center gap-1.5">
+          <SlidersHorizontal className="h-3 w-3" aria-hidden />
+          Output quality
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {QUALITY_TIERS.map(({ id, label, blurb }) => {
+            const active = (options.quality ?? "auto") === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={disabled}
+                aria-pressed={active}
+                onClick={() => onChange({ ...options, quality: id })}
+                className={clsx(
+                  "rounded-lg border p-2.5 text-left transition-all",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                  active
+                    ? "border-meta-500/50 bg-meta-50 text-black"
+                    : "border-black/[0.08] bg-black/[0.02] text-ink-subtle hover:border-black/20",
+                )}
+              >
+                <span className="text-xs font-semibold">{label}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-ink-faint">{blurb}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label htmlFor="upscale" className="label mb-1.5 flex h-4 items-center gap-1.5">
+              <Maximize2 className="h-3 w-3" aria-hidden />
+              Upscale low-res
+            </label>
+            <select
+              id="upscale"
+              className="field"
+              value={options.upscale_to ?? ""}
+              disabled={disabled}
+              onChange={(event) =>
+                onChange({
+                  ...options,
+                  upscale_to: event.target.value ? Number(event.target.value) : null,
+                  // Upscaling sets the delivered size, so "keep resolution" no longer applies.
+                  keep_resolution: event.target.value ? false : options.keep_resolution,
+                })
+              }
+            >
+              <option value="">Off</option>
+              {UPSCALE_HEIGHTS.map((height) => (
+                <option key={height} value={height}>
+                  up to {height}p
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <label className="flex items-center gap-2 self-end pb-2.5 text-[11px] text-ink-subtle">
+            <input
+              type="checkbox"
+              className="accent-meta-500"
+              checked={options.keep_resolution ?? false}
+              disabled={disabled || Boolean(options.upscale_to)}
+              onChange={(event) => onChange({ ...options, keep_resolution: event.target.checked })}
+            />
+            Keep the source&apos;s original resolution
+          </label>
+        </div>
+
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+          Quality and resolution control how the finished file looks — the camouflage layers above
+          are unchanged. Upscaling and higher quality still count against your plan the same way.
+        </p>
+      </section>
     </div>
   );
 }

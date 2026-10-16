@@ -124,6 +124,7 @@ export function createBatch(
   onUploadProgress?: (fraction: number) => void,
   signal?: AbortSignal,
   overlayImage?: File | null,
+  overlayImages?: File[],
 ): Promise<BatchCreated> {
   return new Promise((resolve, reject) => {
     const form = new FormData();
@@ -132,6 +133,8 @@ export function createBatch(
     if (overlayImage) {
       form.append("overlay_image", overlayImage, overlayImage.name);
     }
+    // One image per layer in options.overlays, in the same order.
+    (overlayImages ?? []).forEach((image) => form.append("overlay_images", image, image.name));
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/api/v1/batches`);

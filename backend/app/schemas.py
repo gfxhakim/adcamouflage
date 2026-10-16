@@ -49,6 +49,34 @@ class Preset(str, Enum):
     CUSTOM = "custom"
 
 
+class QualityTier(str, Enum):
+    """User-facing output fidelity.
+
+    ``AUTO`` preserves the engine's own per-asset rate-control so nothing about
+    the existing behaviour changes unless the user opts in. The named tiers pin
+    a fixed CRF — a plain quality choice, not a hash-varying knob.
+    """
+
+    AUTO = "auto"
+    HIGH = "high"
+    BALANCED = "balanced"
+    COMPACT = "compact"
+
+
+# CRF pinned by each named tier (libx264 scale; the webm/vp9 path adds its own
+# offset downstream). Lower is higher quality. ``AUTO`` is absent on purpose -
+# it means "leave the engine's randomised rate-control alone".
+QUALITY_TIER_CRF: dict[QualityTier, int] = {
+    QualityTier.HIGH: 18,
+    QualityTier.BALANCED: 21,
+    QualityTier.COMPACT: 26,
+}
+
+# Minimum output heights the "upscale low-res sources" control offers. The
+# output is only ever scaled up to one of these, never down.
+UPSCALE_HEIGHTS = (720, 1080, 1440, 2160)
+
+
 class OverlayMode(str, Enum):
     """When the overlay image is visible."""
 
@@ -117,6 +145,20 @@ class OverlaySettings(BaseModel):
         return self
 
 
+class PosterSettings(BaseModel):
+    """Which source frame becomes the video's thumbnail/poster.
+
+    Purely a presentation choice: the engine extracts the frame at ``timestamp``
+    (seconds into the *source*, clamped to its duration), saves it as a sidecar
+    thumbnail and, for containers that support cover art, embeds it so players
+    show that frame. It never alters the video stream itself.
+    """
+
+    enabled: bool = False
+    # Seconds into the source clip. Clamped per-asset to that clip's duration.
+    timestamp: float = Field(default=0.0, ge=0, le=86_400)
+
+
 class MutationOptions(BaseModel):
     """User-facing knobs for a single batch."""
 
@@ -146,8 +188,53 @@ class MutationOptions(BaseModel):
     # Number of distinct mutated copies to emit per uploaded asset.
     variants: int = Field(default=1, ge=1, le=5)
 
-    # Optional image composited onto the asset.
+    # Optional image composited onto the asset. Kept as a single field for
+    # backward compatibility with older clients and the single-badge API path;
+    # additional, independently placed logos/badges go in ``overlays``.
     overlay: OverlaySettings = Field(default_factory=OverlaySettings)
+
+    # Extra brand overlays, each with its own image, placement and timing, so a
+    # creative can carry more than one logo or badge at once.
+    overlays: list[OverlaySettings] = Field(default_factory=list, max_length=8)
+
+    # Which source frame becomes the output's thumbnail/poster.
+    poster: PosterSettings = Field(default_factory=PosterSettings)
+
+    # --- output fidelity (does not affect the camouflage layers) ----------
+    # Named quality tier. AUTO leaves the engine's own rate-control untouched.
+    quality: QualityTier = QualityTier.AUTO
+    # Scale the output back to the source's width and height (the micro-crop
+    # resample still runs; only the delivered dimensions are preserved).
+    keep_resolution: bool = False
+    # Scale a lower-resolution source *up* to at least this output height.
+    # Never downscales a source that is already taller.
+    upscale_to: int | None = Field(default=None)
+
+    @field_validator("upscale_to")
+    @classmethod
+    def _validate_upscale(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value not in UPSCALE_HEIGHTS:
+            raise ValueError(
+                f"upscale_to must be one of {sorted(UPSCALE_HEIGHTS)} or null"
+            )
+        return value
+
+    def effective_overlays(self) -> list[OverlaySettings]:
+        """Every overlay to composite, legacy single field first.
+
+        An overlay counts only once it has a stored image; the API sets
+        ``image_filename`` as each upload is persisted.
+        """
+
+        layers: list[OverlaySettings] = []
+        if self.overlay.enabled and self.overlay.image_filename:
+            layers.append(self.overlay)
+        for layer in self.overlays:
+            if layer.enabled and layer.image_filename:
+                layers.append(layer)
+        return layers
 
     @field_validator("output_format")
     @classmethod
@@ -245,6 +332,8 @@ class AssetJob(BaseModel):
     output_filename: str | None = None
     output_size_bytes: int | None = None
     download_url: str | None = None
+    poster_filename: str | None = None
+    poster_url: str | None = None
     error: str | None = None
     applied: list[str] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)

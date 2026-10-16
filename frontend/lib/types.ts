@@ -36,6 +36,23 @@ export interface OverlaySettings {
   image_filename?: string | null;
 }
 
+export type QualityTier = "auto" | "high" | "balanced" | "compact";
+
+export const UPSCALE_HEIGHTS = [720, 1080, 1440, 2160] as const;
+export type UpscaleHeight = (typeof UPSCALE_HEIGHTS)[number];
+
+export interface PosterSettings {
+  enabled: boolean;
+  timestamp: number;
+}
+
+/** One brand overlay in the workspace: its placement plus the image file. */
+export interface OverlayLayer {
+  id: string;
+  settings: OverlaySettings;
+  image: File | null;
+}
+
 export interface MutationOptions {
   preset: PresetId;
   intensity: number;
@@ -54,6 +71,11 @@ export interface MutationOptions {
   seed?: number | null;
   variants: number;
   overlay: OverlaySettings;
+  overlays: OverlaySettings[];
+  poster: PosterSettings;
+  quality: QualityTier;
+  keep_resolution: boolean;
+  upscale_to?: number | null;
 }
 
 export interface AssetMetrics {
@@ -90,6 +112,8 @@ export interface AssetJob {
   output_filename: string | null;
   output_size_bytes: number | null;
   download_url: string | null;
+  poster_filename?: string | null;
+  poster_url?: string | null;
   error: string | null;
   applied: string[];
   metrics: AssetMetrics;
