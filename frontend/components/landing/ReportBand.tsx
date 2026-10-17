@@ -65,7 +65,7 @@ export function ReportBand() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <SectionTag index="05" className="!bg-black/20 !text-white">
+            <SectionTag index="04" className="!bg-black/20 !text-white">
               INFRASTRUCTURE CAPABILITIES
             </SectionTag>
             <h2 className="mt-5 text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
