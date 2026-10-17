@@ -1,0 +1,395 @@
+"""Pydantic models shared by the API, the queue and the mutation engine."""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def new_id(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:20]}"
+
+
+class AssetKind(str, Enum):
+    VIDEO = "video"
+    IMAGE = "image"
+
+
+class JobStatus(str, Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+TERMINAL_STATUSES = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+
+
+class Preset(str, Enum):
+    """Named intensity profiles.
+
+    ``stealth`` keeps the asset visually identical to the human eye while still
+    breaking perceptual hashes; ``nuclear`` maximises divergence and accepts a
+    visible difference in exchange.
+    """
+
+    STEALTH = "stealth"
+    BALANCED = "balanced"
+    AGGRESSIVE = "aggressive"
+    NUCLEAR = "nuclear"
+    CUSTOM = "custom"
+
+
+class QualityTier(str, Enum):
+    """User-facing output fidelity.
+
+    ``AUTO`` preserves the engine's own per-asset rate-control so nothing about
+    the existing behaviour changes unless the user opts in. The named tiers pin
+    a fixed CRF — a plain quality choice, not a hash-varying knob.
+    """
+
+    AUTO = "auto"
+    HIGH = "high"
+    BALANCED = "balanced"
+    COMPACT = "compact"
+
+
+# CRF pinned by each named tier (libx264 scale; the webm/vp9 path adds its own
+# offset downstream). Lower is higher quality. ``AUTO`` is absent on purpose -
+# it means "leave the engine's randomised rate-control alone".
+QUALITY_TIER_CRF: dict[QualityTier, int] = {
+    QualityTier.HIGH: 18,
+    QualityTier.BALANCED: 21,
+    QualityTier.COMPACT: 26,
+}
+
+# Minimum output heights the "upscale low-res sources" control offers. The
+# output is only ever scaled up to one of these, never down.
+UPSCALE_HEIGHTS = (720, 1080, 1440, 2160)
+
+
+class OverlayMode(str, Enum):
+    """When the overlay image is visible."""
+
+    ALWAYS = "always"      # on every frame of the video
+    INTRO = "intro"        # only at the start, for `intro_seconds`
+    RANGES = "ranges"      # only on the frame ranges the user picked
+
+
+class OverlayPosition(str, Enum):
+    TOP_LEFT = "top_left"
+    TOP_CENTER = "top_center"
+    TOP_RIGHT = "top_right"
+    CENTER_LEFT = "center_left"
+    CENTER = "center"
+    CENTER_RIGHT = "center_right"
+    BOTTOM_LEFT = "bottom_left"
+    BOTTOM_CENTER = "bottom_center"
+    BOTTOM_RIGHT = "bottom_right"
+    CUSTOM = "custom"      # offset_x / offset_y are absolute pixel coordinates
+
+
+class FrameRange(BaseModel):
+    """An inclusive range of source frames."""
+
+    start_frame: int = Field(ge=0)
+    end_frame: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "FrameRange":
+        if self.end_frame < self.start_frame:
+            raise ValueError("end_frame must not be before start_frame")
+        return self
+
+
+class OverlaySettings(BaseModel):
+    """Composite a user-supplied image onto the asset."""
+
+    enabled: bool = False
+    mode: OverlayMode = OverlayMode.ALWAYS
+    position: OverlayPosition = OverlayPosition.BOTTOM_RIGHT
+
+    # Margin from the chosen edge, or absolute coordinates when position is
+    # CUSTOM. Negative values are allowed so an overlay can sit part-way off.
+    offset_x: int = Field(default=24, ge=-10000, le=10000)
+    offset_y: int = Field(default=24, ge=-10000, le=10000)
+
+    # Overlay width as a percentage of the output video width.
+    scale_percent: float = Field(default=18.0, gt=0, le=100)
+    opacity: float = Field(default=1.0, ge=0.05, le=1.0)
+
+    # Used when mode is INTRO.
+    intro_seconds: float = Field(default=3.0, gt=0, le=600)
+
+    # Used when mode is RANGES. Frame numbers refer to the *source* video; the
+    # engine converts them to timestamps, so they stay correct even though the
+    # output frame rate is deliberately changed.
+    ranges: list[FrameRange] = Field(default_factory=list, max_length=50)
+
+    # Set by the API once the overlay image has been stored.
+    image_filename: str | None = None
+
+    @model_validator(mode="after")
+    def _ranges_required(self) -> "OverlaySettings":
+        if self.enabled and self.mode is OverlayMode.RANGES and not self.ranges:
+            raise ValueError("pick at least one frame range, or choose another overlay mode")
+        return self
+
+
+class PosterSettings(BaseModel):
+    """Which source frame becomes the video's thumbnail/poster.
+
+    Purely a presentation choice: the engine extracts the frame at ``timestamp``
+    (seconds into the *source*, clamped to its duration), saves it as a sidecar
+    thumbnail and, for containers that support cover art, embeds it so players
+    show that frame. It never alters the video stream itself.
+    """
+
+    enabled: bool = False
+    # Seconds into the source clip. Clamped per-asset to that clip's duration.
+    timestamp: float = Field(default=0.0, ge=0, le=86_400)
+
+
+class MutationOptions(BaseModel):
+    """User-facing knobs for a single batch."""
+
+    preset: Preset = Preset.BALANCED
+
+    # Intensity is a 0..100 dial; presets seed it but the user can override.
+    intensity: int = Field(default=45, ge=0, le=100)
+
+    micro_crop: bool = True
+    frame_rate_stagger: bool = True
+    noise_injection: bool = True
+    color_drift: bool = True
+    audio_mutation: bool = True
+    strip_metadata: bool = True
+    deep_scramble: bool = False
+    mirror: bool = False
+    temporal_trim: bool = True
+
+    target_fps: float | None = Field(default=None, gt=1, le=240)
+    audio_pitch_ratio: float | None = Field(default=None, ge=0.8, le=1.25)
+    output_format: str | None = Field(default=None)
+
+    # Deterministic runs are handy for regression tests and for re-creating a
+    # variant a customer liked. ``None`` means "fresh entropy per asset".
+    seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
+
+    # Number of distinct mutated copies to emit per uploaded asset.
+    variants: int = Field(default=1, ge=1, le=5)
+
+    # Optional image composited onto the asset. Kept as a single field for
+    # backward compatibility with older clients and the single-badge API path;
+    # additional, independently placed logos/badges go in ``overlays``.
+    overlay: OverlaySettings = Field(default_factory=OverlaySettings)
+
+    # Extra brand overlays, each with its own image, placement and timing, so a
+    # creative can carry more than one logo or badge at once.
+    overlays: list[OverlaySettings] = Field(default_factory=list, max_length=8)
+
+    # Which source frame becomes the output's thumbnail/poster.
+    poster: PosterSettings = Field(default_factory=PosterSettings)
+
+    # --- output fidelity (does not affect the camouflage layers) ----------
+    # Named quality tier. AUTO leaves the engine's own rate-control untouched.
+    quality: QualityTier = QualityTier.AUTO
+    # Scale the output back to the source's width and height (the micro-crop
+    # resample still runs; only the delivered dimensions are preserved).
+    keep_resolution: bool = False
+    # Scale a lower-resolution source *up* to at least this output height.
+    # Never downscales a source that is already taller.
+    upscale_to: int | None = Field(default=None)
+
+    @field_validator("upscale_to")
+    @classmethod
+    def _validate_upscale(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value not in UPSCALE_HEIGHTS:
+            raise ValueError(
+                f"upscale_to must be one of {sorted(UPSCALE_HEIGHTS)} or null"
+            )
+        return value
+
+    def effective_overlays(self) -> list[OverlaySettings]:
+        """Every overlay to composite, legacy single field first.
+
+        An overlay counts only once it has a stored image; the API sets
+        ``image_filename`` as each upload is persisted.
+        """
+
+        layers: list[OverlaySettings] = []
+        if self.overlay.enabled and self.overlay.image_filename:
+            layers.append(self.overlay)
+        for layer in self.overlays:
+            if layer.enabled and layer.image_filename:
+                layers.append(layer)
+        return layers
+
+    @field_validator("output_format")
+    @classmethod
+    def _normalise_format(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        cleaned = value.strip().lower().lstrip(".")
+        allowed = {"mp4", "mov", "webm", "mkv", "jpg", "jpeg", "png", "webp"}
+        if cleaned not in allowed:
+            raise ValueError(f"unsupported output format: {value}")
+        return cleaned
+
+    def resolved(self) -> "MutationOptions":
+        """Apply preset defaults for anything the caller did not pin."""
+
+        if self.preset is Preset.CUSTOM:
+            return self.model_copy(deep=True)
+
+        defaults = PRESET_DEFAULTS[self.preset]
+        data = self.model_dump()
+        fields_set = self.model_fields_set
+        for key, value in defaults.items():
+            if key not in fields_set:
+                data[key] = value
+        return MutationOptions.model_validate(data)
+
+
+PRESET_DEFAULTS: dict[Preset, dict[str, Any]] = {
+    Preset.STEALTH: {
+        "intensity": 22,
+        "micro_crop": True,
+        "frame_rate_stagger": True,
+        "noise_injection": True,
+        "color_drift": True,
+        "audio_mutation": True,
+        "strip_metadata": True,
+        "deep_scramble": False,
+        "mirror": False,
+        "temporal_trim": True,
+    },
+    Preset.BALANCED: {
+        "intensity": 48,
+        "micro_crop": True,
+        "frame_rate_stagger": True,
+        "noise_injection": True,
+        "color_drift": True,
+        "audio_mutation": True,
+        "strip_metadata": True,
+        "deep_scramble": False,
+        "mirror": False,
+        "temporal_trim": True,
+    },
+    Preset.AGGRESSIVE: {
+        "intensity": 72,
+        "micro_crop": True,
+        "frame_rate_stagger": True,
+        "noise_injection": True,
+        "color_drift": True,
+        "audio_mutation": True,
+        "strip_metadata": True,
+        "deep_scramble": True,
+        "mirror": False,
+        "temporal_trim": True,
+    },
+    Preset.NUCLEAR: {
+        "intensity": 92,
+        "micro_crop": True,
+        "frame_rate_stagger": True,
+        "noise_injection": True,
+        "color_drift": True,
+        "audio_mutation": True,
+        "strip_metadata": True,
+        "deep_scramble": True,
+        "mirror": True,
+        "temporal_trim": True,
+    },
+}
+
+
+class AssetJob(BaseModel):
+    """State of one uploaded asset as it moves through the pipeline."""
+
+    id: str = Field(default_factory=lambda: new_id("asset"))
+    batch_id: str
+    original_filename: str
+    stored_filename: str
+    kind: AssetKind
+    size_bytes: int
+    status: JobStatus = JobStatus.QUEUED
+    progress: float = 0.0
+    stage: str = "queued"
+    variant_index: int = 0
+    variants_total: int = 1
+    task_id: str | None = None
+    output_filename: str | None = None
+    output_size_bytes: int | None = None
+    download_url: str | None = None
+    poster_filename: str | None = None
+    poster_url: str | None = None
+    error: str | None = None
+    applied: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status in TERMINAL_STATUSES
+
+
+class Batch(BaseModel):
+    id: str = Field(default_factory=lambda: new_id("batch"))
+    # Owner of the batch. Every read path checks this before returning data.
+    user_id: int | None = None
+    options: MutationOptions
+    asset_ids: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def expires_at_hint(self) -> datetime:
+        return self.created_at
+
+
+class BatchStatus(BaseModel):
+    batch: Batch
+    assets: list[AssetJob]
+    status: JobStatus
+    progress: float
+    completed: int
+    failed: int
+    total: int
+    archive_url: str | None = None
+
+
+class UploadRejection(BaseModel):
+    filename: str
+    reason: str
+
+
+class BatchCreated(BaseModel):
+    batch_id: str
+    accepted: list[AssetJob]
+    rejected: list[UploadRejection] = Field(default_factory=list)
+    options: MutationOptions
+
+
+class HealthReport(BaseModel):
+    status: str
+    version: str
+    environment: str
+    ffmpeg: bool
+    ffmpeg_version: str | None = None
+    redis: bool
+    worker_mode: str
+    active_jobs: int
+    queue_depth: int

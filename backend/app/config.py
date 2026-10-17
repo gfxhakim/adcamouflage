@@ -1,0 +1,190 @@
+"""Runtime configuration for the AdCamouflage backend.
+
+Every value can be overridden through environment variables (or a local
+``.env`` file) so the same image runs unchanged in dev, staging and prod.
+"""
+
+from __future__ import annotations
+
+import os
+import secrets
+from functools import lru_cache
+from pathlib import Path
+
+from typing import Annotated
+
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"),
+        env_file_encoding="utf-8",
+        env_prefix="ADCAM_",
+        extra="ignore",
+    )
+
+    # --- service identity -------------------------------------------------
+    app_name: str = "AdCamouflage"
+    environment: str = "development"
+    debug: bool = False
+
+    # --- storage ----------------------------------------------------------
+    storage_root: Path = Field(default=Path("/tmp/adcamouflage"))
+    retention_hours: int = 24
+    max_upload_mb: int = 2048
+    max_batch_files: int = 25
+
+    # --- redis / celery ---------------------------------------------------
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str | None = None
+    celery_result_backend: str | None = None
+
+    # When true the API executes mutation jobs on a local thread pool instead
+    # of handing them to Celery. Useful for laptops, CI and smoke tests.
+    inline_worker: bool = False
+    inline_worker_concurrency: int = 2
+
+    # --- security ---------------------------------------------------------
+    # Signing key for download tokens. Generated per-process when unset, which
+    # is fine for a single dev server but MUST be pinned in production so the
+    # API and any replica agree on token signatures.
+    secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
+    download_token_ttl: int = 3600
+    api_key: str | None = None
+    # NoDecode stops pydantic-settings from JSON-parsing the raw env value, so
+    # the documented comma-separated form reaches the validator below instead of
+    # blowing up with a JSONDecodeError before it ever runs.
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+    )
+
+    # --- database & accounts ---------------------------------------------
+    # Defaults to SQLite inside the storage root, which needs no setup. Set a
+    # postgresql+psycopg:// URL in production.
+    database_url: str | None = None
+    allow_registration: bool = True
+    min_password_length: int = 10
+    session_ttl_hours: int = 24 * 14
+
+    # Comma-separated sign-in emails that are always admins. This is how the
+    # first admin gets in; more can then be promoted from the admin panel.
+    admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Optional password for the first ADCAM_ADMIN_EMAILS address. When set, that
+    # account is created (or its password reset) on every start, so the owner
+    # can sign in without signing up first. See accounts.ensure_admin_account.
+    admin_password: SecretStr | None = None
+    # Plan given to new sign-ups (see app/plans.py for the list).
+    default_plan: str = "free"
+
+    # Session cookie. When the API and the web UI sit on different domains the
+    # cookie must be SameSite=None and Secure, or the browser drops it.
+    cookie_name: str = "adcam_session"
+    cookie_secure: bool = False
+    cookie_samesite: str = "lax"
+    cookie_domain: str | None = None
+
+    # --- media engine -----------------------------------------------------
+    ffmpeg_binary: str = "ffmpeg"
+    ffprobe_binary: str = "ffprobe"
+    ffmpeg_threads: int = 0  # 0 => let ffmpeg pick
+    job_timeout_seconds: int = 60 * 45
+    video_max_duration: int = 60 * 30
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        """Accept either a comma-separated string or a JSON array."""
+
+        if isinstance(value, str):
+            candidate = value.strip()
+            if candidate.startswith("["):
+                import json
+
+                try:
+                    parsed = json.loads(candidate)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, list):
+                    return [str(origin).strip() for origin in parsed if str(origin).strip()]
+            return [origin.strip() for origin in candidate.split(",") if origin.strip()]
+        return value
+
+    @field_validator("admin_emails", mode="before")
+    @classmethod
+    def _split_admin_emails(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [email.strip().lower() for email in value.split(",") if email.strip()]
+        if isinstance(value, list):
+            return [str(email).strip().lower() for email in value if str(email).strip()]
+        return value
+
+    @field_validator("storage_root", mode="before")
+    @classmethod
+    def _expand_path(cls, value: object) -> object:
+        if isinstance(value, str):
+            return Path(os.path.expanduser(value))
+        return value
+
+    @property
+    def broker_url(self) -> str:
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def result_backend(self) -> str:
+        return self.celery_result_backend or self.redis_url
+
+    @property
+    def uploads_dir(self) -> Path:
+        return self.storage_root / "uploads"
+
+    @property
+    def outputs_dir(self) -> Path:
+        return self.storage_root / "outputs"
+
+    @property
+    def work_dir(self) -> Path:
+        return self.storage_root / "work"
+
+    @property
+    def max_upload_bytes(self) -> int:
+        return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def resolved_database_url(self) -> str:
+        if not self.database_url:
+            return f"sqlite:///{(self.storage_root / 'adcamouflage.db').as_posix()}"
+
+        url = self.database_url.strip()
+        # Managed providers (Railway, Heroku, Render) hand out bare
+        # postgresql:// or the legacy postgres:// form. SQLAlchemy then reaches
+        # for psycopg2, which is not installed - this project uses psycopg 3.
+        # Naming the driver here turns a confusing ModuleNotFoundError at boot
+        # into a URL that simply works.
+        for prefix in ("postgresql://", "postgres://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix) :]
+        return url
+
+    @property
+    def cookie_samesite_value(self) -> str:
+        value = (self.cookie_samesite or "lax").lower()
+        return value if value in {"lax", "strict", "none"} else "lax"
+
+    def ensure_dirs(self) -> None:
+        for path in (self.uploads_dir, self.outputs_dir, self.work_dir):
+            path.mkdir(parents=True, exist_ok=True)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    settings = Settings()
+    settings.ensure_dirs()
+    return settings
+
+
+settings = get_settings()

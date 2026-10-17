@@ -1,0 +1,743 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* One accent family: Meta blue. */
+  --meta-50: #e7f0ff;
+  --meta-100: #cce0ff;
+  --meta-200: #99c2ff;
+  --meta-300: #66a3ff;
+  --meta-400: #3385ff;
+  --meta-500: #0866ff;
+  --meta-600: #0052cc;
+  --meta-700: #003d99;
+  --meta-800: #002966;
+
+  --page: #ffffff;
+  --surface: 255 255 255;
+  --ink: #000000;
+  --ink-muted: #4b4f56;
+  --ink-subtle: #65676b;
+  --ink-faint: #8a8d91;
+  --line: 0 0 0;
+
+  color-scheme: light;
+}
+
+/* min-height, not height: a fixed-height body would cut the sticky header loose mid-page. */
+html {
+  height: 100%;
+}
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-white text-black antialiased;
+  background-color: var(--page);
+  background-image: radial-gradient(
+    ellipse 60% 32% at 50% -10%,
+    rgb(8 102 255 / 0.05),
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgb(8 102 255 / 0.22);
+  color: #001433;
+}
+
+/* Scrollbars ------------------------------------------------------------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(8 102 255 / 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(8 102 255 / 0.35);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgb(8 102 255 / 0.6);
+}
+
+/* Range sliders -----------------------------------------------------------
+   Give the thumb one consistent, on-brand look across browsers, and a larger,
+   comfortable hit area on touch devices. The per-input track styling (height,
+   gradient) is left untouched, so the desktop look does not change. */
+input[type="range"] {
+  touch-action: pan-y;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--meta-500);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(8 102 255 / 0.5);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--meta-500);
+  box-shadow: 0 1px 3px rgb(8 102 255 / 0.5);
+  cursor: pointer;
+}
+input[type="range"]:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+input[type="range"]:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}
+/* Fine pointers (mouse) can keep a trim thumb; touch gets a bigger target. */
+@media (pointer: coarse) {
+  input[type="range"]::-webkit-slider-thumb {
+    height: 22px;
+    width: 22px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    height: 22px;
+    width: 22px;
+  }
+}
+
+@layer components {
+  /* ----------------------------------------------------------------------
+     .blob-card - white cards with a moving Meta-blue neon rim.
+     Markup lives in components/ui/gradient-bold-card.tsx.
+
+     The card is a pale-blue rim around a white surface inset by
+     --blob-border. Behind the surface, a blurred gradient blob travels
+     clockwise through the four corners, lighting the rim as it passes.
+
+     The demo this is adapted from moved the blob with translate(-100%) on a
+     fixed-size box. A translate percentage refers to the element itself, so
+     here the motion is split across two full-size layers: .blob-track moves
+     along x and .blob-track-y along y, each by ±50% of its own box - which is
+     exactly the card's width or height. The blob therefore follows the real
+     edge of any card at any breakpoint, using only composited transforms.
+     ---------------------------------------------------------------------- */
+  .blob-card {
+    --blob-border: 4px;
+    --blob-radius: 1rem;
+    --blob-speed: 6s;
+    --blob-size: clamp(160px, 60%, 520px);
+    --blob-from: #00c6ff;
+    --blob-via: #0866ff;
+    --blob-to: #0040c1;
+    --blob-opacity: 1;
+
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-width: 0;
+    padding: var(--blob-border);
+    border-radius: var(--blob-radius);
+    background: linear-gradient(135deg, var(--meta-100), var(--meta-50) 45%, var(--meta-100));
+    box-shadow:
+      10px 10px 30px -6px rgb(160 174 200 / 0.45),
+      -10px -10px 30px -6px rgb(255 255 255 / 0.9),
+      0 0 0 1px rgb(8 102 255 / 0.06);
+    transition: transform 240ms ease, box-shadow 240ms ease;
+  }
+
+  .blob-track,
+  .blob-track-y {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    will-change: transform;
+    animation-duration: var(--blob-speed);
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  .blob-track {
+    animation-name: blob-x;
+  }
+
+  .blob-track-y {
+    animation-name: blob-y;
+  }
+
+  /* The trailing blob runs half a lap behind the leader. */
+  .blob-track--trail,
+  .blob-track--trail > .blob-track-y {
+    animation-delay: calc(var(--blob-speed) / -2);
+  }
+
+  .blob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--blob-size);
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(90deg, var(--blob-from), var(--blob-via), var(--blob-to));
+    filter: blur(12px);
+    opacity: var(--blob-opacity);
+  }
+
+  .blob-track--trail .blob {
+    width: calc(var(--blob-size) * 0.75);
+    opacity: calc(var(--blob-opacity) * 0.7);
+  }
+
+  .blob-surface {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    min-width: 0;
+    border-radius: calc(var(--blob-radius) - var(--blob-border));
+    background: rgb(var(--surface) / 0.96);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    outline: 1px solid rgb(255 255 255 / 0.9);
+    outline-offset: -1px;
+  }
+
+  .blob-card[data-tone="slow"] {
+    --blob-speed: 9s;
+    --blob-from: #66a3ff;
+    --blob-via: #0866ff;
+    --blob-to: #00c6ff;
+  }
+
+  .blob-card[data-tone="success"] {
+    --blob-from: #00c6ff;
+    --blob-via: #0081fb;
+    --blob-to: #0866ff;
+  }
+
+  /* Failure is the one place that stays red: it is a functional signal, not
+     decoration, and a blue error state is unreadable at a glance. */
+  .blob-card[data-tone="danger"] {
+    --blob-from: #fca5a5;
+    --blob-via: #ef4444;
+    --blob-to: #b91c1c;
+    background: linear-gradient(135deg, #fee2e2, #fef2f2);
+  }
+
+  .blob-card[data-tone="muted"] {
+    --blob-speed: 10s;
+    --blob-opacity: 0.55;
+  }
+
+  .blob-card[data-interactive="true"]:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      12px 14px 36px -6px rgb(8 102 255 / 0.22),
+      -10px -10px 30px -6px rgb(255 255 255 / 0.9),
+      0 0 0 1px rgb(8 102 255 / 0.12);
+  }
+
+  @keyframes blob-x {
+    0%,
+    100% {
+      transform: translateX(-50%);
+    }
+    25%,
+    50% {
+      transform: translateX(50%);
+    }
+    75% {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes blob-y {
+    0%,
+    25%,
+    100% {
+      transform: translateY(-50%);
+    }
+    50%,
+    75% {
+      transform: translateY(50%);
+    }
+  }
+
+  /* Windows "Animation effects: off" turns this on for every site. The rim
+     keeps drifting, slowly, rather than freezing on one corner. */
+  @media (prefers-reduced-motion: reduce) {
+    .blob-card,
+    .blob-card[data-tone] {
+      --blob-speed: 30s;
+    }
+  }
+
+  /* ----------------------------------------------------------------------
+     .plain-card - every card that is not the important one (no `glow`).
+     White, hairline border, and a Meta-blue shadow on hover.
+     ---------------------------------------------------------------------- */
+  .plain-card {
+    position: relative;
+    min-width: 0;
+    border-radius: var(--blob-radius, 1rem);
+    border: 1px solid rgb(0 0 0 / 0.08);
+    background: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -18px rgb(0 0 0 / 0.18);
+    transition:
+      transform 240ms ease,
+      box-shadow 240ms ease,
+      border-color 240ms ease;
+  }
+
+  .plain-surface {
+    height: 100%;
+    min-width: 0;
+  }
+
+  .plain-card:hover {
+    border-color: rgb(8 102 255 / 0.35);
+    box-shadow:
+      0 0 0 1px rgb(8 102 255 / 0.16),
+      0 18px 40px -14px rgb(8 102 255 / 0.45);
+  }
+
+  .plain-card[data-interactive="true"]:hover {
+    transform: translateY(-3px);
+  }
+
+  .plain-card[data-tone="danger"] {
+    border-color: #fecaca;
+    background: #fffafa;
+  }
+
+  .plain-card[data-tone="danger"]:hover {
+    border-color: #fca5a5;
+    box-shadow: 0 18px 40px -14px rgb(239 68 68 / 0.35);
+  }
+
+  /* ----------------------------------------------------------------------
+     Surfaces, buttons and form controls
+     ---------------------------------------------------------------------- */
+  .glass {
+    @apply border border-black/10 bg-white/90 backdrop-blur-xl;
+  }
+
+  /* ----------------------------------------------------------------------
+     .glass-shine - the landing header's dark glass pills and buttons.
+     A soft sheen sweeps across every few seconds, and the glass turns blue
+     on hover. .glass-shine-primary is the blue "Get started" version.
+     ---------------------------------------------------------------------- */
+  .glass-shine {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    color: #fff;
+    border: 1px solid rgb(255 255 255 / 0.18);
+    background:
+      linear-gradient(135deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.03)),
+      rgb(6 10 22 / 0.74);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.22),
+      0 10px 30px -12px rgb(8 102 255 / 0.55);
+    transition:
+      background 350ms ease,
+      border-color 350ms ease,
+      box-shadow 350ms ease,
+      transform 200ms ease;
+  }
+  .glass-shine::before {
+    content: "";
+    position: absolute;
+    top: -60%;
+    bottom: -60%;
+    left: 0;
+    width: 35%;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.32), transparent);
+    transform: translateX(-180%) rotate(18deg);
+    animation: glass-sheen 5s ease-in-out infinite;
+  }
+  .glass-shine:hover {
+    border-color: rgb(102 163 255 / 0.7);
+    background:
+      linear-gradient(135deg, rgb(8 102 255 / 0.6), rgb(0 198 255 / 0.32)),
+      rgb(6 10 22 / 0.74);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.3),
+      0 0 0 1px rgb(51 133 255 / 0.25),
+      0 14px 40px -10px rgb(8 102 255 / 0.85);
+  }
+  .glass-shine-primary {
+    @apply glass-shine;
+    border-color: rgb(153 194 255 / 0.5);
+    background:
+      linear-gradient(135deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0)),
+      linear-gradient(135deg, rgb(8 102 255 / 0.9), rgb(51 133 255 / 0.7));
+  }
+  .glass-shine-primary:hover {
+    border-color: rgb(204 224 255 / 0.8);
+    background:
+      linear-gradient(135deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0)),
+      linear-gradient(135deg, rgb(0 198 255 / 0.9), rgb(8 102 255 / 0.95));
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold;
+    @apply transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-meta-500 text-white;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 8px 22px -10px rgb(8 102 255 / 0.75);
+  }
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-meta-600;
+    box-shadow: 0 2px 4px rgb(0 0 0 / 0.1), 0 14px 30px -10px rgb(8 102 255 / 0.85);
+  }
+
+  .btn-ghost {
+    @apply btn border border-black/[0.12] bg-white text-black;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    @apply border-meta-500/50 bg-meta-50 text-meta-700;
+  }
+
+  .btn-danger {
+    @apply btn border border-red-300 bg-red-50 text-red-700;
+  }
+  .btn-danger:hover:not(:disabled) {
+    @apply border-red-400 bg-red-100;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-black/[0.03] px-2.5 py-1 text-[11px] font-medium tracking-wide text-ink-muted;
+  }
+
+  .label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-subtle;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm text-black;
+    @apply focus:border-meta-500 focus:outline-none focus:ring-1 focus:ring-meta-500/40;
+  }
+
+  /* A slim shimmer that travels along a progress bar while work is running. */
+  .progress-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 33%;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.7), transparent);
+    animation: neon-sweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .grid-backdrop {
+    background-image:
+      linear-gradient(rgb(8 102 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(8 102 255 / 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(100deg, var(--meta-600), var(--meta-500) 45%, var(--meta-300));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The card rims slow down instead (see .blob-card); everything else stops. */
+  *:not(.blob-track):not(.blob-track-y),
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes glass-sheen {
+  0% {
+    transform: translateX(-180%) rotate(18deg);
+  }
+  55%,
+  100% {
+    transform: translateX(420%) rotate(18deg);
+  }
+}
+
+/* Intro (components/IntroScreen.tsx) -------------------------------------- */
+/* If scripts never run, the intro still gets out of the way. */
+.intro-screen {
+  animation: intro-failsafe 0s linear 10s forwards;
+}
+
+/* Reached by a hop inside the site, not by opening the link: no intro. */
+html[data-intro="off"] .intro-screen {
+  display: none;
+}
+
+@keyframes intro-failsafe {
+  to {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* =========================================================================
+   COMMAND DECK — dark control-room theme for the workspace and admin.
+   Everything here is scoped under `.deck`, so the landing, auth and plan
+   pages are untouched. Tailwind `dark:` variants (darkMode: ["selector",
+   ".deck"]) switch on under the same wrapper; this block restyles the shared
+   component classes (.plain-card, .field, .chip, .label, .btn-ghost, .glass)
+   and supplies the deck-only pieces: the left rail and the mono readouts.
+   ========================================================================= */
+.deck {
+  /* Panels read the shared --surface token, so overriding it re-skins every
+     glow card's surface at once. */
+  --surface: 17 23 36;            /* #111724 raised panel */
+  --deck-bg: #070b14;
+  --deck-panel: #111724;
+  --deck-panel-2: #0c111d;        /* recessed fills, inputs */
+  --deck-ink: #e9eefb;
+  --deck-ink-muted: #aab4c6;
+  --deck-ink-faint: #717d92;
+  --deck-line: 255 255 255;       /* border base: rgb(var(--deck-line) / a) */
+  --track-empty: rgb(148 163 184 / 0.28); /* unfilled range-slider track on dark */
+
+  color-scheme: dark;
+  color: var(--deck-ink);
+  background-color: var(--deck-bg);
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -8%, rgb(8 102 255 / 0.16), transparent 62%),
+    linear-gradient(rgb(8 102 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(8 102 255 / 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 54px 54px, 54px 54px;
+  background-attachment: fixed;
+}
+
+.deck ::selection {
+  background: rgb(8 102 255 / 0.4);
+  color: #eaf2ff;
+}
+.deck * {
+  scrollbar-color: rgb(8 102 255 / 0.5) transparent;
+}
+
+/* Plain cards ------------------------------------------------------------ */
+.deck .plain-card {
+  border-color: rgb(var(--deck-line) / 0.08);
+  background: var(--deck-panel);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 18px 40px -26px rgb(0 0 0 / 0.9);
+}
+.deck .plain-card:hover {
+  border-color: rgb(8 102 255 / 0.55);
+  box-shadow:
+    0 0 0 1px rgb(8 102 255 / 0.3),
+    0 20px 46px -16px rgb(8 102 255 / 0.5);
+}
+.deck .plain-card[data-tone="danger"] {
+  border-color: rgb(239 68 68 / 0.4);
+  background: #1a1016;
+}
+.deck .plain-card[data-tone="danger"]:hover {
+  border-color: rgb(239 68 68 / 0.6);
+  box-shadow: 0 20px 46px -16px rgb(239 68 68 / 0.4);
+}
+
+/* Glow cards: surface re-skins via --surface; soften the light-mode rim and
+   drop the neumorphic white shadow so the dark panel does not glow white. */
+.deck .blob-surface {
+  outline-color: rgb(var(--deck-line) / 0.06);
+}
+.deck .blob-card {
+  background: linear-gradient(135deg, #0b2a66, #0a1830 48%, #0b2a66);
+  box-shadow:
+    0 0 0 1px rgb(8 102 255 / 0.12),
+    0 24px 60px -24px rgb(8 102 255 / 0.5);
+}
+.deck .blob-card[data-tone="danger"] {
+  background: linear-gradient(135deg, #3a1410, #1a0d10);
+}
+
+/* Inputs, chips, labels, ghost buttons ----------------------------------- */
+.deck .field {
+  border-color: rgb(var(--deck-line) / 0.14);
+  background: var(--deck-panel-2);
+  color: var(--deck-ink);
+}
+.deck .field::placeholder {
+  color: var(--deck-ink-faint);
+}
+.deck .field:focus {
+  border-color: var(--meta-500);
+}
+.deck .chip {
+  border-color: rgb(var(--deck-line) / 0.12);
+  background: rgb(var(--deck-line) / 0.04);
+  color: var(--deck-ink-muted);
+}
+.deck .label {
+  color: var(--deck-ink-faint);
+}
+.deck .btn-ghost {
+  border-color: rgb(var(--deck-line) / 0.14);
+  background: rgb(var(--deck-line) / 0.04);
+  color: var(--deck-ink);
+}
+.deck .btn-ghost:hover:not(:disabled) {
+  border-color: rgb(8 102 255 / 0.5);
+  background: rgb(8 102 255 / 0.14);
+  color: #cfe0ff;
+}
+.deck .btn:focus-visible {
+  --tw-ring-offset-color: var(--deck-bg);
+}
+.deck .glass {
+  border-color: rgb(var(--deck-line) / 0.1);
+  background: rgb(17 23 36 / 0.82);
+}
+.deck .grid-backdrop {
+  background-image:
+    linear-gradient(rgb(8 102 255 / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(8 102 255 / 0.1) 1px, transparent 1px);
+}
+
+/* The left rail: slim, sticky, icon-first section navigator (desktop only).
+   On phones the deck falls back to the normal stacked flow + top header. */
+.deck-rail {
+  position: sticky;
+  top: 5.25rem;
+  align-self: start;
+  display: none;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 3.5rem;
+  padding: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(var(--deck-line) / 0.08);
+  background: rgb(17 23 36 / 0.7);
+  backdrop-filter: blur(12px);
+}
+@media (min-width: 1024px) {
+  .deck-rail { display: flex; }
+}
+.deck-rail-btn {
+  position: relative;
+  display: grid;
+  height: 2.5rem;
+  width: 2.5rem;
+  place-items: center;
+  border-radius: 0.7rem;
+  border: 1px solid transparent;
+  color: var(--deck-ink-faint);
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+.deck-rail-btn:hover {
+  color: #cfe0ff;
+  background: rgb(8 102 255 / 0.12);
+}
+.deck-rail-btn[aria-current="true"],
+.deck-rail-btn[data-active="true"] {
+  color: #fff;
+  border-color: rgb(8 102 255 / 0.5);
+  background: rgb(8 102 255 / 0.2);
+  box-shadow: 0 0 18px -4px rgb(8 102 255 / 0.7);
+}
+.deck-rail-sep {
+  height: 1px;
+  margin: 0.25rem 0.4rem;
+  background: rgb(var(--deck-line) / 0.08);
+}
+
+/* Mono readouts — the control-panel stat strip. */
+.readout {
+  position: relative;
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgb(var(--deck-line) / 0.08);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.02), transparent),
+    var(--deck-panel-2);
+  overflow: hidden;
+}
+.readout::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--meta-500);
+  opacity: 0.8;
+}
+.readout[data-tone="danger"]::before { background: #f87171; }
+.readout[data-tone="success"]::before { background: #34d399; }
+.readout[data-tone="muted"]::before { background: rgb(var(--deck-line) / 0.2); }
+.readout-k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--deck-ink-faint);
+}
+.readout-v {
+  margin-top: 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--deck-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.readout-h {
+  margin-top: 0.1rem;
+  font-size: 11px;
+  color: var(--deck-ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Section eyebrow for the dense panels: "01 · Load assets" */
+.panel-step {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--meta-400);
+}
+
+/* Anchor jumps (the deck rail links) clear the sticky header. */
+html {
+  scroll-padding-top: 5.5rem;
+}
+
+/* The danger button on the dark deck (JobQueue "delete batch" etc.). */
+.deck .btn-danger {
+  border-color: rgb(239 68 68 / 0.45);
+  background: rgb(239 68 68 / 0.14);
+  color: #fca5a5;
+}
+.deck .btn-danger:hover:not(:disabled) {
+  border-color: rgb(239 68 68 / 0.65);
+  background: rgb(239 68 68 / 0.22);
+  color: #fecaca;
+}

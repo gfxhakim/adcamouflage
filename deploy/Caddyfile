@@ -1,0 +1,40 @@
+# Caddy terminates TLS and puts the web UI and the API on ONE origin.
+#
+# That single fact is what makes the deployment simple: the session cookie is
+# first-party, the Next middleware can read it, and there is no CORS anywhere.
+# /api goes straight to FastAPI rather than through Node, so a large upload
+# never passes through the JavaScript proxy.
+#
+# SITE_DOMAIN is read from the environment. Caddy provisions and renews a
+# Let's Encrypt certificate for it automatically.
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# Uploads can be large; do not buffer them to disk in the proxy.
+	request_body {
+		max_size {$MAX_UPLOAD_SIZE:2GB}
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
