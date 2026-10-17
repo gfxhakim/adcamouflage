@@ -10,34 +10,34 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "What exactly changes in each copy?",
-    a: "Each copy gets a new file hash and pixel signature, is micro-cropped and resampled, re-timed to a new frame rate, re-graded, re-encoded, has its audio re-pitched, and has camera, editor and encoder metadata wiped clean.",
+    q: "Is AdCamouflage a video editor like CapCut or Premiere?",
+    a: "No. Video editors are built for humans to cut clips and add captions. AdCamouflage is an automated binary and structural sanitization engine. You upload your finished ad creative, and our engine alters its internal file fingerprint, pixel matrix, and audio frequencies so ad algorithms treat it as a brand-new, never-before-seen asset.",
     tag: "Engine",
   },
   {
-    q: "Will my viewers notice a difference?",
-    a: "No. The copies look identical to people. The changes are in the file itself, which is what platforms compare.",
-    tag: "Engine",
+    q: "Will mutating my video or image reduce its visual or audio quality?",
+    a: "Not at all. Our mutation parameters operate at the sub-pixel and micro-frequency level. To your prospects watching the ad, the visual sharpness, colors, and voiceover clarity remain 100% identical to your original export.",
+    tag: "Quality",
   },
   {
-    q: "Which files can I upload?",
-    a: "Videos and images. MP4, MOV, JPG and PNG all work, and you can upload a whole batch at once and download it back as one zip.",
-    tag: "Files",
-  },
-  {
-    q: "Does it guarantee my ads get approved?",
-    a: "No. AdCamouflage changes your files, not the rules. Ad review still applies, so use it only on creatives you own or are licensed to distribute, and within the terms of the platforms you publish to.",
-    tag: "Policy",
-  },
-  {
-    q: "How are files counted on my plan?",
-    a: "Every uploaded file and every extra variant counts as one file. Usage resets on the 1st of each month, and every plan has every feature.",
-    tag: "Pricing",
-  },
-  {
-    q: "Who can see my uploads?",
-    a: "Only you. Batches, outputs and download links live in your private workspace, and everything is deleted automatically when your retention window ends.",
+    q: "Are my winning creatives safe? Do you store my uploaded ads?",
+    a: "Your creatives never stay on our servers. All files are processed inside an isolated, encrypted container and are automatically and permanently deleted immediately after processing. Nobody—including our team—can view or access your ads.",
     tag: "Privacy",
+  },
+  {
+    q: "Why is simply removing metadata not enough anymore?",
+    a: "Ad platforms stopped relying solely on basic file metadata years ago. Today, automated review bots generate perceptual hashes of your video frames and run AI speech-to-text on your audio track. If you only strip metadata, the algorithm still recognizes the visual and audio signature in seconds. AdCamouflage modifies all three layers: metadata, optical pixels, and audio frequencies.",
+    tag: "Security",
+  },
+  {
+    q: "Which ad platforms does AdCamouflage work for?",
+    a: "Our presets are engineered specifically for Meta Ads (Facebook & Instagram), TikTok Ads, and Google/YouTube Ads—supporting both vertical short-form videos and static image formats.",
+    tag: "Platforms",
+  },
+  {
+    q: "Can I generate multiple unique copies from a single video?",
+    a: "Yes. If you are launching the same winning creative across 5 or 10 contingency ad accounts, you can generate multiple distinct downloads from a single upload. Every file receives a completely independent hash and mutation pattern so accounts are never linked by creative footprint.",
+    tag: "Batching",
   },
 ];
 
@@ -48,8 +48,8 @@ export function Faq() {
     <section id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <SectionTag index="07">FAQ</SectionTag>
-          <Headline text="Questions, | [answered.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+          <SectionTag index="07">FREQUENTLY ASKED QUESTIONS</SectionTag>
+          <Headline text="Everything You Need to Know Before You Upload." className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
 
           <div className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-white/60">
@@ -57,16 +57,16 @@ export function Faq() {
               Still unsure?
             </p>
             <p className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
-              Camouflage your first creative for free.
+              Camouflage your first creative in under a minute.
             </p>
             <p className="mt-2 text-sm text-white/60">
-              Create an account in a minute. Your assets and outputs are visible only to you.
+              Create an account, drop in a file, and process a clean variant before the next moderation loop hits.
             </p>
             <Link
               href="/login"
               className="group mt-5 inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white"
             >
-              Get started
+              Test the Engine Now
               <PillArrow dark />
             </Link>
           </div>

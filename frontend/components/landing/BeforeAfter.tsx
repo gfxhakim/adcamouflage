@@ -121,13 +121,12 @@ export function BeforeAfter() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-end">
           <div>
             <SectionTag index="03" dark>
-              Before and after
+              DEEP EVASION LAYER
             </SectionTag>
-            <Headline dark text="Looks identical to people. | [New to the machine.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+            <Headline dark text="Built for the Buyer. | [Invisible to the Bot.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <p className="text-sm leading-relaxed text-white/65">
-            Drag the handle. The creative your viewers see stays the same, while the file carries a
-            new hash, new pixels, new timing and zero metadata.
+            Basic metadata cleaners stopped working years ago. Modern ad networks scan pixel structures and transcribe audio tracks in real time. AdCamouflage neutralizes both.
           </p>
         </div>
 
@@ -137,14 +136,15 @@ export function BeforeAfter() {
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:items-center">
           <Reveal>
-            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/50">Example render · one creative</p>
+            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/50">platform protection</p>
             <h3 className="mt-3 max-w-lg text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-              Every copy you render gets its own new values.
+              Optical pattern breaking and audio transcription shielding built in.
             </h3>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-white/65">
-              Each job ships with a report of hashes before and after, the changes applied, and how
-              many provenance tags remain.
-            </p>
+            <ul className="mt-5 space-y-3 text-sm leading-relaxed text-white/75">
+              <li>• Disrupts automated OCR and computer-vision scanners from reading on-screen hooks and aggressive visual elements without blurring the creative.</li>
+              <li>• Micro-modulates background frequencies and vocal harmonics to throw off speech-to-text bots while keeping voiceovers crystal clear.</li>
+              <li>• Generates multiple unique variants in one upload for multi-account scale.</li>
+            </ul>
           </Reveal>
           <Reveal delay={0.1}>
             <RenderProof />

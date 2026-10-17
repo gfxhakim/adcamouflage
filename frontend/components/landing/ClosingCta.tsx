@@ -38,7 +38,6 @@ function QueueBar() {
 export function ClosingCta({ startHref }: { startHref: string }) {
   return (
     <section id="get-started" className="relative isolate scroll-mt-24 overflow-hidden bg-black py-24 text-white sm:py-32">
-      {/* Concentric rings and a slow blue glow */}
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
         {[1, 2, 3, 4].map((ring) => (
           <motion.span
@@ -55,16 +54,15 @@ export function ClosingCta({ startHref }: { startHref: string }) {
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:px-8">
         <div>
           <SectionTag index="08" dark>
-            Get started
+            Final CTA
           </SectionTag>
           <Headline
             dark
-            text="Your next winner is already made. | [Make it new again.]"
+            text="Stop Letting Algorithms Dictate Your Scale."
             className="mt-5 text-4xl sm:text-6xl lg:text-7xl"
           />
-          <p className="mt-6 max-w-md text-sm leading-relaxed text-white/65">
-            Create an account in a minute and camouflage your first creative. Your assets and
-            outputs are visible only to you.
+          <p className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">
+            Protect your winning creatives, isolate your ad accounts from hash-linking, and get rejected campaigns back into profit in seconds.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
@@ -72,7 +70,7 @@ export function ClosingCta({ startHref }: { startHref: string }) {
               className="group inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white transition hover:bg-meta-600"
             >
               <Rocket className="h-4 w-4" aria-hidden />
-              Get started
+              Camouflage Your First Ad Now
               <PillArrow dark />
             </Link>
             <Link
@@ -83,7 +81,7 @@ export function ClosingCta({ startHref }: { startHref: string }) {
             </Link>
           </div>
           <p className="mt-4 font-mono text-[10px] uppercase tracking-wider text-white/40">
-            Free account to start · batch uploads · files auto-deleted after your retention window
+            Setup takes less than 60 seconds • Cancel anytime
           </p>
         </div>
 

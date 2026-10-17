@@ -122,58 +122,31 @@ function OverlayVisual() {
 
 const PANELS: Panel[] = [
   {
-    name: "Fingerprint",
-    title: "A new file hash",
-    body: "A new file hash and pixel signature on every copy, so a re-run creative reads as a brand-new file instead of a match.",
-    points: ["New hash per copy", "New pixel signature", "Report of hashes before and after"],
-    stat: "100% new hash",
+    name: "PROBE",
+    title: "Deep Diagnostic Scan",
+    body: "Extracts and maps every exposed signature inside your file—including container metadata, EXIF/XMP strings, MD5/SHA hashes, and recognizable audio-visual patterns that ad bots flag.",
+    points: ["Container metadata", "EXIF/XMP strings", "MD5/SHA hash mapping"],
+    stat: "FLAGGED / TRACKABLE",
     look: "gray",
     visual: <HashVisual />,
   },
   {
-    name: "Geometry",
-    title: "Re-cut and resampled",
-    body: "Each copy is micro-cropped and resampled, so the frame looks the same to people while its pixels are new.",
-    points: ["Micro-crop", "Resample", "Re-grade"],
-    stat: "1280 × 720 → 1274 × 708",
+    name: "MUTATE",
+    title: "Sub-Pixel & Frequency Alteration",
+    body: "Applies imperceptible spatial pixel shifts, micro-frame adjustments, and audio frequency masking. To human buyers, your creative looks and sounds untouched. To AI vision and transcription models, it is an unrecognizable new file.",
+    points: ["Pixel-shift mutation", "Micro-frame timing", "Audio frequency masking"],
+    stat: "Stealth / Aggressive",
     look: "black",
     visual: <FrameVisual />,
   },
   {
-    name: "Timing",
-    title: "Re-timed frames",
-    body: "Frame rates are staggered and temporal noise is injected, with its own random values on every render.",
-    points: ["Staggered frame rate", "Temporal noise", "Re-encoded"],
-    stat: "30 → 23.976 fps",
-    look: "white",
-    visual: <TimingVisual />,
-  },
-  {
-    name: "Audio",
-    title: "A new-sounding track",
-    body: "Audio re-pitched, so voice matching hears a new track, while your viewers hear the same ad.",
-    points: ["Pitch shift", "Random per copy", "New track to voice matching"],
-    stat: "+39.8 cents",
+    name: "SCRUB",
+    title: "Complete Binary Wipe",
+    body: "Strips all editing software footprints, creation timestamps, and tracking tags, rebuilding a clean container from scratch so every download carries a 100% unique digital fingerprint.",
+    points: ["Remove provenance tags", "Rebuild clean container", "Unique fingerprint each export"],
+    stat: "CLEAN / UNIQUE HASH",
     look: "blue",
-    visual: <AudioVisual />,
-  },
-  {
-    name: "Metadata",
-    title: "Zero metadata",
-    body: "Device, editing app, project names and encoder tags are removed, so your files say nothing about how, where or by whom they were made.",
-    points: ["Camera tags", "Editor tags", "Encoder tags"],
-    stat: "0 tags left",
-    look: "black",
     visual: <MetaVisual />,
-  },
-  {
-    name: "Overlay",
-    title: "Your logo, where you want it",
-    body: "Add your logo on every frame, on the intro only, or on exact frames. Nine anchor positions or exact coordinates, adjustable opacity, and transparent PNGs keep their transparency.",
-    points: ["Every frame", "Intro only", "Exact frames"],
-    stat: "9 anchor positions",
-    look: "white",
-    visual: <OverlayVisual />,
   },
 ];
 
@@ -239,12 +212,11 @@ export function FeaturePanels() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <SectionTag index="02">Features</SectionTag>
-            <Headline text="Nine mutation layers. | [One clean upload.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+            <SectionTag index="02">THE SANITIZATION PIPELINE</SectionTag>
+            <Headline text="Your Creative Enters Trackable and Flagged — | [It Leaves Structurally Brand New.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <p className="text-sm leading-relaxed text-ink-muted">
-            Each copy is re-cut, re-timed, re-graded, re-encoded and scrubbed, with its own random
-            values. Batch in, one zip out.
+            Our three-stage processing engine rewrites how ad platform crawlers read your media file while keeping it 100% identical to the human eye.
           </p>
         </div>
       </div>

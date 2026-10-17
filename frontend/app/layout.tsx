@@ -3,9 +3,6 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
-import IntroScreen from "@/components/IntroScreen";
-import { INTRO_GATE_SCRIPT } from "@/lib/intro";
-
 import "./globals.css";
 
 // Headlines: Instrument Serif (the blue part set in italic). Text: Geist.
@@ -41,19 +38,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // The gate script below may mark <html> before React hydrates it.
     <html
       lang="en"
       suppressHydrationWarning
       className={`${GeistSans.variable} ${GeistMono.variable} ${display.variable}`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: INTRO_GATE_SCRIPT }} />
-      </head>
-      <body className="min-h-screen">
-        <IntroScreen />
-        {children}
-      </body>
+      <body className="min-h-screen">{children}</body>
     </html>
   );
 }
