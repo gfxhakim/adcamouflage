@@ -10,6 +10,7 @@ import {
   Layers,
   Maximize2,
   Palette,
+  RefreshCcw,
   Scissors,
   SlidersHorizontal,
   Sparkles,
@@ -63,6 +64,10 @@ type ToggleKey =
   | "color_drift"
   | "audio_mutation"
   | "strip_metadata"
+  | "keyframe_gop_jitter"
+  | "container_bitrate_shuffle"
+  | "chroma_matrix_shift"
+  | "frequency_smoothing"
   | "deep_scramble"
   | "mirror"
   | "temporal_trim";
@@ -109,6 +114,30 @@ const TOGGLES: { key: ToggleKey; label: string; description: string; icon: Lucid
     label: "Strip metadata",
     description: "Erase EXIF, camera data, editor tags and encoder signatures.",
     icon: Tags,
+  },
+  {
+    key: "keyframe_gop_jitter",
+    label: "Keyframe & GOP jitter",
+    description: "Randomize I-frame intervals and scene-cut thresholds across variants.",
+    icon: RefreshCcw,
+  },
+  {
+    key: "container_bitrate_shuffle",
+    label: "Container & bitrate shuffle",
+    description: "Vary MP4 atom structure, chunk interleaving and micro-CRF curves.",
+    icon: Layers,
+  },
+  {
+    key: "chroma_matrix_shift",
+    label: "Chroma matrix shift",
+    description: "Sub-perceptual YUV color-space and chroma calibration tweaks.",
+    icon: Palette,
+  },
+  {
+    key: "frequency_smoothing",
+    label: "Frequency smoothing",
+    description: "Apply micro-bilateral chroma filtering to normalize high-frequency noise.",
+    icon: Waves,
   },
   {
     key: "deep_scramble",
@@ -216,7 +245,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
 
       <section>
         <p className="label mb-3">Evasion layers</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 md:grid-cols-2">
           {TOGGLES.map(({ key, label, description, icon: Icon }) => {
             const active = options[key];
             return (
@@ -267,7 +296,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-3">
         <div>
           <label htmlFor="variants" className="label mb-1.5 flex h-4 items-center gap-1.5">
             <Layers className="h-3 w-3" aria-hidden />

@@ -62,6 +62,10 @@ export interface MutationOptions {
   color_drift: boolean;
   audio_mutation: boolean;
   strip_metadata: boolean;
+  keyframe_gop_jitter: boolean;
+  container_bitrate_shuffle: boolean;
+  chroma_matrix_shift: boolean;
+  frequency_smoothing: boolean;
   deep_scramble: boolean;
   mirror: boolean;
   temporal_trim: boolean;

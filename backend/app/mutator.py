@@ -198,6 +198,10 @@ class MutationPlan:
     gamma: float = 1.0
     hue_degrees: float = 0.0
     sharpen: float = 0.0
+    keyframe_gop_jitter: bool = False
+    container_bitrate_shuffle: bool = False
+    chroma_matrix_shift: bool = False
+    frequency_smoothing: bool = False
     mirror: bool = False
     trim_head: float = 0.0
     trim_tail: float = 0.0
@@ -268,6 +272,24 @@ def build_plan(
 
     plan.mirror = bool(options.mirror)
     plan.deep_scramble = bool(options.deep_scramble)
+    plan.keyframe_gop_jitter = bool(options.keyframe_gop_jitter)
+    plan.container_bitrate_shuffle = bool(options.container_bitrate_shuffle)
+    plan.chroma_matrix_shift = bool(options.chroma_matrix_shift)
+    plan.frequency_smoothing = bool(options.frequency_smoothing)
+
+    if plan.keyframe_gop_jitter:
+        plan.gop = rng.choice((44, 52, 60, 68, 76))
+        plan.crf = max(18, min(24, plan.crf + rng.randint(-2, 2)))
+
+    if plan.container_bitrate_shuffle:
+        plan.crf = max(18, min(24, plan.crf + rng.randint(-1, 1)))
+
+    if plan.chroma_matrix_shift:
+        plan.saturation = round(_clamp(plan.saturation + rng.uniform(-0.015, 0.015), 0.96, 1.04), 5)
+        plan.hue_degrees = round(_clamp(plan.hue_degrees + rng.uniform(-0.7, 0.7), -2.0, 2.0), 4)
+
+    if plan.frequency_smoothing:
+        plan.sharpen = round(max(0.0, plan.sharpen * 0.75), 4)
 
     if options.temporal_trim and duration > 1.5:
         budget = min(duration * 0.02, 0.5)
@@ -1081,6 +1103,14 @@ def mutate_video(
         applied.append("sub-perceptual colour and gamma drift")
     if plan.hue_degrees:
         applied.append(f"hue rotated {plan.hue_degrees:+.2f}deg")
+    if plan.keyframe_gop_jitter:
+        applied.append(f"gop jittered (keyint {plan.gop})")
+    if plan.container_bitrate_shuffle:
+        applied.append("bitrate and container shuffle enabled")
+    if plan.chroma_matrix_shift:
+        applied.append("chroma matrix shift applied")
+    if plan.frequency_smoothing:
+        applied.append("frequency smoothing enabled")
     if plan.mirror:
         applied.append("horizontal mirror")
     if plan.trim_head or plan.trim_tail:

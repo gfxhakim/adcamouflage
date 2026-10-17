@@ -173,6 +173,10 @@ class MutationOptions(BaseModel):
     color_drift: bool = True
     audio_mutation: bool = True
     strip_metadata: bool = True
+    keyframe_gop_jitter: bool = True
+    container_bitrate_shuffle: bool = True
+    chroma_matrix_shift: bool = True
+    frequency_smoothing: bool = False
     deep_scramble: bool = False
     mirror: bool = False
     temporal_trim: bool = True
@@ -264,49 +268,65 @@ class MutationOptions(BaseModel):
 
 PRESET_DEFAULTS: dict[Preset, dict[str, Any]] = {
     Preset.STEALTH: {
-        "intensity": 22,
+        "intensity": 35,
         "micro_crop": True,
         "frame_rate_stagger": True,
-        "noise_injection": True,
-        "color_drift": True,
-        "audio_mutation": True,
+        "noise_injection": False,
+        "color_drift": False,
+        "audio_mutation": False,
         "strip_metadata": True,
+        "keyframe_gop_jitter": True,
+        "container_bitrate_shuffle": True,
+        "chroma_matrix_shift": True,
+        "frequency_smoothing": False,
         "deep_scramble": False,
         "mirror": False,
         "temporal_trim": True,
     },
     Preset.BALANCED: {
-        "intensity": 48,
+        "intensity": 65,
         "micro_crop": True,
         "frame_rate_stagger": True,
         "noise_injection": True,
         "color_drift": True,
         "audio_mutation": True,
         "strip_metadata": True,
+        "keyframe_gop_jitter": True,
+        "container_bitrate_shuffle": True,
+        "chroma_matrix_shift": True,
+        "frequency_smoothing": False,
         "deep_scramble": False,
         "mirror": False,
         "temporal_trim": True,
     },
     Preset.AGGRESSIVE: {
-        "intensity": 72,
+        "intensity": 85,
         "micro_crop": True,
         "frame_rate_stagger": True,
         "noise_injection": True,
         "color_drift": True,
         "audio_mutation": True,
         "strip_metadata": True,
+        "keyframe_gop_jitter": True,
+        "container_bitrate_shuffle": True,
+        "chroma_matrix_shift": True,
+        "frequency_smoothing": True,
         "deep_scramble": True,
         "mirror": False,
         "temporal_trim": True,
     },
     Preset.NUCLEAR: {
-        "intensity": 92,
+        "intensity": 100,
         "micro_crop": True,
         "frame_rate_stagger": True,
         "noise_injection": True,
         "color_drift": True,
         "audio_mutation": True,
         "strip_metadata": True,
+        "keyframe_gop_jitter": True,
+        "container_bitrate_shuffle": True,
+        "chroma_matrix_shift": True,
+        "frequency_smoothing": True,
         "deep_scramble": True,
         "mirror": True,
         "temporal_trim": True,
