@@ -7,7 +7,7 @@ import { useRef } from "react";
 import BrandLogo from "@/components/BrandLogo";
 import { EASE } from "@/components/landing/primitives";
 
-const NAME = "BluCloacking";
+const NAME = "AdCamouflage";
 
 const COLUMNS = [
   {
@@ -95,7 +95,7 @@ export function SiteFooter() {
               <BrandLogo onDark />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
-              Turn one winning creative into fresh, unique files.
+              Deep Asset Mutation & Fingerprint Sanitization for High-Performance Media Buyers.
             </p>
             <Link
               href="/login"
@@ -123,8 +123,7 @@ export function SiteFooter() {
         <div className="mt-14 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} {NAME}. All rights reserved.</p>
           <p className="max-w-xl sm:text-right">
-            Use only on creatives you own or are licensed to distribute, and within the terms of the
-            platforms you publish to.
+            All Systems Operational — 99.9% Uptime
           </p>
         </div>
       </div>

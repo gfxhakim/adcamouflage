@@ -66,17 +66,14 @@ export function ReportBand() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
             <SectionTag index="05" className="!bg-black/20 !text-white">
-              The report
+              INFRASTRUCTURE CAPABILITIES
             </SectionTag>
             <h2 className="mt-5 text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
-              Every job ships with
-              <br />
-              <span className="underline decoration-white decoration-[0.08em] underline-offset-[0.12em]">proof.</span>
+              Engineered for Media Buyers Who Live on Scale and Contingency.
             </h2>
           </div>
           <p className="text-sm leading-relaxed text-white/80">
-            A report of hashes before and after, the changes applied, and how many provenance tags
-            remain. Values below are from an example batch.
+            Every tool required to keep your creatives live, isolated, and undetectable across ad networks.
           </p>
         </div>
 

@@ -9,17 +9,17 @@ const WHY = [
   {
     icon: Copy,
     title: "Stop duplicate flags",
-    body: "Ad platforms compare every upload with what they have already seen. A camouflaged copy reads as a brand-new file, so a creative that worked once can run again without being matched to the original.",
+    body: "A winning asset gets re-used, then matched, flagged, and throttled by platform fingerprinting. AdCamouflage gives every variant a clean, independent identity before it reaches the network.",
   },
   {
     icon: Repeat2,
-    title: "Beat creative fatigue",
-    body: "Skip paying for new edits every week. Spin a winning ad into fresh variants in minutes and keep testing across ad sets and campaigns.",
+    title: "Recover momentum faster",
+    body: "You do not lose hours to Premiere or CapCut churn. The engine creates fresh files in seconds so your scaling loops keep moving instead of stalling on rejection.",
   },
   {
     icon: EyeOff,
-    title: "Keep your files anonymous",
-    body: "Device, editing app, project names and encoder tags are removed, so your files say nothing about how, where or by whom they were made.",
+    title: "Keep your files invisible",
+    body: "Metadata, hashes, audio patterns, and visual signatures are scrubbed so your creatives are structurally new and harder for automated moderation and spy systems to link together.",
   },
 ];
 
@@ -139,11 +139,19 @@ export function WhyRadar() {
     <section id="why" className="scroll-mt-24 bg-[#F4F5F7] py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:px-8">
         <div>
-          <SectionTag index="01">Why media buyers use it</SectionTag>
+          <SectionTag index="01">THE SCALING BOTTLENECK</SectionTag>
           <Headline
-            text="Your best ad, | [without the] [duplicate tax.]"
+            text="When a Winning Creative Gets Flagged, | [You Don't Just Lose an Ad — You Lose Your Algorithm Momentum.]"
             className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
           />
+          <p className="mt-6 max-w-xl text-sm leading-relaxed text-ink-muted">
+            Every media buyer knows the trap: you find a winning angle, start scaling budget, and
+            automated moderation bots flag the file hash or ban the ad account. Opening Premiere or
+            CapCut to manually flip frames, pitch-shift audio, and re-render every variation kills your speed.
+          </p>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-ink-muted">
+            <strong className="font-semibold text-black">AdCamouflage automates the entire evasion workflow directly in your browser.</strong>
+          </p>
           <ul className="mt-10 divide-y divide-black/10 border-y border-black/10">
             {WHY.map(({ icon: Icon, title, body }, i) => (
               <Reveal key={title} delay={i * 0.08}>
@@ -166,7 +174,7 @@ export function WhyRadar() {
           <Radar />
           <p className="mt-10 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
             <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-rose-500" />
-            re-uploaded original
+            flagged original
             <span className="mx-3 text-black/20">|</span>
             <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-meta-500" />
             camouflaged copy

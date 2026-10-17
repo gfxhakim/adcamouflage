@@ -25,18 +25,18 @@ interface PricingSectionProps {
 const POPULAR = "pro";
 
 const BLURBS: Record<string, string> = {
-  free: "Try the engine on your first creatives.",
-  starter: "For one brand testing new angles every week.",
-  pro: "For media buyers shipping batches every day.",
-  unlimited: "For agencies that never stop launching.",
+  free: "For solo media buyers validating new offers and protecting initial ad accounts.",
+  starter: "For daily media buyers running aggressive campaigns across multiple accounts.",
+  pro: "For high-volume teams, agencies, and heavy contingency operations.",
+  unlimited: "For teams that never stop launching and need unlimited asset mutations.",
 };
 
-// Every plan gets the whole engine; plans differ only in monthly volume.
 const INCLUDED = [
-  "Every camouflage preset",
-  "Metadata and fingerprint scrub",
-  "Brand overlay on any frames",
-  "Batch download as a zip",
+  "Full Probe, Mutate & Scrub Engine",
+  "Video & Static Image Support",
+  "Complete Metadata & Hash Wipe",
+  "Standard Processing Queue",
+  "Single User Access",
 ];
 
 function price(amount: number, currency: string) {
@@ -62,17 +62,16 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
         <div>
           <SectionTag index="06" dark>
-            Pricing
+            TRANSPARENT PRICING
           </SectionTag>
           <Headline
             dark
-            text="Pick the volume you run. | [Get the whole engine.]"
+            text="One Saved Campaign Pays for Your Entire Year."
             className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
           />
         </div>
         <p className="text-sm leading-relaxed text-white/65">
-          Every plan has every feature. Plans only change how many files you can process each
-          month. Start free, no card needed.
+          Choose the processing volume that matches your ad spend. No contracts—upgrade, downgrade, or cancel in one click.
         </p>
       </div>
 

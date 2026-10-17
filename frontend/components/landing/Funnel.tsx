@@ -58,8 +58,8 @@ export function Funnel() {
         className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:px-8"
       >
         <div>
-          <SectionTag index="04">How it works</SectionTag>
-          <Headline text="Four steps. | [A few minutes.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+          <SectionTag index="04">OPERATIONAL SPEED</SectionTag>
+          <Headline text="Your Workflow Today vs. Your Workflow With AdCamouflage" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
 
           <ol className="mt-10 space-y-1">
             {STEPS.map((s, i) => {
