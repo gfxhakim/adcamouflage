@@ -5,7 +5,6 @@ import ClosingCta from "@/components/landing/ClosingCta";
 import CursorRing from "@/components/landing/CursorRing";
 import Faq from "@/components/landing/Faq";
 import FeaturePanels from "@/components/landing/FeaturePanels";
-import Funnel from "@/components/landing/Funnel";
 import Hero from "@/components/landing/Hero";
 import ReportBand from "@/components/landing/ReportBand";
 import SiteFooter from "@/components/landing/SiteFooter";
@@ -63,7 +62,6 @@ export default async function LandingPage() {
         <WhyRadar />
         <FeaturePanels />
         <BeforeAfter />
-        <Funnel />
         <ReportBand />
         <section id="pricing" className="scroll-mt-24 bg-black py-20 text-white sm:py-28">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
