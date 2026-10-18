@@ -8,12 +8,12 @@ import {
   Layers3,
   Radar,
   Rocket,
-  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Header from "@/components/Header";
+import DeckRail from "@/components/DeckRail";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
 import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
@@ -85,14 +85,6 @@ const DEFAULT_OPTIONS: MutationOptions = {
 const POLL_INTERVAL_MS = 1200;
 const HEALTH_INTERVAL_MS = 15000;
 
-const RAIL_LINKS = [
-  { href: "#upload", label: "Load assets", icon: Sparkles },
-  { href: "#configure", label: "Configure camouflage", icon: Layers3 },
-  { href: "#overlay", label: "Brand overlay", icon: ImagePlus },
-  { href: "#poster", label: "Poster frame", icon: Film },
-  { href: "#run", label: "Run mutation", icon: Rocket },
-  { href: "#queue", label: "Mutation queue", icon: Radar },
-];
 
 export default function WorkspacePage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -352,22 +344,9 @@ export default function WorkspacePage() {
     <div className="deck min-h-screen">
       <Header health={health} healthError={healthError} user={user} onDark />
 
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-          {/* Left rail — section navigator (desktop) ------------------- */}
-          <nav className="deck-rail" aria-label="Workspace sections">
-            <span
-              className="grid h-10 w-10 place-items-center rounded-[0.7rem] bg-meta-500/15 text-meta-300"
-              aria-hidden
-            >
-              <ShieldCheck className="h-5 w-5" />
-            </span>
-            <span className="deck-rail-sep" aria-hidden />
-            {RAIL_LINKS.map(({ href, label, icon: Icon }) => (
-              <a key={href} href={href} className="deck-rail-btn" title={label} aria-label={label}>
-                <Icon className="h-4 w-4" aria-hidden />
-              </a>
-            ))}
-          </nav>
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+          {/* Left rail — signed-in navigation -------------------------- */}
+          <DeckRail />
 
           {/* Main console --------------------------------------------- */}
           <main className="relative min-w-0 flex-1">

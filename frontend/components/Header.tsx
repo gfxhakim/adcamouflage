@@ -4,19 +4,14 @@ import clsx from "clsx";
 import {
   Activity,
   CircleAlert,
-  Crown,
   Gauge,
-  LayoutGrid,
-  LogOut,
   User as UserIcon,
   Waves,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
 
 import BrandLogo from "@/components/BrandLogo";
-import { signOut, type UserProfile } from "@/lib/auth";
+import { type UserProfile } from "@/lib/auth";
 import { usageText } from "@/lib/format";
 import type { HealthReport } from "@/lib/types";
 
@@ -29,26 +24,8 @@ interface HeaderProps {
   onDark?: boolean;
 }
 
-const NAV = [
-  { href: "/app", label: "Workspace", icon: LayoutGrid },
-  { href: "/app/plan", label: "My plan", icon: Crown },
-];
-
 export function Header({ health, healthError, user, onDark = false }: HeaderProps) {
-  const [signingOut, setSigningOut] = useState(false);
-  const pathname = usePathname();
   const showEngine = health !== undefined || healthError !== undefined;
-
-  const handleSignOut = async () => {
-    if (signingOut) return;
-    setSigningOut(true);
-    try {
-      await signOut();
-    } finally {
-      // A full navigation lets the middleware see the cleared cookie.
-      window.location.assign("/");
-    }
-  };
 
   const online = Boolean(health) && !healthError;
   const degraded = health?.status === "degraded";
@@ -114,46 +91,13 @@ export function Header({ health, healthError, user, onDark = false }: HeaderProp
 
 
           {user ? (
-            <div className="flex items-center gap-2">
-              <nav className="flex items-center gap-1" aria-label="Workspace">
-                {NAV.map(({ href, label, icon: Icon }) => {
-                  const active = pathname === href;
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      aria-current={active ? "page" : undefined}
-                      title={label}
-                      className={clsx(
-                        "btn-ghost !px-2.5",
-                        active && "!border-meta-500/50 !bg-meta-50 dark:!bg-meta-500/10 !text-meta-700 dark:!text-meta-300",
-                      )}
-                    >
-                      <Icon className="h-4 w-4" aria-hidden />
-                      <span className="hidden md:inline">{label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-              <span
-                className="chip hidden max-w-[180px] truncate lg:inline-flex"
-                title={user.email}
-              >
-                <UserIcon className="h-3.5 w-3.5 text-meta-500" aria-hidden />
-                {user.display_name || user.email}
-              </span>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                disabled={signingOut}
-                className="btn-ghost !px-2.5"
-                aria-label="Sign out"
-                title="Sign out"
-              >
-                <LogOut className="h-4 w-4" aria-hidden />
-                <span className="hidden sm:inline">{signingOut ? "Signing out…" : "Sign out"}</span>
-              </button>
-            </div>
+            <span
+              className="chip hidden max-w-[180px] truncate sm:inline-flex"
+              title={user.email}
+            >
+              <UserIcon className="h-3.5 w-3.5 text-meta-500" aria-hidden />
+              {user.display_name || user.email}
+            </span>
           ) : null}
         </div>
       </div>
