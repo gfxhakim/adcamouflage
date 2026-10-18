@@ -53,11 +53,7 @@ export function ClosingCta({ startHref }: { startHref: string }) {
 
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:px-8">
         <div>
-<<<<<<< HEAD
           <SectionTag index="07" dark>
-=======
-          <SectionTag index="08" dark>
->>>>>>> faa4550 (Update landing page UI and project app edits)
             Final CTA
           </SectionTag>
           <Headline

@@ -3,12 +3,8 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
-<<<<<<< HEAD
 import IntroScreen from "@/components/IntroScreen";
 import { INTRO_GATE_SCRIPT } from "@/lib/intro";
-
-=======
->>>>>>> faa4550 (Update landing page UI and project app edits)
 import "./globals.css";
 
 // Headlines: Instrument Serif (the blue part set in italic). Text: Geist.
@@ -44,16 +40,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-<<<<<<< HEAD
     // The gate script below may mark <html> before React hydrates it.
-=======
->>>>>>> faa4550 (Update landing page UI and project app edits)
     <html
       lang="en"
       suppressHydrationWarning
       className={`${GeistSans.variable} ${GeistMono.variable} ${display.variable}`}
     >
-<<<<<<< HEAD
       <head>
         <script dangerouslySetInnerHTML={{ __html: INTRO_GATE_SCRIPT }} />
       </head>
@@ -61,9 +53,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <IntroScreen />
         {children}
       </body>
-=======
-      <body className="min-h-screen">{children}</body>
->>>>>>> faa4550 (Update landing page UI and project app edits)
     </html>
   );
 }

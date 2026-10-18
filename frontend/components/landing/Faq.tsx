@@ -48,11 +48,7 @@ export function Faq() {
     <section id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
-<<<<<<< HEAD
           <SectionTag index="06">FREQUENTLY ASKED QUESTIONS</SectionTag>
-=======
-          <SectionTag index="07">FREQUENTLY ASKED QUESTIONS</SectionTag>
->>>>>>> faa4550 (Update landing page UI and project app edits)
           <Headline text="Everything You Need to Know Before You Upload." className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
 
           <div className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">

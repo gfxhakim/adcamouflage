@@ -35,7 +35,6 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
           nav && "lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]",
         )}
       >
-<<<<<<< HEAD
         {floating ? (
           // The landing page shows no logo; this keeps the nav in the centre column.
           <div aria-hidden />
@@ -51,27 +50,6 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
             />
           </Link>
         )}
-=======
-        <Link
-          href="/"
-          className={cn(
-            "flex min-w-0 items-center gap-3 justify-self-start",
-            floating && "glass-shine pointer-events-auto rounded-full py-1.5 pl-2 pr-4",
-          )}
-          aria-label="BluCloacking home"
-        >
-          <BrandLogo
-            onDark={floating}
-            animated={floating}
-            caption={floating ? undefined : "Media mutation & fingerprint stripping"}
-            captionClassName={cn(
-              "hidden sm:block",
-              // Make room for the nav on smaller laptops.
-              nav && "lg:hidden xl:block",
-            )}
-          />
-        </Link>
->>>>>>> faa4550 (Update landing page UI and project app edits)
 
         {nav}
 

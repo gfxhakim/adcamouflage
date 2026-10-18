@@ -61,11 +61,7 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
     <div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
         <div>
-<<<<<<< HEAD
           <SectionTag index="05" dark>
-=======
-          <SectionTag index="06" dark>
->>>>>>> faa4550 (Update landing page UI and project app edits)
             TRANSPARENT PRICING
           </SectionTag>
           <Headline

@@ -7,11 +7,7 @@ import { useRef } from "react";
 import BrandLogo from "@/components/BrandLogo";
 import { EASE } from "@/components/landing/primitives";
 
-<<<<<<< HEAD
 const NAME = "BluCloacking";
-=======
-const NAME = "AdCamouflage";
->>>>>>> faa4550 (Update landing page UI and project app edits)
 
 const COLUMNS = [
   {

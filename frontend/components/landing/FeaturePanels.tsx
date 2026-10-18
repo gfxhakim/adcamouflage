@@ -123,49 +123,28 @@ function OverlayVisual() {
 const PANELS: Panel[] = [
   {
     name: "PROBE",
-<<<<<<< HEAD
     title: "See exactly what got you flagged.",
     body: "We find every fingerprint the ad bots use to recognize your file. Before they do.",
     points: ["Hash that matched", "Hidden metadata", "Audio & visual signatures"],
     stat: "FLAGGED → MAPPED",
-=======
-    title: "Deep Diagnostic Scan",
-    body: "Extracts and maps every exposed signature inside your file—including container metadata, EXIF/XMP strings, MD5/SHA hashes, and recognizable audio-visual patterns that ad bots flag.",
-    points: ["Container metadata", "EXIF/XMP strings", "MD5/SHA hash mapping"],
-    stat: "FLAGGED / TRACKABLE",
->>>>>>> faa4550 (Update landing page UI and project app edits)
     look: "gray",
     visual: <HashVisual />,
   },
   {
     name: "MUTATE",
-<<<<<<< HEAD
     title: "Same ad to humans. New file to AI.",
     body: "Invisible pixel, frame and audio shifts. Your creative looks identical, the model sees a stranger.",
     points: ["Zero visible change", "Beats AI vision & transcription", "Stealth or Aggressive mode"],
     stat: "100% UNDETECTABLE",
-=======
-    title: "Sub-Pixel & Frequency Alteration",
-    body: "Applies imperceptible spatial pixel shifts, micro-frame adjustments, and audio frequency masking. To human buyers, your creative looks and sounds untouched. To AI vision and transcription models, it is an unrecognizable new file.",
-    points: ["Pixel-shift mutation", "Micro-frame timing", "Audio frequency masking"],
-    stat: "Stealth / Aggressive",
->>>>>>> faa4550 (Update landing page UI and project app edits)
     look: "black",
     visual: <FrameVisual />,
   },
   {
     name: "SCRUB",
-<<<<<<< HEAD
     title: "Every download is a fresh fingerprint.",
     body: "Editing traces, timestamps and tracking tags gone. Each export is a brand-new file ready to scale.",
     points: ["No CapCut / Premiere traces", "Unique hash every export", "Ready to upload in seconds"],
     stat: "CLEAN → SCALE",
-=======
-    title: "Complete Binary Wipe",
-    body: "Strips all editing software footprints, creation timestamps, and tracking tags, rebuilding a clean container from scratch so every download carries a 100% unique digital fingerprint.",
-    points: ["Remove provenance tags", "Rebuild clean container", "Unique fingerprint each export"],
-    stat: "CLEAN / UNIQUE HASH",
->>>>>>> faa4550 (Update landing page UI and project app edits)
     look: "blue",
     visual: <MetaVisual />,
   },
@@ -202,11 +181,7 @@ function PanelBody({ panel, index }: { panel: Panel; index: number }) {
               panel.look === "black" || panel.look === "blue" ? "bg-white text-black" : "bg-black text-white",
             )}
           >
-<<<<<<< HEAD
             Camouflage my ad
-=======
-            Try it
->>>>>>> faa4550 (Update landing page UI and project app edits)
             <PillArrow dark={!(panel.look === "black" || panel.look === "blue")} />
           </Link>
         </div>
@@ -238,17 +213,10 @@ export function FeaturePanels() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
             <SectionTag index="02">THE SANITIZATION PIPELINE</SectionTag>
-<<<<<<< HEAD
             <Headline text="Flagged In. | [Unstoppable Out.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <p className="text-sm leading-relaxed text-ink-muted">
             Three layers. One click. Your winning ad comes back with a fingerprint the platforms have never seen.
-=======
-            <Headline text="Your Creative Enters Trackable and Flagged — | [It Leaves Structurally Brand New.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
-          </div>
-          <p className="text-sm leading-relaxed text-ink-muted">
-            Our three-stage processing engine rewrites how ad platform crawlers read your media file while keeping it 100% identical to the human eye.
->>>>>>> faa4550 (Update landing page UI and project app edits)
           </p>
         </div>
       </div>
