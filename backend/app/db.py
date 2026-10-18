@@ -7,6 +7,7 @@ SQLite is the default so the app runs with no setup at all; production points
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Iterator
 
@@ -24,6 +25,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 from .config import settings
@@ -149,6 +151,10 @@ def _build_engine() -> Engine:
     else:
         kwargs["pool_size"] = 5
         kwargs["max_overflow"] = 10
+        # Fail a stuck connect fast so the startup retry loop can take over
+        # rather than hanging past the platform healthcheck window. psycopg and
+        # most other DBAPI drivers accept connect_timeout (in seconds).
+        connect_args["connect_timeout"] = settings.db_connect_timeout
 
     engine = create_engine(url, connect_args=connect_args, **kwargs)
 
@@ -211,10 +217,51 @@ def _add_missing_columns(engine: Engine) -> None:
                 raise
 
 
+def _wait_for_database(engine: Engine) -> None:
+    """Block until the database accepts a connection, retrying with backoff.
+
+    On Railway the api container can start before its managed Postgres is
+    ready, so a single connection attempt would raise, kill application
+    startup and (after the restart cap) leave the service down. Retrying a
+    light ``SELECT 1`` lets a database that is still coming up - or one that
+    hiccups during a deploy - be picked up on a later attempt instead. SQLite
+    is always local, so it needs no wait.
+    """
+
+    url = settings.resolved_database_url
+    if url.startswith("sqlite"):
+        return
+
+    attempts = max(1, settings.db_connect_max_attempts)
+    delay = 1.0
+    for attempt in range(1, attempts + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            if attempt > 1:
+                logger.info("database reachable after %s attempt(s)", attempt)
+            return
+        except OperationalError as exc:
+            if attempt == attempts:
+                logger.error(
+                    "database still unreachable after %s attempts: %s", attempts, exc
+                )
+                raise
+            logger.warning(
+                "database not ready (attempt %s/%s), retrying in %.1fs",
+                attempt,
+                attempts,
+                delay,
+            )
+            time.sleep(delay)
+            delay = min(delay * 2, 10.0)
+
+
 def init_db() -> None:
     """Create any missing tables and columns. Safe to call on every start."""
 
     engine = get_engine()
+    _wait_for_database(engine)
     Base.metadata.create_all(bind=engine)
     _add_missing_columns(engine)
     logger.info("database ready at %s", settings.resolved_database_url.split("@")[-1])

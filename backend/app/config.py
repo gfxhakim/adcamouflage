@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # Defaults to SQLite inside the storage root, which needs no setup. Set a
     # postgresql+psycopg:// URL in production.
     database_url: str | None = None
+    # Startup resilience: on Railway the api service can boot before its
+    # Postgres is accepting connections, so the first connection is retried
+    # with backoff instead of letting the container crash-loop out. The connect
+    # timeout keeps a stuck connect from hanging past the platform healthcheck.
+    db_connect_timeout: int = 10
+    db_connect_max_attempts: int = 12
     allow_registration: bool = True
     min_password_length: int = 10
     session_ttl_hours: int = 24 * 14
