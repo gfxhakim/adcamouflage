@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import Header from "@/components/Header";
+import DeckRail from "@/components/DeckRail";
 import NeonCard from "@/components/NeonCard";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import PasswordCard from "@/components/plan/PasswordCard";
@@ -101,7 +102,10 @@ export default function PlanPage() {
     <>
       <Header user={user} />
 
-      <main className="relative mx-auto max-w-7xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+        <DeckRail onDark={false} />
+
+        <main className="relative min-w-0 flex-1">
         <section className="mb-6 flex flex-col gap-1 sm:mb-8">
           <p className="label">My plan</p>
           <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">Plan & usage</h1>
@@ -372,7 +376,8 @@ export default function PlanPage() {
             </section>
           </div>
         )}
-      </main>
+        </main>
+      </div>
     </>
   );
 }
