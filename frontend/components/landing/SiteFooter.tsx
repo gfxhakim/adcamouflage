@@ -7,7 +7,7 @@ import { useRef } from "react";
 import BrandLogo from "@/components/BrandLogo";
 import { EASE } from "@/components/landing/primitives";
 
-const NAME = "AdCamouflage";
+const NAME = "BluCloacking";
 
 const COLUMNS = [
   {

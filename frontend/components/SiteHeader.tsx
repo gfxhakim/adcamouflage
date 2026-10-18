@@ -35,25 +35,21 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
           nav && "lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]",
         )}
       >
-        <Link
-          href="/"
-          className={cn(
-            "flex min-w-0 items-center gap-3 justify-self-start",
-            floating && "glass-shine pointer-events-auto rounded-full py-1.5 pl-2 pr-4",
-          )}
-          aria-label="BluCloacking home"
-        >
-          <BrandLogo
-            onDark={floating}
-            animated={floating}
-            caption={floating ? undefined : "Media mutation & fingerprint stripping"}
-            captionClassName={cn(
-              "hidden sm:block",
-              // Make room for the nav on smaller laptops.
-              nav && "lg:hidden xl:block",
-            )}
-          />
-        </Link>
+        {floating ? (
+          // The landing page shows no logo; this keeps the nav in the centre column.
+          <div aria-hidden />
+        ) : (
+          <Link href="/" className="flex min-w-0 items-center gap-3 justify-self-start" aria-label="BluCloacking home">
+            <BrandLogo
+              caption="Media mutation & fingerprint stripping"
+              captionClassName={cn(
+                "hidden sm:block",
+                // Make room for the nav on smaller laptops.
+                nav && "lg:hidden xl:block",
+              )}
+            />
+          </Link>
+        )}
 
         {nav}
 
