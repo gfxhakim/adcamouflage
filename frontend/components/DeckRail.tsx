@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- small static brand PNG; the image optimizer adds nothing here. */
 "use client";
 
 import clsx from "clsx";
@@ -37,6 +38,9 @@ const ITEMS: NavItem[] = [
   { href: "/app/history", label: "History", icon: Clock },
   { href: "/app/plan", label: "My plan", icon: Crown },
 ];
+
+/** The BluCloacking spy-shield mark, sitting at the top of the rail. */
+const BRAND_MARK = "/brand/blucloacking-mark.png";
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/app") return pathname === "/app";
@@ -91,6 +95,31 @@ export function DeckRail({ onDark = true }: DeckRailProps) {
         )}
         aria-label="Workspace navigation"
       >
+        <Link
+          href="/app"
+          title="BluCloacking"
+          className="group relative mb-1 grid h-11 w-11 place-items-center rounded-xl transition hover:bg-meta-500/15"
+        >
+          <img
+            src={BRAND_MARK}
+            alt="BluCloacking"
+            width={28}
+            height={28}
+            className="h-7 w-7 drop-shadow-[0_0_10px_rgba(51,133,255,0.5)]"
+          />
+          <span
+            className={clsx(
+              "pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-lg transition group-hover:opacity-100",
+              tipTone,
+            )}
+            role="tooltip"
+          >
+            BluCloacking
+          </span>
+        </Link>
+
+        <span className={clsx("mb-1 h-px", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />
+
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const current = isActive(pathname, href);
           return (
@@ -154,6 +183,20 @@ export function DeckRail({ onDark = true }: DeckRailProps) {
         )}
         aria-label="Workspace navigation"
       >
+        <Link
+          href="/app"
+          title="BluCloacking"
+          className="flex h-11 min-w-[2.75rem] items-center justify-center rounded-xl px-2 transition hover:bg-meta-500/15"
+        >
+          <img
+            src={BRAND_MARK}
+            alt="BluCloacking"
+            width={24}
+            height={24}
+            className="h-6 w-6 drop-shadow-[0_0_8px_rgba(51,133,255,0.5)]"
+          />
+        </Link>
+        <span className={clsx("mx-0.5 h-7 w-px self-center", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const current = isActive(pathname, href);
           return (
