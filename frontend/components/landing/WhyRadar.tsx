@@ -60,7 +60,7 @@ function Pipeline() {
   const reduce = useReducedMotion() ?? false;
 
   return (
-    <div className="relative mx-auto w-full max-w-[560px]">
+    <div className="relative mx-auto w-full max-w-[760px]">
       <style>{`
         .pipeline-dash {
           background-image: linear-gradient(to right, #0866FF 50%, transparent 50%);
@@ -77,9 +77,9 @@ function Pipeline() {
         @media (prefers-reduced-motion: reduce) { .pipeline-dash { animation: none; } }
       `}</style>
 
-      <div className="flex flex-col items-stretch md:flex-row md:items-center">
+      <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-center md:gap-0">
         {/* 1. The flagged original */}
-        <motion.div {...phase(0.02, reduce)} className="md:w-[30%]">
+        <motion.div {...phase(0.02, reduce)} className="md:w-[29%]">
           <div className="rounded-2xl border border-rose-500/30 bg-white p-3 shadow-sm">
             <div className="flex items-center gap-2">
               <Upload className="h-3.5 w-3.5 text-ink-faint" aria-hidden />
@@ -96,21 +96,21 @@ function Pipeline() {
         <Connector />
 
         {/* 2. The engine */}
-        <motion.div {...phase(0.14, reduce)} className="md:w-[36%]">
-          <div className="rounded-2xl bg-black p-4 text-white shadow-[0_0_40px_rgba(8,102,255,0.25)]">
+        <motion.div {...phase(0.14, reduce)} className="md:w-[35%]">
+          <div className="rounded-2xl bg-black p-4 text-white shadow-[0_0_40px_rgba(8,102,255,0.25)] md:p-5">
             <p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.15em] text-white/60">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-400" aria-hidden />
               AdCamouflage engine
             </p>
-            <ul className="mt-3 space-y-1.5">
+            <ul className="mt-3 space-y-1.5 md:space-y-2">
               {STEPS.map((step, i) => (
                 <motion.li
                   key={step}
                   {...phase(0.22 + i * 0.07, reduce)}
-                  className="flex items-center gap-2 text-[11px] text-white/85"
+                  className="flex items-center gap-2 text-[11px] text-white/85 md:text-[12px]"
                 >
-                  <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-meta-500">
-                    <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                  <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-meta-500 md:h-4 md:w-4">
+                    <Check className="h-2.5 w-2.5 md:h-2.75 md:w-2.75" strokeWidth={3} aria-hidden />
                   </span>
                   {step}
                 </motion.li>
@@ -122,14 +122,14 @@ function Pipeline() {
         <Connector />
 
         {/* 3. Clean copies fan out */}
-        <div className="space-y-2 md:w-[30%]">
+        <div className="space-y-2 md:w-[29%]">
           {OUTPUTS.map((name, i) => (
             <motion.div
               key={name}
               {...phase(0.62 + i * 0.08, reduce)}
-              className="flex items-center justify-between gap-2 rounded-xl border border-meta-500/30 bg-white px-3 py-2 shadow-sm"
+              className="flex items-center justify-between gap-2 rounded-xl border border-meta-500/30 bg-white px-3 py-2 shadow-sm md:px-3.5 md:py-2.5"
             >
-              <span className="truncate font-mono text-[10px] text-black">{name}</span>
+              <span className="truncate font-mono text-[10px] text-black md:text-[11px]">{name}</span>
               <span className="shrink-0 rounded-full bg-meta-500 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-white">
                 Approved
               </span>
@@ -138,7 +138,7 @@ function Pipeline() {
         </div>
       </div>
 
-      <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+      <p className="mt-8 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint md:text-[11px]">
         <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-rose-500" />
         1 flagged file in
         <span className="mx-3 text-black/20">→</span>
@@ -151,8 +151,8 @@ function Pipeline() {
 
 export function WhyRadar() {
   return (
-    <section id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-20 sm:py-28">
-      <div className="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:px-8">
+    <section id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-12 sm:py-16 lg:py-20">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8 lg:px-8">
         <div>
           <SectionTag index="01">THE SCALING BOTTLENECK</SectionTag>
           <Headline
@@ -182,7 +182,7 @@ export function WhyRadar() {
           </ul>
         </div>
 
-        <Reveal className="px-2 py-6 sm:px-6">
+        <Reveal className="flex justify-center lg:justify-end">
           <Pipeline />
         </Reveal>
       </div>

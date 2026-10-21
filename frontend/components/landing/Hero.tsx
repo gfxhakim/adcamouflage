@@ -35,13 +35,13 @@ export function Hero({ startHref }: { startHref: string }) {
           transition={{ duration: 0.6, ease: EASE }}
         >
           <ShieldCheck className="h-3.5 w-3.5 text-meta-400" aria-hidden />
-          ENGINE ONLINE • ZERO-TRACE ARCHITECTURE
+          AI ENGINE ONLINE • ZERO-TRACE ARCHITECTURE
         </motion.span>
 
         <Headline
           as="h1"
           dark
-          text="Algorithms Flag Patterns. | [We Erase Them.]"
+          text="Algorithms Flag Patterns. | [Our AI super agent] | [breaks them.]"
           className="text-[2.7rem] sm:text-6xl lg:text-[5.4rem]"
         />
 
