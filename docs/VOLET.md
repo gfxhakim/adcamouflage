@@ -236,8 +236,31 @@ limits each of the three addresses to 100 characters.
 
 ### Step 3: Appearance (optional)
 
-The guide says you can add your logo and brand colours here, and that it can
-be done later.
+Volet lets you recolour its checkout page and add your logo, so it looks
+like a continuation of the app. The values below are the app's own theme
+(frontend `tailwind.config.js` and `app/globals.css`): the plan page the
+customer comes from is light, the workspace's dark mode uses the "deck"
+colours.
+
+| Volet field | Light mode | Dark mode | What it is in the app |
+|---|---|---|---|
+| accent | `#0866FF` | `#3385FF` | Meta blue (links, focus rings) |
+| error | `#EF4444` | `#F87171` | red used for errors |
+| button | `#0866FF` | `#0866FF` | primary button background |
+| buttonText | `#FFFFFF` | `#FFFFFF` | primary button text |
+| bgPage | `#FFFFFF` | `#070B14` | page background |
+| bgForm | `#FFFFFF` | `#111724` | card / panel background |
+| textBase | `#000000` | `#E9EEFB` | body text |
+| textSidebar | `#4B4F56` | `#AAB4C6` | secondary text |
+| outline | `#E5E7EB` | `#2A3243` | borders |
+
+Under **Custom logo** pick **Volet.com logo + Merchant logo** (customers see
+both who they are paying and who processes it) and upload
+`frontend/public/brand/blucloacking-mark.png` (256 x 256, transparent) or,
+if Volet wants a wide image, `blucloacking-wordmark.png` (720 x 120). The
+accepted file types and sizes: **check in your Volet account**. Save, then
+open a test checkout (section 5) in both the light and the dark setting of
+your browser to see the result.
 
 ### Step 4: Save and wait for approval
 
