@@ -124,7 +124,7 @@ export default function AdminPage() {
   // --- gate --------------------------------------------------------------
   if (!checked) {
     return (
-      <div className="deck grid min-h-screen place-items-center text-slate-500">
+      <div className="deck deck-fixed grid min-h-screen place-items-center text-slate-500">
         <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
       </div>
     );
@@ -138,7 +138,7 @@ export default function AdminPage() {
   const activeTab = TABS.find((t) => t.id === tab);
 
   return (
-    <div className="deck min-h-screen">
+    <div className="deck deck-fixed min-h-screen">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">

@@ -507,8 +507,10 @@ html[data-intro="off"] .intro-screen {
    ".deck"]) switch on under the same wrapper; this block restyles the shared
    component classes (.plain-card, .field, .chip, .label, .btn-ghost, .glass)
    and supplies the deck-only pieces: the left rail and the mono readouts.
+   The workspace's white-background switch sets <html data-deck-theme="light">,
+   which turns every rule here off; `.deck-fixed` (admin) keeps it on.
    ========================================================================= */
-.deck {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) {
   /* Panels read the shared --surface token, so overriding it re-skins every
      glow card's surface at once. */
   --surface: 17 23 36;            /* #111724 raised panel */
@@ -532,88 +534,88 @@ html[data-intro="off"] .intro-screen {
   background-attachment: fixed;
 }
 
-.deck ::selection {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) ::selection {
   background: rgb(8 102 255 / 0.4);
   color: #eaf2ff;
 }
-.deck * {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) * {
   scrollbar-color: rgb(8 102 255 / 0.5) transparent;
 }
 
 /* Plain cards ------------------------------------------------------------ */
-.deck .plain-card {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .plain-card {
   border-color: rgb(var(--deck-line) / 0.08);
   background: var(--deck-panel);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 18px 40px -26px rgb(0 0 0 / 0.9);
 }
-.deck .plain-card:hover {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .plain-card:hover {
   border-color: rgb(8 102 255 / 0.55);
   box-shadow:
     0 0 0 1px rgb(8 102 255 / 0.3),
     0 20px 46px -16px rgb(8 102 255 / 0.5);
 }
-.deck .plain-card[data-tone="danger"] {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .plain-card[data-tone="danger"] {
   border-color: rgb(239 68 68 / 0.4);
   background: #1a1016;
 }
-.deck .plain-card[data-tone="danger"]:hover {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .plain-card[data-tone="danger"]:hover {
   border-color: rgb(239 68 68 / 0.6);
   box-shadow: 0 20px 46px -16px rgb(239 68 68 / 0.4);
 }
 
 /* Glow cards: surface re-skins via --surface; soften the light-mode rim and
    drop the neumorphic white shadow so the dark panel does not glow white. */
-.deck .blob-surface {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .blob-surface {
   outline-color: rgb(var(--deck-line) / 0.06);
 }
-.deck .blob-card {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .blob-card {
   background: linear-gradient(135deg, #0b2a66, #0a1830 48%, #0b2a66);
   box-shadow:
     0 0 0 1px rgb(8 102 255 / 0.12),
     0 24px 60px -24px rgb(8 102 255 / 0.5);
 }
-.deck .blob-card[data-tone="danger"] {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .blob-card[data-tone="danger"] {
   background: linear-gradient(135deg, #3a1410, #1a0d10);
 }
 
 /* Inputs, chips, labels, ghost buttons ----------------------------------- */
-.deck .field {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .field {
   border-color: rgb(var(--deck-line) / 0.14);
   background: var(--deck-panel-2);
   color: var(--deck-ink);
 }
-.deck .field::placeholder {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .field::placeholder {
   color: var(--deck-ink-faint);
 }
-.deck .field:focus {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .field:focus {
   border-color: var(--meta-500);
 }
-.deck .chip {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .chip {
   border-color: rgb(var(--deck-line) / 0.12);
   background: rgb(var(--deck-line) / 0.04);
   color: var(--deck-ink-muted);
 }
-.deck .label {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .label {
   color: var(--deck-ink-faint);
 }
-.deck .btn-ghost {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .btn-ghost {
   border-color: rgb(var(--deck-line) / 0.14);
   background: rgb(var(--deck-line) / 0.04);
   color: var(--deck-ink);
 }
-.deck .btn-ghost:hover:not(:disabled) {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .btn-ghost:hover:not(:disabled) {
   border-color: rgb(8 102 255 / 0.5);
   background: rgb(8 102 255 / 0.14);
   color: #cfe0ff;
 }
-.deck .btn:focus-visible {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .btn:focus-visible {
   --tw-ring-offset-color: var(--deck-bg);
 }
-.deck .glass {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .glass {
   border-color: rgb(var(--deck-line) / 0.1);
   background: rgb(17 23 36 / 0.82);
 }
-.deck .grid-backdrop {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .grid-backdrop {
   background-image:
     linear-gradient(rgb(8 102 255 / 0.1) 1px, transparent 1px),
     linear-gradient(90deg, rgb(8 102 255 / 0.1) 1px, transparent 1px);
@@ -731,13 +733,25 @@ html {
 }
 
 /* The danger button on the dark deck (JobQueue "delete batch" etc.). */
-.deck .btn-danger {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .btn-danger {
   border-color: rgb(239 68 68 / 0.45);
   background: rgb(239 68 68 / 0.14);
   color: #fca5a5;
 }
-.deck .btn-danger:hover:not(:disabled) {
+:is(html:not([data-deck-theme="light"]) .deck, .deck-fixed) .btn-danger:hover:not(:disabled) {
   border-color: rgb(239 68 68 / 0.65);
   background: rgb(239 68 68 / 0.22);
   color: #fecaca;
+}
+
+/* White background for the workspace (the ThemeDock sun): same faint blue grid
+   on a near-white ground, so the pages keep the deck's structure. */
+html[data-deck-theme="light"] .deck:not(.deck-fixed) {
+  background-color: #f6f8fc;
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -8%, rgb(8 102 255 / 0.08), transparent 62%),
+    linear-gradient(rgb(8 102 255 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(8 102 255 / 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 54px 54px, 54px 54px;
+  background-attachment: fixed;
 }
