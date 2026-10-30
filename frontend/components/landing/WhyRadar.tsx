@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Gauge, Layers, Sparkles, Upload } from "lucide-react";
 
 import { Headline, Reveal, SectionTag } from "@/components/landing/primitives";
@@ -31,7 +31,8 @@ const STEPS = ["Scrub metadata", "Rewrite file hash", "Shift frames & pixels", "
 /** Output files that fan out of the engine. */
 const OUTPUTS = ["winner_v1_a.mp4", "winner_v1_b.mp4", "winner_v1_c.mp4"];
 
-/** Source GIF asset used inside the source-video card. */
+/** Source media used inside the source-video card. */
+const SOURCE_VIDEO = "/brand/1030(2).mp4";
 const SOURCE_GIF = "/landing/source.gif";
 
 // One full loop of the animation, in seconds.
@@ -62,7 +63,34 @@ function Connector({ className }: { className?: string }) {
 
 function SourceVideoCard() {
   const reduce = useReducedMotion() ?? false;
-  const [imageBroken, setImageBroken] = useState(false);
+  const [mediaFailed, setMediaFailed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleIntersection = (entries: IntersectionObserverEntry[]) => {
+      const entry = entries[0];
+      if (!entry) return;
+
+      if (entry.isIntersecting) {
+        video.muted = true;
+        video.playsInline = true;
+        void video.play().catch(() => undefined);
+      } else {
+        video.pause();
+        video.currentTime = 0;
+      }
+    };
+
+    const observer = new IntersectionObserver(handleIntersection, {
+      threshold: 0.35,
+    });
+
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <motion.div {...phase(0.02, reduce)} className="w-full">
@@ -73,20 +101,25 @@ function SourceVideoCard() {
         </div>
 
         <div className="relative overflow-hidden rounded-[22px] border border-slate-900/10 bg-[#0b0f14] shadow-[inset_0_0_30px_rgba(0,0,0,0.9)]">
-          {imageBroken ? (
+          {mediaFailed ? (
             <div className="aspect-[4/5] w-full bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.24),transparent_20%),linear-gradient(135deg,#090d12_0%,#171d2a_55%,#090d12_100%)]" />
           ) : (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={SOURCE_GIF}
-                alt="Source video frame"
-                className="aspect-[4/5] h-auto w-full object-cover"
-                loading="eager"
-                onError={() => setImageBroken(true)}
-                draggable={false}
-              />
-            </>
+            <video
+              ref={videoRef}
+              className="aspect-[4/5] h-auto w-full object-cover"
+              src={SOURCE_VIDEO}
+              muted
+              loop
+              playsInline
+              preload="auto"
+              onError={() => setMediaFailed(true)}
+              onEnded={() => {
+                const video = videoRef.current;
+                if (!video) return;
+                video.currentTime = 0;
+                void video.play().catch(() => undefined);
+              }}
+            />
           )}
         </div>
       </div>
