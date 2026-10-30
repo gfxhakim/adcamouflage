@@ -1,5 +1,7 @@
 import { API_BASE, ApiError } from "./api";
-import type { BillingMode, TokenPlanCard, TopupOption } from "./types";
+import type { BillingMode, PaymentProviderId, TokenPlanCard, TopupOption } from "./types";
+
+export type { PaymentProviderId };
 
 export interface UserProfile {
   id: number;
@@ -164,6 +166,12 @@ export interface Topups {
   options: TopupOption[];
 }
 
+/** A payment method the server has set up; the customer picks one when there are several. */
+export interface PaymentProvider {
+  id: PaymentProviderId;
+  label: string;
+}
+
 export interface Subscription {
   plan: PlanOption;
   /** The limit on this account; support may have set it apart from the plan's. */
@@ -191,7 +199,9 @@ export interface Subscription {
   balance: TokenBalance;
   token_plans: TokenPlanCard[];
   topups: Topups;
-  /** False until BTCPay is configured on the server; buttons become a notice. */
+  /** The payment methods set up on the server, in the order they are offered. */
+  payment_providers: PaymentProvider[];
+  /** False until at least one payment method is configured; buttons become a notice. */
   payments_enabled: boolean;
   grace_days: number;
   alerts: BillingAlert[];
@@ -231,6 +241,7 @@ export interface Order {
   amount: number;
   tokens: number;
   status: OrderStatus;
+  provider: PaymentProviderId;
   checkout_url: string | null;
   created_at: string;
   paid_at: string | null;
@@ -238,7 +249,12 @@ export interface Order {
 
 export interface Checkout {
   order_id: string;
-  /** BTCPay's invoice page; the browser is sent there and comes back with ?order=. */
+  provider: PaymentProviderId;
+  /**
+   * Where the browser goes to pay: BTCPay's invoice page, or the app's own
+   * /api/v1/billing/orders/{id}/pay page that forwards to Volet. Either way it
+   * comes back to /app/plan with ?order=.
+   */
   checkout_url: string;
   amount: number;
   tokens: number;
@@ -249,9 +265,16 @@ export interface SubscriptionState {
   period_end: string | null;
 }
 
-/** Start a BTCPay checkout for a plan period or a top-up on the current plan. */
-export function startCheckout(kind: OrderKind, choice: { plan_id?: string; amount?: number }) {
-  return post<Checkout>("/api/v1/billing/checkout", { kind, ...choice });
+/**
+ * Start a checkout for a plan period or a top-up on the current plan. The
+ * provider is sent only when given; the server then uses the first one set up.
+ */
+export function startCheckout(
+  kind: OrderKind,
+  choice: { plan_id?: string; amount?: number },
+  provider?: PaymentProviderId,
+) {
+  return post<Checkout>("/api/v1/billing/checkout", { kind, ...choice, ...(provider ? { provider } : {}) });
 }
 
 async function get<T>(path: string): Promise<T> {

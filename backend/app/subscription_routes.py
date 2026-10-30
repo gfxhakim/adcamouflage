@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
+from .billing_routes import available_providers, provider_label
 from .config import settings
 from .db import ActivityEvent, BatchRecord, User, get_db
 from .plans import (
@@ -130,6 +131,11 @@ class Alert(BaseModel):
     text: str
 
 
+class PaymentProvider(BaseModel):
+    id: str  # btcpay | volet
+    label: str
+
+
 class Subscription(BaseModel):
     plan: PlanOption
     # The limit on this account, which an admin may have set apart from the plan's.
@@ -159,6 +165,9 @@ class Subscription(BaseModel):
     balance: TokenBalance
     token_plans: list[TokenPlanCard]
     topups: Topups
+    # The providers the owner has set up, in the order to offer them; the
+    # plan page shows a picker when there is more than one.
+    payment_providers: list[PaymentProvider]
     payments_enabled: bool
     grace_days: int
     alerts: list[Alert]
@@ -287,13 +296,15 @@ def _token_fields(db: Session, user: User, now: datetime) -> dict[str, Any]:
     token_plans = get_token_plans(db)
     topups = get_topups(db)
     current = token_plans.get(user.sub_plan or "")
+    providers = [{"id": p, "label": provider_label(p)} for p in available_providers()]
     return {
         "billing_mode": user.billing_mode,
         "subscription": subscription_summary(db, user, now),
         "balance": balance_summary(db, user, now),
         "token_plans": [p.as_dict() for p in token_plans.values()],
         "topups": {"amounts": topups["amounts"], "options": topup_options(current, topups)},
-        "payments_enabled": settings.billing_configured,
+        "payment_providers": providers,
+        "payments_enabled": bool(providers),
         "grace_days": get_billing_rules(db)["grace_days"],
         "alerts": billing_alerts(db, user, now),
     }

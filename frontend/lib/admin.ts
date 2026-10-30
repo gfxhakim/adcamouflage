@@ -1,5 +1,5 @@
 import { API_BASE, ApiError } from "./api";
-import type { BillingMode, BillingRules, TokenPlanCard, TopupTable } from "./types";
+import type { BillingMode, BillingRules, PaymentProviderId, TokenPlanCard, TopupTable } from "./types";
 
 export interface PlanInfo {
   id: string;
@@ -275,6 +275,7 @@ export interface AdminOrder {
   amount: number;
   tokens: number;
   status: "pending" | "paid" | "expired" | "invalid";
+  provider: PaymentProviderId;
   created_at: string;
   paid_at: string | null;
 }

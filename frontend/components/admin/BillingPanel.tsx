@@ -16,7 +16,7 @@ import {
   type UserBilling,
 } from "@/lib/admin";
 import { formatDate, formatMoney, formatTokens, timeAgo } from "@/lib/format";
-import type { BillingMode, TokenPlanCard } from "@/lib/types";
+import { paymentProviderName, type BillingMode, type TokenPlanCard } from "@/lib/types";
 
 interface BillingPanelProps {
   user: AdminUser;
@@ -310,31 +310,35 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
               <p className="py-2 text-xs text-ink-faint dark:text-slate-500">No orders yet.</p>
             ) : (
               <ul className="divide-y divide-black/[0.06] dark:divide-white/10">
-                {billing.orders.map((order) => (
-                  <li key={order.id} className="flex items-center justify-between gap-3 py-1.5 text-xs">
-                    <span className="min-w-0 truncate text-black dark:text-slate-100">
-                      {order.kind === "subscription" ? `${order.plan_id} period` : `top-up on ${order.plan_id}`} ·{" "}
-                      {formatMoney(order.amount, currency)} · {formatTokens(order.tokens)} tokens
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <span
-                        className={clsx(
-                          "chip !text-[10px]",
-                          order.status === "paid"
-                            ? "!border-emerald-300 dark:!border-emerald-500/40 !bg-emerald-50 dark:!bg-emerald-500/10 !text-emerald-700 dark:!text-emerald-300"
-                            : order.status === "pending"
-                              ? "!border-amber-300 dark:!border-amber-500/40 !bg-amber-50 dark:!bg-amber-500/10 !text-amber-700 dark:!text-amber-300"
-                              : "",
-                        )}
-                      >
-                        {order.status}
+                {billing.orders.map((order) => {
+                  const providerName = paymentProviderName(order.provider);
+                  return (
+                    <li key={order.id} className="flex items-center justify-between gap-3 py-1.5 text-xs">
+                      <span className="min-w-0 truncate text-black dark:text-slate-100">
+                        {order.kind === "subscription" ? `${order.plan_id} period` : `top-up on ${order.plan_id}`} ·{" "}
+                        {formatMoney(order.amount, currency)} · {formatTokens(order.tokens)} tokens
                       </span>
-                      <time className="text-ink-faint dark:text-slate-500" dateTime={order.paid_at ?? order.created_at}>
-                        {timeAgo(order.paid_at ?? order.created_at)}
-                      </time>
-                    </span>
-                  </li>
-                ))}
+                      <span className="flex shrink-0 items-center gap-2">
+                        {providerName ? <span className="chip !text-[10px]">{providerName}</span> : null}
+                        <span
+                          className={clsx(
+                            "chip !text-[10px]",
+                            order.status === "paid"
+                              ? "!border-emerald-300 dark:!border-emerald-500/40 !bg-emerald-50 dark:!bg-emerald-500/10 !text-emerald-700 dark:!text-emerald-300"
+                              : order.status === "pending"
+                                ? "!border-amber-300 dark:!border-amber-500/40 !bg-amber-50 dark:!bg-amber-500/10 !text-amber-700 dark:!text-amber-300"
+                                : "",
+                          )}
+                        >
+                          {order.status}
+                        </span>
+                        <time className="text-ink-faint dark:text-slate-500" dateTime={order.paid_at ?? order.created_at}>
+                          {timeAgo(order.paid_at ?? order.created_at)}
+                        </time>
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

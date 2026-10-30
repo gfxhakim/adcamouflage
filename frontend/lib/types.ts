@@ -240,3 +240,14 @@ export interface PublicPricing {
   topups: TopupTable;
   rules?: BillingRules;
 }
+
+/** Where a checkout is paid: BTCPay's invoice page or Volet's hosted checkout. */
+export type PaymentProviderId = "btcpay" | "volet";
+
+const PAYMENT_PROVIDER_NAMES: Record<PaymentProviderId, string> = { btcpay: "BTCPay", volet: "Volet" };
+
+/** The short name on an order row's provider tag; empty when the API sent none. */
+export function paymentProviderName(id: PaymentProviderId | null | undefined): string {
+  if (!id) return "";
+  return PAYMENT_PROVIDER_NAMES[id] ?? id;
+}

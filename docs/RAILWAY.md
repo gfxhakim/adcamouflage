@@ -237,18 +237,24 @@ start. The API log should show `celery@… ready` shortly after boot, and
 
 **Uploads fail at a certain size.** See the section above.
 
-## Billing (BTCPay) variables
+## Billing variables (BTCPay / Volet)
 
-Token plans are sold through a self-hosted BTCPay Server (Greenfield API). Set
-these on the `api` service; until the first three are present, checkout
-answers 503 and the plan page says payments are being set up.
+Token plans are sold through one or both of two payment methods: a
+self-hosted BTCPay Server (Greenfield API) and Volet.com's Hosted Checkout.
+Set the variables for the method(s) you use on the `api` service. Until at
+least one method is complete (BTCPay's first three variables, or Volet's
+three), checkout answers 503 and the plan page says payments are being set
+up. When both are complete, the plan page shows a "Pay with" choice and the
+customer picks one; BTCPay is the default.
+
+BTCPay (click-by-click guide: [BTCPAY.md](BTCPAY.md)):
 
 ```bash
 ADCAM_BTCPAY_URL=https://pay.yourdomain.com      # no trailing slash
 ADCAM_BTCPAY_STORE_ID=<store id from BTCPay>
 ADCAM_BTCPAY_API_KEY=<Greenfield API key with btcpay.store.cancreateinvoice + canviewinvoices>
 ADCAM_BTCPAY_WEBHOOK_SECRET=<secret entered on the BTCPay webhook>
-ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # where BTCPay sends the customer back
+ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # where the customer is sent back after paying
 ```
 
 In BTCPay, add a webhook on the store pointing at
@@ -256,6 +262,30 @@ In BTCPay, add a webhook on the store pointing at
 secret, sending the invoice events (`InvoiceSettled` is the one that credits
 tokens; expired/invalid close the order). A missed webhook is caught up when
 the customer's plan page polls the order.
+
+Volet (click-by-click guide: [VOLET.md](VOLET.md)):
+
+```bash
+ADCAM_VOLET_ACCOUNT_EMAIL=<the e-mail of your Volet.com account>
+ADCAM_VOLET_SCI_NAME=<the Hosted Checkout (SCI) name, exactly as created in Volet>
+ADCAM_VOLET_SCI_SECRET=<the Hosted Checkout password set when creating it>
+ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # required for Volet; 40 characters or fewer
+ADCAM_VOLET_NOTIFY_IPS=50.7.115.5,51.255.40.139,13.53.55.89   # optional; this is the built-in default
+```
+
+`ADCAM_PUBLIC_URL` is the base of the success, fail and status addresses
+the app sends to Volet with every payment, so for Volet it is required (a
+checkout without it stops with a message saying the link has no site
+address); Volet limits each of them to 100 characters, which caps the public
+URL at 40. In Volet, the Hosted Checkout's Status URL is
+`https://<web domain>/api/v1/billing/volet/status` with method POST, and
+"Use a digital signature" must be on. The app acts on a notification only
+when its hash checks out and it was sent from one of Volet's sender
+addresses (`ADCAM_VOLET_NOTIFY_IPS`; the default is the list in Volet's SCI
+document, and an empty value turns the check off - see VOLET.md section 6
+before changing it). The status notification is the only thing that credits
+a Volet order (there is no polling fallback), so an order whose notification
+never arrives stays pending until you settle it by hand from the admin panel.
 
 Optional email reminders (period ends in 3 days / period just ended) go out
 through Resend once a day from the Celery beat schedule:

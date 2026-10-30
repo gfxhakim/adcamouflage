@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 
 import type { Order } from "@/lib/auth";
 import { formatDate, formatMoney, formatTokens } from "@/lib/format";
+import { paymentProviderName } from "@/lib/types";
 
 interface OrderHistoryProps {
   orders: Order[];
@@ -29,6 +30,9 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
       {orders.map((order) => {
         const status = STATUS[order.status] ?? STATUS.pending;
         const plan = planLabels[order.plan_id] ?? order.plan_id;
+        const providerName = paymentProviderName(order.provider);
+        // A Volet order pays on this app's own /pay page, so the link is same-origin.
+        const external = /^https?:/i.test(order.checkout_url ?? "");
         return (
           <li key={order.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
             <div className="min-w-0">
@@ -45,11 +49,12 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
                 <a
                   href={order.checkout_url}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-meta-600 hover:underline"
-                  rel="noreferrer"
+                  rel={external ? "noreferrer" : undefined}
                 >
                   Pay <ExternalLink className="h-3 w-3" aria-hidden />
                 </a>
               ) : null}
+              {providerName ? <span className="chip !text-[10px] !text-ink-faint">{providerName}</span> : null}
               <span className={clsx("chip !text-[10px]", status.tone)}>{status.text}</span>
             </div>
           </li>

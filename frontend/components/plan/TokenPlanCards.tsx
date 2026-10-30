@@ -154,8 +154,8 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
       </div>
 
       <p className="text-[11px] leading-relaxed text-ink-faint">
-        Every purchase starts a new 30-day period from today, and days left on the current one are added on. Payment
-        is in crypto through BTCPay; nothing renews on its own.
+        Every purchase starts a new 30-day period from today, and days left on the current one are added on. You pay
+        once per period; nothing renews on its own.
       </p>
     </div>
   );
