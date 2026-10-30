@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { useState } from "react";
 import { Check, Gauge, Layers, Sparkles, Upload } from "lucide-react";
 
 import { Headline, Reveal, SectionTag } from "@/components/landing/primitives";
@@ -25,13 +25,13 @@ const WHY = [
   },
 ];
 
-/** What the render engine does to each file, shown ticking off one by one. */
-const STEPS = ["Reframe & crop", "Apply overlays", "Pick cover frame", "Tune quality", "Render variants"];
+/** What the engine does to each file, shown ticking off one by one. */
+const STEPS = ["Scrub metadata", "Rewrite file hash", "Shift frames & pixels", "Pitch-shift audio", "Re-encode clean"];
 
 /** Output files that fan out of the engine. */
-const OUTPUTS = ["your_video_a.mp4", "your_video_b.mp4", "your_video_c.mp4"];
+const OUTPUTS = ["winner_v1_a.mp4", "winner_v1_b.mp4", "winner_v1_c.mp4"];
 
-/** Looping clip shown in the source card; drop a GIF at this path in /public. */
+/** Source GIF asset used inside the source-video card. */
 const SOURCE_GIF = "/landing/source.gif";
 
 // One full loop of the animation, in seconds.
@@ -52,29 +52,45 @@ function phase(start: number, reduce: boolean) {
   };
 }
 
-function Connector() {
+function Connector({ className }: { className?: string }) {
   return (
-    <div className="flex justify-center py-1.5" aria-hidden>
-      <span className="pipeline-dash block h-8 w-0.5 rounded-full sm:h-10" />
+    <div className={cn("flex w-full justify-center", className)} aria-hidden>
+      <span className="pipeline-dash block h-12 w-0.5 rounded-full" />
     </div>
   );
 }
 
-/** The source clip. A GIF loops forever on its own; falls back to a dark gradient if missing. */
-function SourceClip() {
-  const [failed, setFailed] = useState(false);
+function SourceVideoCard() {
+  const reduce = useReducedMotion() ?? false;
+  const [imageBroken, setImageBroken] = useState(false);
+
   return (
-    <div className="relative mt-3 aspect-video overflow-hidden rounded-lg bg-[linear-gradient(135deg,#111_0%,#333_60%,#111_100%)]">
-      {!failed && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={SOURCE_GIF}
-          alt="Source video preview"
-          className="absolute inset-0 h-full w-full object-cover"
-          onError={() => setFailed(true)}
-        />
-      )}
-    </div>
+    <motion.div {...phase(0.02, reduce)} className="w-full">
+      <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_16px_32px_rgba(15,23,42,0.08)] sm:p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <Upload className="h-4 w-4 text-ink-faint" aria-hidden />
+          <span className="truncate font-mono text-[11px] text-black sm:text-[12px]">source_video.mp4</span>
+        </div>
+
+        <div className="relative overflow-hidden rounded-[22px] border border-slate-900/10 bg-[#0b0f14] shadow-[inset_0_0_30px_rgba(0,0,0,0.9)]">
+          {imageBroken ? (
+            <div className="aspect-[4/5] w-full bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.24),transparent_20%),linear-gradient(135deg,#090d12_0%,#171d2a_55%,#090d12_100%)]" />
+          ) : (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={SOURCE_GIF}
+                alt="Source video frame"
+                className="aspect-[4/5] h-auto w-full object-cover"
+                loading="eager"
+                onError={() => setImageBroken(true)}
+                draggable={false}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -82,53 +98,41 @@ function Pipeline() {
   const reduce = useReducedMotion() ?? false;
 
   return (
-    <div className="relative mx-auto w-full max-w-[480px]">
+    <div className="relative mx-auto w-full max-w-[480px] overflow-x-hidden">
       <style>{`
         .pipeline-dash {
           background-image: linear-gradient(to bottom, #0866FF 50%, transparent 50%);
-          background-size: 100% 8px;
-          animation: pipeline-flow 0.8s linear infinite;
+          background-size: 100% 12px;
+          animation: pipeline-flow 0.9s linear infinite;
         }
-        @keyframes pipeline-flow { to { background-position: 0 8px; } }
-        @media (prefers-reduced-motion: reduce) { .pipeline-dash { animation: none; } }
+        @keyframes pipeline-flow {
+          to { background-position: 0 12px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .pipeline-dash { animation: none; }
+        }
       `}</style>
 
-      <div className="flex flex-col">
-        {/* 1. The source video (GIF plays in the dark frame) */}
-        <motion.div {...phase(0.02, reduce)}>
-          <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] text-ink-faint">01</span>
-              <Upload className="h-4 w-4 shrink-0 text-ink-faint" aria-hidden />
-              <span className="truncate font-mono text-xs text-black sm:text-sm">your_video.mp4</span>
-            </div>
-            <SourceClip />
-            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-black px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-white">
-              <span className="h-1.5 w-1.5 rounded-full bg-meta-400" />
-              Source
-            </span>
-          </div>
-        </motion.div>
+      <div className="flex w-full flex-col items-stretch gap-3">
+        <SourceVideoCard />
 
-        <Connector />
+        <Connector className="my-1" />
 
-        {/* 2. The engine */}
-        <motion.div {...phase(0.14, reduce)}>
-          <div className="rounded-2xl bg-black p-5 text-white shadow-[0_0_40px_rgba(8,102,255,0.25)] sm:p-6">
-            <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] text-white/60 sm:text-[11px]">
-              <span className="font-mono text-white/40">02</span>
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-400" aria-hidden />
+        <motion.div {...phase(0.14, reduce)} className="w-full">
+          <div className="rounded-[28px] bg-black p-5 text-white shadow-[0_0_40px_rgba(8,102,255,0.25)] sm:p-6">
+            <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/65 sm:text-[11px]">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-meta-400" aria-hidden />
               Render engine
             </p>
-            <ul className="mt-4 space-y-2.5">
+            <ul className="mt-5 space-y-3 sm:space-y-3.5">
               {STEPS.map((step, i) => (
                 <motion.li
                   key={step}
                   {...phase(0.22 + i * 0.07, reduce)}
-                  className="flex items-center gap-2.5 text-sm text-white/85 sm:text-[15px]"
+                  className="flex items-center gap-3 text-[12px] text-white/85 sm:text-[13px]"
                 >
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-meta-500">
-                    <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-meta-500 sm:h-6 sm:w-6">
+                    <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={3} aria-hidden />
                   </span>
                   {step}
                 </motion.li>
@@ -137,35 +141,23 @@ function Pipeline() {
           </div>
         </motion.div>
 
-        <Connector />
+        <Connector className="my-1" />
 
-        {/* 3. Finished variants fan out */}
-        <div className="space-y-2.5">
+        <div className="w-full space-y-2.5">
           {OUTPUTS.map((name, i) => (
             <motion.div
               key={name}
               {...phase(0.62 + i * 0.08, reduce)}
-              className="flex items-center justify-between gap-2 rounded-xl border border-meta-500/30 bg-white px-4 py-3 shadow-sm"
+              className="flex items-center justify-between gap-3 rounded-[20px] border border-meta-500/30 bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)] sm:px-4.5"
             >
-              <span className="flex min-w-0 items-center gap-2">
-                {i === 0 && <span className="font-mono text-[10px] text-ink-faint">03</span>}
-                <span className="truncate font-mono text-xs text-black sm:text-sm">{name}</span>
-              </span>
-              <span className="shrink-0 rounded-full bg-meta-500 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-white">
+              <span className="truncate font-mono text-[11px] text-black sm:text-[12px]">{name}</span>
+              <span className="shrink-0 rounded-full bg-meta-500 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.12em] text-white">
                 Ready
               </span>
             </motion.div>
           ))}
         </div>
       </div>
-
-      <p className="mt-6 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint sm:mt-8 md:text-[11px]">
-        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-black" />
-        1 video in
-        <span className="mx-3 text-black/20">→</span>
-        <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-meta-500" />
-        ready-to-post variants out
-      </p>
     </div>
   );
 }
@@ -173,8 +165,8 @@ function Pipeline() {
 export function WhyRadar() {
   return (
     <section id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-12 sm:py-16 lg:py-20">
-      <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16 lg:px-8">
-        <div>
+      <div className="mx-auto grid max-w-7xl items-center gap-10 overflow-x-hidden px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8 lg:px-8">
+        <div className="min-w-0">
           <SectionTag index="01">THE SCALING BOTTLENECK</SectionTag>
           <Headline
             text="Your Winner Got Flagged. | [Relaunch It in Seconds.]"
