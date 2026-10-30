@@ -106,7 +106,7 @@ function SourceVideoCard() {
           ) : (
             <video
               ref={videoRef}
-              className="aspect-[4/5] h-auto w-full object-cover"
+              className="block h-auto w-full max-w-full object-contain"
               src={SOURCE_VIDEO}
               muted
               loop
