@@ -24,12 +24,12 @@ const POINTS: { icon: LucideIcon; title: string; body: (hours: number) => string
   {
     icon: Wallet,
     title: "No card on file",
-    body: () => "We never store payment details. Plan changes are handled by our team on request.",
+    body: () => "Plans are paid per 30-day period in crypto through BTCPay. We never see or store payment details, and nothing renews on its own.",
   },
   {
     icon: ShieldCheck,
     title: "Fair usage, clearly counted",
-    body: () => "Each file and each extra variant counts as one. Your allowance resets on the 1st of every month.",
+    body: () => "One output file is one generation, priced in tokens. Unused subscription tokens roll over up to your plan's cap.",
   },
 ];
 

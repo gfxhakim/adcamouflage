@@ -185,3 +185,58 @@ export interface PresetCatalogue {
   };
   formats: { video: string[]; image: string[] };
 }
+
+// --- token billing ---------------------------------------------------------
+
+export type BillingMode = "legacy" | "tokens";
+
+/** One of the three token plans, as /api/v1/plans and the subscription payload send it. */
+export interface TokenPlanCard {
+  id: string;
+  label: string;
+  /** Per 30-day period, in the site currency. */
+  price: number;
+  tokens: number;
+  tokens_per_generation: number;
+  generations: number;
+  price_per_generation: number;
+  /** Unused subscription tokens carry over up to rollover_months × tokens; 0 means none. */
+  rollover_months: number;
+  /** Sent by the API as a convenience; derive it as rollover_months × tokens when absent. */
+  rollover_cap?: number;
+  /** Tokens per 1 unit of currency on a top-up. */
+  topup_rate: number;
+}
+
+/** One row of the top-up picker, priced for a plan. */
+export interface TopupOption {
+  amount: number;
+  tokens: number;
+  bonus: number;
+  total: number;
+  generations: number;
+}
+
+/** Allowed top-up amounts and the bonus each earns per plan (plan id → amount → tokens). */
+export interface TopupTable {
+  amounts: number[];
+  bonus: Record<string, Record<string, number>>;
+}
+
+export interface BillingRules {
+  grace_days: number;
+  period_days: number;
+}
+
+/** The public price list behind the landing page's pricing section. */
+/** The rollover cap, whether or not the API sent it. */
+export function rolloverCap(plan: Pick<TokenPlanCard, "rollover_months" | "tokens" | "rollover_cap">): number {
+  return plan.rollover_cap ?? plan.rollover_months * plan.tokens;
+}
+
+export interface PublicPricing {
+  currency: string;
+  plans: TokenPlanCard[];
+  topups: TopupTable;
+  rules?: BillingRules;
+}

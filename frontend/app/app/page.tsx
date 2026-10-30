@@ -6,8 +6,10 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  Coins,
   Crown,
   Film,
+  Lock,
   Megaphone,
   ImagePlus,
   Radar,
@@ -24,6 +26,7 @@ import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
 import OptionsPanel from "@/components/OptionsPanel";
+import BillingAlerts from "@/components/plan/BillingAlerts";
 import ProgressBar from "@/components/ProgressBar";
 import UploadZone from "@/components/UploadZone";
 import {
@@ -35,8 +38,8 @@ import {
   getHealth,
   getPresets,
 } from "@/lib/api";
-import { formatBytes } from "@/lib/format";
-import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
+import { formatBytes, formatTokens, plural } from "@/lib/format";
+import { fetchMe, fetchSubscription, signOut, type Subscription, type UserProfile } from "@/lib/auth";
 import type {
   BatchStatus,
   HealthReport,
@@ -123,6 +126,8 @@ export default function WorkspacePage() {
   const [step, setStep] = useState(0);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayer[]>([createOverlayLayer()]);
   const [user, setUser] = useState<UserProfile | null>(null);
+  /** Token balance, per-generation cost and reminders; only loaded for token accounts. */
+  const [billing, setBilling] = useState<Subscription | null>(null);
   const [options, setOptions] = useState<MutationOptions>(DEFAULT_OPTIONS);
   const [catalogue, setCatalogue] = useState<PresetCatalogue | null>(null);
   const [health, setHealth] = useState<HealthReport | null>(null);
@@ -132,6 +137,8 @@ export default function WorkspacePage() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /** Set with the message when the API refused the batch for billing reasons (402). */
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
 
@@ -143,6 +150,21 @@ export default function WorkspacePage() {
     return () => {
       mountedRef.current = false;
     };
+  }, []);
+
+  // Token accounts also need the subscription payload: the per-generation
+  // cost for the preview and the reminders for the banner.
+  const loadBilling = useCallback(async (profile: UserProfile) => {
+    if (profile.billing_mode !== "tokens") {
+      setBilling(null);
+      return;
+    }
+    try {
+      const subscription = await fetchSubscription();
+      if (mountedRef.current) setBilling(subscription);
+    } catch {
+      /* The paywall and chip still work from the profile alone. */
+    }
   }, []);
 
   useEffect(() => {
@@ -160,12 +182,13 @@ export default function WorkspacePage() {
           return;
         }
         setUser(profile);
+        void loadBilling(profile);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadBilling]);
 
   // --- health + presets ---------------------------------------------------
   useEffect(() => {
@@ -249,6 +272,7 @@ export default function WorkspacePage() {
     setUploading(true);
     setUploadProgress(0);
     setSubmitError(null);
+    setPaymentError(null);
     setPollError(null);
 
     try {
@@ -282,20 +306,29 @@ export default function WorkspacePage() {
 
       await refresh(created.batch_id);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "The upload failed.");
+      // 402: no subscription, period over or not enough tokens. The API's
+      // message says which; the plan page is where it gets fixed.
+      if (error instanceof ApiError && error.status === 402) {
+        setPaymentError(error.message);
+      } else {
+        setSubmitError(error instanceof Error ? error.message : "The upload failed.");
+      }
     } finally {
       if (mountedRef.current) {
         setUploading(false);
         setUploadProgress(0);
       }
-      // Keeps the plan usage readout in the header current.
+      // Keeps the token / plan usage readout in the header current.
       void fetchMe()
         .then((profile) => {
-          if (profile && mountedRef.current) setUser(profile);
+          if (profile && mountedRef.current) {
+            setUser(profile);
+            void loadBilling(profile);
+          }
         })
         .catch(() => undefined);
     }
-  }, [files, options, overlayLayers, refresh, uploading]);
+  }, [files, loadBilling, options, overlayLayers, refresh, uploading]);
 
   const handleCancel = useCallback(
     async (assetId: string) => {
@@ -370,6 +403,20 @@ export default function WorkspacePage() {
   const outputsReady = batch?.completed ?? 0;
   const engineBlocked = Boolean(health) && !health?.ffmpeg;
 
+  // --- token billing ------------------------------------------------------
+  const tokenMode = user?.billing_mode === "tokens";
+  // No active period: nothing can be generated until they subscribe or renew.
+  const paywalled = Boolean(user && tokenMode && !user.subscription_active);
+  const perGeneration = billing?.subscription?.tokens_per_generation ?? 0;
+  const usableTokens = billing?.balance.usable_tokens ?? user?.tokens_usable ?? 0;
+  const generations = files.length * Math.max(1, options.variants);
+  const batchCost = perGeneration * generations;
+  const shortOfTokens = tokenMode && !paywalled && perGeneration > 0 && batchCost > usableTokens;
+  // The paywall already says what the danger alerts say; the banner keeps the rest.
+  const bannerAlerts = (billing?.alerts ?? []).filter(
+    (alert) => alert.level !== "info" && !(paywalled && (alert.code === "no_subscription" || alert.code === "ended")),
+  );
+
   const plan = user
     ? {
         label: user.plan_label,
@@ -388,7 +435,7 @@ export default function WorkspacePage() {
 
       <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 sm:px-6 sm:pt-8 md:pb-28 lg:px-8">
         {/* Left rail — signed-in navigation -------------------------- */}
-        <DeckRail onDark={onDark} />
+        <DeckRail onDark={onDark} user={user} />
 
         {/* Step Flow: one step at a time in a single framed console ---- */}
         <main className="relative flex min-w-0 flex-1 flex-col gap-4">
@@ -403,6 +450,33 @@ export default function WorkspacePage() {
               </p>
             </div>
           ) : null}
+
+          {paywalled ? (
+            <NeonCard tone="danger" padding="md" radius="lg">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200">
+                    <Lock className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-black dark:text-slate-50">
+                      {billing?.subscription ? "Renew your plan to keep generating" : "Subscribe to start generating"}
+                    </p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-ink-muted dark:text-slate-400">
+                      {billing?.alerts.find((a) => a.code === "ended" || a.code === "no_subscription")?.text ??
+                        "Pick a plan on the plan page; tokens are added as soon as the payment is confirmed."}
+                    </p>
+                  </div>
+                </div>
+                <Link href="/app/plan" className="btn-primary shrink-0 !text-xs">
+                  <Crown className="h-3.5 w-3.5" aria-hidden />
+                  {billing?.subscription ? "Renew" : "See plans"}
+                </Link>
+              </div>
+            </NeonCard>
+          ) : null}
+
+          {bannerAlerts.length > 0 ? <BillingAlerts alerts={bannerAlerts} linkToPlan /> : null}
 
           {engineBlocked ? (
             <NeonCard tone="danger" padding="md" radius="lg">
@@ -480,7 +554,21 @@ export default function WorkspacePage() {
 
           {/* Status strip: plan, files, layers, engine, outputs --------- */}
           <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-            {plan ? (
+            {user && tokenMode ? (
+              <Link
+                href="/app/plan"
+                className={clsx(
+                  "chip !font-mono hover:!border-meta-500/60",
+                  (paywalled || usableTokens <= 0) && "!border-red-400/50 !text-red-700 dark:!text-red-300",
+                )}
+                title="Plan & tokens"
+              >
+                <Coins className="h-3.5 w-3.5" aria-hidden />
+                {paywalled
+                  ? "No subscription"
+                  : `${billing?.subscription?.plan_label ?? "Plan"} · ${formatTokens(usableTokens)} tokens`}
+              </Link>
+            ) : plan ? (
               <Link
                 href="/app/plan"
                 className={clsx(
@@ -606,6 +694,8 @@ export default function WorkspacePage() {
                         disabled={
                           files.length === 0 ||
                           uploading ||
+                          paywalled ||
+                          shortOfTokens ||
                           Boolean(healthError) ||
                           Boolean(overlayProblem)
                         }
@@ -628,6 +718,57 @@ export default function WorkspacePage() {
 
                       {uploading ? (
                         <ProgressBar value={uploadProgress * 100} active label="Upload progress" />
+                      ) : null}
+
+                      {tokenMode && !paywalled && perGeneration > 0 ? (
+                        <p
+                          className={clsx(
+                            "flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed",
+                            shortOfTokens
+                              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                              : "border-meta-500/30 bg-meta-50 text-meta-900 dark:bg-meta-500/10 dark:text-meta-100",
+                          )}
+                          aria-live="polite"
+                        >
+                          <Coins className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <span>
+                            {files.length === 0
+                              ? `Each generation costs ${perGeneration} tokens. You have ${formatTokens(usableTokens)}.`
+                              : `${plural(generations, "generation")} = ${formatTokens(batchCost)} tokens (you have ${formatTokens(usableTokens)}).`}
+                            {shortOfTokens ? (
+                              <>
+                                {" "}
+                                Not enough for this batch:{" "}
+                                <Link href="/app/plan" className="font-semibold underline">
+                                  top up or upgrade
+                                </Link>
+                                , or remove some files.
+                              </>
+                            ) : null}
+                          </span>
+                        </p>
+                      ) : null}
+
+                      {paywalled ? (
+                        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                          Generating is paused until you{" "}
+                          <Link href="/app/plan" className="font-semibold underline">
+                            {billing?.subscription ? "renew your plan" : "subscribe to a plan"}
+                          </Link>
+                          .
+                        </p>
+                      ) : null}
+
+                      {paymentError ? (
+                        <p
+                          role="alert"
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                        >
+                          {paymentError}{" "}
+                          <Link href="/app/plan" className="font-semibold underline">
+                            Go to Plan &amp; tokens
+                          </Link>
+                        </p>
                       ) : null}
 
                       {overlayProblem ? (

@@ -82,3 +82,14 @@ export function formatMoney(amount: number, currency = "USD"): string {
 export function formatPercent(share: number): string {
   return `${Math.round(share * 1000) / 10}%`;
 }
+
+/** "1,500" for a token count; "—" when there is nothing to show. */
+export function formatTokens(value?: number | null): string {
+  if (value === undefined || value === null || Number.isNaN(value)) return "—";
+  return value.toLocaleString();
+}
+
+/** "3 generations", "1 generation". */
+export function plural(count: number, one: string, many = `${one}s`): string {
+  return `${count.toLocaleString()} ${count === 1 ? one : many}`;
+}

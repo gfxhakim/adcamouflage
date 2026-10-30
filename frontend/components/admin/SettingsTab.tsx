@@ -3,6 +3,7 @@
 import { Loader2, Megaphone, Save, Settings2, Tags } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import TokenPlansCard from "@/components/admin/TokenPlansCard";
 import NeonCard from "@/components/NeonCard";
 import { editPlan, getSettings, updateSettings, type AppSettings, type PlanInfo } from "@/lib/admin";
 
@@ -117,6 +118,9 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
   }
 
   return (
+    <div className="space-y-6">
+    <TokenPlansCard onSaved={onPlansChanged} />
+
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <NeonCard padding="lg" radius="xl">
         <div className="mb-4 flex items-center gap-2">
@@ -145,7 +149,7 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
-              <span className="label">New users start on</span>
+              <span className="label">Legacy plan for hand-made accounts</span>
               <select className="field mt-1" value={form.default_plan} onChange={(e) => setForm({ ...form, default_plan: e.target.value })}>
                 {plans.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -153,6 +157,9 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
                   </option>
                 ))}
               </select>
+              <span className="mt-1 block text-[11px] text-ink-faint dark:text-slate-500">
+                Sign-ups start on token billing with no tokens; this only labels accounts you create here.
+              </span>
             </label>
             <label className="block">
               <span className="label">Currency</span>
@@ -190,13 +197,14 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
         </div>
       </NeonCard>
 
-      <NeonCard padding="lg" radius="xl" tone="slow">
+      <NeonCard padding="lg" radius="xl" tone="muted">
         <div className="mb-1 flex items-center gap-2">
           <Tags className="h-4 w-4 text-meta-500" aria-hidden />
-          <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">Plans &amp; prices</h2>
+          <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">Legacy plans (older accounts)</h2>
         </div>
         <p className="mb-4 text-xs text-ink-faint dark:text-slate-500">
-          Prices drive the revenue figures. Changing a limit also moves everyone on that plan&apos;s standard limit;
+          Monthly file quotas for accounts that predate token billing; they keep these until their end date. Prices
+          drive the legacy revenue figure. Changing a limit also moves everyone on that plan&apos;s standard limit;
           users you gave a custom number keep it.
         </p>
 
@@ -265,6 +273,7 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
           <Feedback error={planError} notice={planNotice} />
         </div>
       </NeonCard>
+    </div>
     </div>
   );
 }

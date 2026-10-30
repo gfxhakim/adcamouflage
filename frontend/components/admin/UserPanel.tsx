@@ -20,6 +20,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import ActivityFeed from "@/components/admin/ActivityFeed";
+import BillingPanel from "@/components/admin/BillingPanel";
 import SecretBox from "@/components/admin/SecretBox";
 import UsageMeter from "@/components/UsageMeter";
 import NeonCard from "@/components/NeonCard";
@@ -237,15 +238,26 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
             {/* Summary ---------------------------------------------------- */}
             <NeonCard padding="md" radius="lg" tone={user!.is_active ? "default" : "danger"}>
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="chip !border-meta-500/30 !bg-meta-50 dark:!bg-meta-500/10 !text-meta-700 dark:!text-meta-300">
-                  {user!.plan_label} · {formatMoney(user!.price, currency)}/mo
-                </span>
+                {user!.billing_mode === "tokens" ? (
+                  <span className="chip !border-meta-500/30 !bg-meta-50 dark:!bg-meta-500/10 !text-meta-700 dark:!text-meta-300">
+                    {user!.sub_plan ? `${user!.sub_plan} · tokens` : "Tokens · no plan yet"}
+                  </span>
+                ) : (
+                  <span className="chip !border-meta-500/30 !bg-meta-50 dark:!bg-meta-500/10 !text-meta-700 dark:!text-meta-300">
+                    {user!.plan_label} · {formatMoney(user!.price, currency)}/mo · legacy
+                  </span>
+                )}
+                {user!.billing_mode === "tokens" && user!.sub_plan && !user!.subscription_active ? (
+                  <span className="chip !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Period ended</span>
+                ) : null}
                 {user!.is_admin ? <span className="chip !border-amber-300 dark:!border-amber-500/40 !bg-amber-50 dark:!bg-amber-500/10 !text-amber-700 dark:!text-amber-300">Admin</span> : null}
                 {!user!.is_active ? <span className="chip !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Suspended</span> : null}
                 {user!.plan_expired ? <span className="chip !border-red-300 dark:!border-red-500/40 !bg-red-50 dark:!bg-red-500/10 !text-red-700 dark:!text-red-300">Plan expired</span> : null}
               </div>
               {user!.display_name ? <p className="mt-2 text-sm text-black dark:text-slate-100">{user!.display_name}</p> : null}
-              <UsageMeter className="mt-3" used={user!.used_this_month} quota={user!.monthly_quota} />
+              {user!.billing_mode === "legacy" ? (
+                <UsageMeter className="mt-3" used={user!.used_this_month} quota={user!.monthly_quota} />
+              ) : null}
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                 <div>
                   <dt className="text-ink-faint dark:text-slate-500">Joined</dt>
@@ -264,8 +276,16 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
                   <dd className="text-black tabular-nums dark:text-slate-100">{user!.files_total}</dd>
                 </div>
                 <div className="col-span-2">
-                  <dt className="text-ink-faint dark:text-slate-500">Plan ends</dt>
-                  <dd className="text-black dark:text-slate-100">{user!.plan_expires_at ? formatDate(user!.plan_expires_at) : "No end date"}</dd>
+                  <dt className="text-ink-faint dark:text-slate-500">{user!.billing_mode === "tokens" ? "Period ends" : "Plan ends"}</dt>
+                  <dd className="text-black dark:text-slate-100">
+                    {user!.billing_mode === "tokens"
+                      ? user!.sub_period_end
+                        ? formatDate(user!.sub_period_end)
+                        : "No period yet"
+                      : user!.plan_expires_at
+                        ? formatDate(user!.plan_expires_at)
+                        : "No end date"}
+                  </dd>
                 </div>
               </dl>
             </NeonCard>
@@ -277,10 +297,18 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
               <p className="rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">{notice}</p>
             ) : null}
 
-            {/* Subscription ------------------------------------------------ */}
+            {/* Token billing ----------------------------------------------- */}
+            <BillingPanel user={user!} currency={currency} onChanged={() => void load().then(() => onChanged(detail.user))} />
+
+            {/* Legacy plan ------------------------------------------------- */}
             {form ? (
-              <NeonCard padding="md" radius="lg" tone="slow">
-                <h3 className="mb-3 text-sm font-semibold text-black dark:text-slate-100">Subscription</h3>
+              <NeonCard padding="md" radius="lg" tone="muted">
+                <h3 className="mb-1 text-sm font-semibold text-black dark:text-slate-100">Legacy plan</h3>
+                <p className="mb-3 text-xs text-ink-faint dark:text-slate-500">
+                  {user!.billing_mode === "legacy"
+                    ? "This account still runs on a monthly file quota."
+                    : "Not in use while the account is on token billing; kept in case you switch it back."}
+                </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block">
                     <span className="label">Plan</span>

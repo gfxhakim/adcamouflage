@@ -19,7 +19,7 @@ export default function PlatformPage({ platform }: { platform: PlatformConfig })
       <Header user={user} onDark={onDark} />
 
       <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 md:pb-24 sm:px-6 sm:pt-8 lg:px-8">
-        <DeckRail onDark={onDark} />
+        <DeckRail onDark={onDark} user={user} />
 
         <main className="min-w-0 flex-1">
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">

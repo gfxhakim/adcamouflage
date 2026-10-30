@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   BarChart3,
   CalendarClock,
+  Coins,
   Cpu,
   DollarSign,
   Files,
@@ -26,6 +27,7 @@ import type { HealthReport } from "@/lib/types";
 const FEED_FILTERS: { id: string; label: string }[] = [
   { id: "", label: "All" },
   { id: "signup", label: "Sign-ups" },
+  { id: "payment", label: "Payments" },
   { id: "plan_request", label: "Plan requests" },
   { id: "batch", label: "Batches" },
   { id: "blocked", label: "Blocked" },
@@ -94,13 +96,27 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <StatTile
+          icon={Coins}
+          label="Token revenue, 30 d"
+          value={overview ? formatMoney(overview.token_revenue_30d, overview.currency) : "—"}
+          hint={overview ? "paid orders, BTCPay" : "loading"}
+          tone="success"
+        />
+        <StatTile
+          icon={CalendarClock}
+          label="Active subscriptions"
+          value={overview ? String(overview.active_subscriptions) : "—"}
+          hint={overview ? "token periods running" : "loading"}
+          tone="success"
+          accent="text-meta-600"
+        />
         <StatTile
           icon={DollarSign}
-          label="Monthly revenue"
+          label="Legacy revenue"
           value={overview ? formatMoney(overview.mrr, overview.currency) : "—"}
-          hint={overview ? `${overview.paying_users} paying users` : "loading"}
-          tone="success"
+          hint={overview ? `${overview.paying_users} paying users, older plans` : "loading"}
         />
         <StatTile
           icon={Users}

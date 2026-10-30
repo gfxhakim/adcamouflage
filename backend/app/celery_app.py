@@ -33,6 +33,10 @@ celery_app.conf.update(
         "purge-expired-assets": {
             "task": "app.tasks.purge_expired_assets",
             "schedule": 900.0,
-        }
+        },
+        "send-billing-reminders": {
+            "task": "app.tasks.send_billing_reminders",
+            "schedule": 86400.0,
+        },
     },
 )

@@ -42,6 +42,45 @@ def _storage_root():
     shutil.rmtree(_TMP_ROOT, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------
+# billing helpers
+#
+# New sign-ups start on token billing with no subscription, so a test that
+# uploads must first give its user a way to pay. Tests about the pipeline
+# grant a Max period (the real path); tests about the legacy monthly quota
+# mark the account legacy, which is how pre-existing accounts behave.
+# --------------------------------------------------------------------------
+
+
+def _user_by_email(session, email: str):
+    from app.db import User
+
+    return session.query(User).filter(User.email == email.strip().lower()).one()
+
+
+def grant_max_period(email: str, plan_id: str = "max") -> None:
+    """Give the account an active paid period on ``plan_id`` (Max by default)."""
+
+    from app.db import get_session_factory
+    from app.tokens import activate_period, get_token_plans
+
+    with get_session_factory()() as session:
+        user = _user_by_email(session, email)
+        activate_period(session, user, get_token_plans(session)[plan_id], note="test fixture")
+        session.commit()
+
+
+def make_legacy(email: str) -> None:
+    """Put the account on the old monthly-quota billing, as pre-existing accounts are."""
+
+    from app.db import get_session_factory
+
+    with get_session_factory()() as session:
+        user = _user_by_email(session, email)
+        user.billing_mode = "legacy"
+        session.commit()
+
+
 @pytest.fixture(scope="session")
 def sample_video() -> Path:
     """A 3s 640x360 clip with a moving pattern and a tone, plus fake metadata."""

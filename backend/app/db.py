@@ -14,6 +14,7 @@ from typing import Iterator
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -75,6 +76,22 @@ class User(Base):
     # Private notes the admin keeps about this customer.
     admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # --- token billing (see app/tokens.py) -----------------------------------
+    # 'legacy' keeps the monthly file quota above; 'tokens' is the paid
+    # 30-day subscription with a token balance. Accounts that predate token
+    # billing stay legacy until they buy a plan; new sign-ups start on tokens.
+    billing_mode: Mapped[str] = mapped_column(String(16), default="legacy", nullable=False)
+    # The plan of the current (or last) paid period; None = never subscribed.
+    sub_plan: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    sub_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The subscription is active while now < sub_period_end.
+    sub_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set when the user cancels; access runs to sub_period_end, then no rollover.
+    sub_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Snapshot of the plan's tokens_per_generation at purchase, used to price
+    # every batch for the rest of the period even if the admin reprices plans.
+    sub_tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     batches: Mapped[list["BatchRecord"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -116,6 +133,71 @@ class AppSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
     )
+
+
+class TokenLedger(Base):
+    """One signed movement of tokens. A user's balance is the sum per bucket.
+
+    ``bucket`` is 'subscription' (granted each period, subject to rollover) or
+    'topup' (bought extra, never expires, frozen while the subscription lapses).
+    ``kind`` says why: grant, rollover, expire, topup, bonus, consume, refund
+    or admin. Nothing in this table is ever updated or deleted, so the history
+    an admin sees is exactly what happened.
+    """
+
+    __tablename__ = "token_ledger"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    bucket: Mapped[str] = mapped_column(String(16), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    order_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+
+
+class Order(Base):
+    """A purchase: a subscription period or a top-up, paid through BTCPay.
+
+    ``status`` moves pending -> paid, or pending -> expired / invalid when
+    the invoice lapses; a payment BTCPay confirms late still moves it to
+    paid. A paid order is applied to the ledger exactly once: settlement
+    claims the row with a conditional UPDATE in the same transaction as the
+    ledger rows, so a webhook delivered twice, or a webhook and a poll that
+    overlap, credit it once.
+    """
+
+    __tablename__ = "orders"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)  # subscription | topup
+    plan_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    amount_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    # What the buyer was quoted at checkout and is credited at settlement,
+    # whatever the admin changes in between: tokens (bonus included), the
+    # bonus part of that, and the per-generation price of the period.
+    tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    bonus_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    btcpay_invoice_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    checkout_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # When the order poll last asked BTCPay about this invoice (throttles the poll).
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ActivityEvent(Base):
@@ -200,6 +282,17 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "usage_reset_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "last_seen_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "admin_notes", "TEXT"),
+    # Token billing. Rows that exist before the upgrade are legacy accounts and
+    # keep their monthly quota; the register route puts new sign-ups on tokens.
+    ("users", "billing_mode", "VARCHAR(16) NOT NULL DEFAULT 'legacy'"),
+    ("users", "sub_plan", "VARCHAR(32)"),
+    ("users", "sub_period_start", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "sub_period_end", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "sub_cancelled_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "sub_tokens_per_generation", "INTEGER"),
+    ("orders", "bonus_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("orders", "tokens_per_generation", "INTEGER"),
+    ("orders", "checked_at", "TIMESTAMP WITH TIME ZONE"),
 ]
 
 

@@ -14,6 +14,8 @@ from app.config import settings
 from app.db import get_engine, init_db
 from app.main import app
 
+from .conftest import make_legacy
+
 RUN_ID = uuid.uuid4().hex[:12]
 
 
@@ -41,12 +43,15 @@ def admin(monkeypatch):
 
 
 def _signed_in(email: str) -> TestClient:
+    """A signed-in legacy (monthly quota) account; these tests are about that billing."""
+
     client = TestClient(app)
     credentials = {"email": email, "password": "correct-horse-battery"}
     response = client.post("/api/v1/auth/register", json=credentials)
     if response.status_code == 409:
         response = client.post("/api/v1/auth/login", json=credentials)
     assert response.status_code in (200, 201), response.text
+    make_legacy(email)
     return client
 
 
@@ -132,8 +137,10 @@ def test_expired_plan_blocks_new_batches(admin, sample_image):
     admin.patch(f"/api/v1/admin/users/{target_id}", json={"plan_expires_at": yesterday})
 
     assert target.get("/api/v1/auth/me").json()["plan_expired"] is True
+    # A legacy plan that has run out falls through to token billing, which
+    # this account has never bought into.
     response = _upload(target, sample_image, 1)
-    assert response.status_code == 402 and "expired" in response.json()["detail"]
+    assert response.status_code == 402 and "Subscribe" in response.json()["detail"]
 
 
 def test_suspending_a_user_ends_their_session(admin):
@@ -365,33 +372,26 @@ def test_analytics_report_revenue_and_upgrade_candidates(admin, sample_image):
 
 
 def test_public_plans_follow_admin_edits(admin):
+    """The landing page lists the token plans, as the admin has priced them."""
+
     visitor = TestClient(app)
     listed = visitor.get("/api/v1/plans")
     assert listed.status_code == 200, listed.text
     body = listed.json()
     assert body["currency"]
-    assert [p["id"] for p in body["plans"]] == ["free", "starter", "pro", "unlimited"]
+    assert [p["id"] for p in body["plans"]] == ["starter", "pro", "max"]
     assert "users" not in body["plans"][0]
+    assert body["topups"]["amounts"] == [20, 40, 80, 160, 240]
 
     original = next(p for p in body["plans"] if p["id"] == "starter")
+    edit = {k: original[k] for k in ("label", "price", "tokens", "tokens_per_generation", "rollover_months", "topup_rate")}
     try:
-        edited = admin.put(
-            "/api/v1/admin/plans/starter",
-            json={"label": "Starter", "monthly_quota": 150, "price": 25, "apply_to_users": False},
-        )
+        edited = admin.put("/api/v1/admin/billing/config", json={"plans": {"starter": {**edit, "price": 42}}})
         assert edited.status_code == 200, edited.text
         starter = next(p for p in visitor.get("/api/v1/plans").json()["plans"] if p["id"] == "starter")
-        assert starter["monthly_quota"] == 150 and starter["price"] == 25
+        assert starter["price"] == 42 and starter["tokens"] == original["tokens"]
     finally:
-        admin.put(
-            "/api/v1/admin/plans/starter",
-            json={
-                "label": original["label"],
-                "monthly_quota": original["monthly_quota"],
-                "price": original["price"],
-                "apply_to_users": False,
-            },
-        )
+        _clear_setting("token_plans")
 
 
 def _login(email: str, password: str) -> TestClient:

@@ -1,4 +1,4 @@
-import { Ban, Crown, KeyRound, LogIn, Rocket, ShieldCheck, UserPlus, type LucideIcon } from "lucide-react";
+import { Ban, BellRing, Coins, Crown, KeyRound, LogIn, Receipt, Rocket, ShieldCheck, UserPlus, type LucideIcon } from "lucide-react";
 
 import type { ActivityEvent } from "@/lib/admin";
 import { timeAgo } from "@/lib/format";
@@ -11,6 +11,11 @@ const KINDS: Record<string, { icon: LucideIcon; tone: string }> = {
   blocked: { icon: Ban, tone: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10" },
   admin: { icon: ShieldCheck, tone: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10" },
   password: { icon: KeyRound, tone: "text-ink-muted dark:text-slate-300 bg-black/[0.04] dark:bg-white/[0.04]" },
+  // Token billing: a checkout started, a payment settled, a cancel/resume, a reminder sent.
+  checkout: { icon: Receipt, tone: "text-meta-600 dark:text-meta-300 bg-meta-50 dark:bg-meta-500/10" },
+  payment: { icon: Coins, tone: "text-emerald-600 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10" },
+  subscription: { icon: Crown, tone: "text-meta-700 dark:text-meta-300 bg-meta-100 dark:bg-meta-500/20" },
+  reminder: { icon: BellRing, tone: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10" },
 };
 
 interface ActivityFeedProps {
