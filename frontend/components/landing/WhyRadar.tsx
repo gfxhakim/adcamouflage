@@ -4,7 +4,9 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { Check, Gauge, Layers, Sparkles, Upload } from "lucide-react";
 
-import { Headline, Reveal, SectionTag } from "@/components/landing/primitives";
+import { CmsIcon, CmsSection, CmsSlot, MediaView, T } from "@/components/cms/Cms";
+import { useCms } from "@/components/cms/ContentProvider";
+import { CmsHeadline, Reveal, SectionTag } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 const WHY = [
@@ -63,6 +65,8 @@ function Connector({ className }: { className?: string }) {
 
 function SourceVideoCard() {
   const reduce = useReducedMotion() ?? false;
+  const cms = useCms();
+  const media = cms.media("why.pipeline.source.media", { src: SOURCE_VIDEO, kind: "video", alt: "" }, "Source video");
   const [mediaFailed, setMediaFailed] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -90,35 +94,26 @@ function SourceVideoCard() {
 
     observer.observe(video);
     return () => observer.disconnect();
-  }, []);
+  }, [media.src, media.kind]);
 
   return (
     <motion.div {...phase(0.02, reduce)} className="w-full">
       <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_16px_32px_rgba(15,23,42,0.08)] sm:p-5">
         <div className="mb-3 flex items-center gap-2">
-          <Upload className="h-4 w-4 text-ink-faint" aria-hidden />
-          <span className="truncate font-mono text-[11px] text-black sm:text-[12px]">source_video.mp4</span>
+          <CmsIcon k="why.pipeline.source.icon" fallback={Upload} className="h-4 w-4 text-ink-faint" aria-hidden />
+          <T k="why.pipeline.source.name" className="truncate font-mono text-[11px] text-black sm:text-[12px]">source_video.mp4</T>
         </div>
 
         <div className="relative overflow-hidden rounded-[22px] border border-slate-900/10 bg-[#0b0f14] shadow-[inset_0_0_30px_rgba(0,0,0,0.9)]">
-          {mediaFailed ? (
+          {mediaFailed || cms.hidden("why.pipeline.source.media") ? (
             <div className="aspect-[4/5] w-full bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.24),transparent_20%),linear-gradient(135deg,#090d12_0%,#171d2a_55%,#090d12_100%)]" />
           ) : (
-            <video
-              ref={videoRef}
-              className="block h-auto w-full max-w-full object-contain"
-              src={SOURCE_VIDEO}
-              muted
-              loop
-              playsInline
-              preload="auto"
+            <MediaView
+              value={{ fit: "contain", autoplay: false, ...media }}
+              videoRef={videoRef}
+              className="h-auto w-full max-w-full object-contain"
+              mark={cms.mark("why.pipeline.source.media")}
               onError={() => setMediaFailed(true)}
-              onEnded={() => {
-                const video = videoRef.current;
-                if (!video) return;
-                video.currentTime = 0;
-                void video.play().catch(() => undefined);
-              }}
             />
           )}
         </div>
@@ -129,12 +124,15 @@ function SourceVideoCard() {
 
 function Pipeline() {
   const reduce = useReducedMotion() ?? false;
+  const cms = useCms();
+  const steps = cms.list("why.pipeline.steps", STEPS, "Render steps", STEPS);
+  const outputs = cms.list("why.pipeline.outputs", OUTPUTS, "Output files", OUTPUTS);
 
   return (
     <div className="relative mx-auto w-full max-w-[480px] overflow-x-hidden">
       <style>{`
         .pipeline-dash {
-          background-image: linear-gradient(to bottom, #0866FF 50%, transparent 50%);
+          background-image: linear-gradient(to bottom, rgb(var(--meta-500-rgb, 8 102 255)) 50%, transparent 50%);
           background-size: 100% 12px;
           animation: pipeline-flow 0.9s linear infinite;
         }
@@ -147,7 +145,9 @@ function Pipeline() {
       `}</style>
 
       <div className="flex w-full flex-col items-stretch gap-3">
-        <SourceVideoCard />
+        <CmsSlot k="why.pipeline.source" label="Source card">
+          <SourceVideoCard />
+        </CmsSlot>
 
         <Connector className="my-1" />
 
@@ -155,19 +155,19 @@ function Pipeline() {
           <div className="rounded-[28px] bg-black p-5 text-white shadow-[0_0_40px_rgba(8,102,255,0.25)] sm:p-6">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/65 sm:text-[11px]">
               <span className="h-2 w-2 animate-pulse rounded-full bg-meta-400" aria-hidden />
-              Render engine
+              <T k="why.pipeline.engine">Render engine</T>
             </p>
             <ul className="mt-5 space-y-3 sm:space-y-3.5">
-              {STEPS.map((step, i) => (
+              {steps.map(({ item: step, key, id }, i) => (
                 <motion.li
-                  key={step}
+                  key={id}
                   {...phase(0.22 + i * 0.07, reduce)}
                   className="flex items-center gap-3 text-[12px] text-white/85 sm:text-[13px]"
                 >
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-meta-500 sm:h-6 sm:w-6">
                     <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" strokeWidth={3} aria-hidden />
                   </span>
-                  {step}
+                  <T k={`${key}.label`}>{step}</T>
                 </motion.li>
               ))}
             </ul>
@@ -177,16 +177,16 @@ function Pipeline() {
         <Connector className="my-1" />
 
         <div className="w-full space-y-2.5">
-          {OUTPUTS.map((name, i) => (
+          {outputs.map(({ item: name, key, id }, i) => (
             <motion.div
-              key={name}
+              key={id}
               {...phase(0.62 + i * 0.08, reduce)}
               className="flex items-center justify-between gap-3 rounded-[20px] border border-meta-500/30 bg-white px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)] sm:px-4.5"
             >
-              <span className="truncate font-mono text-[11px] text-black sm:text-[12px]">{name}</span>
-              <span className="shrink-0 rounded-full bg-meta-500 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.12em] text-white">
+              <T k={`${key}.name`} className="truncate font-mono text-[11px] text-black sm:text-[12px]">{name}</T>
+              <T k="why.pipeline.ready" className="shrink-0 rounded-full bg-meta-500 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.12em] text-white">
                 Ready
-              </span>
+              </T>
             </motion.div>
           ))}
         </div>
@@ -196,31 +196,34 @@ function Pipeline() {
 }
 
 export function WhyRadar() {
+  const cms = useCms();
+  const why = cms.list("why.items", WHY, "Points", WHY.map((w) => w.title));
   return (
-    <section id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-12 sm:py-16 lg:py-20">
+    <CmsSection k="why" label="How it works" id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-12 sm:py-16 lg:py-20">
       <div className="mx-auto grid max-w-7xl items-center gap-10 overflow-x-hidden px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8 lg:px-8">
         <div className="min-w-0">
-          <SectionTag index="01">THE SCALING BOTTLENECK</SectionTag>
-          <Headline
+          <SectionTag k="why.tag" index="01">THE SCALING BOTTLENECK</SectionTag>
+          <CmsHeadline
+            k="why.headline"
             text="Your Winner Got Flagged. | [Relaunch It in Seconds.]"
             className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
           />
-          <p className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted">
+          <T k="why.lede" long as="p" className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted">
             Platforms don&apos;t ban your idea. They ban your file. AdCamouflage rewrites the
             fingerprint so the bots see a brand-new asset and your audience sees the same creative
             that was already printing.
-          </p>
+          </T>
           <ul className="mt-10 divide-y divide-black/10 border-y border-black/10">
-            {WHY.map(({ icon: Icon, title, body }, i) => (
-              <Reveal key={title} delay={i * 0.08}>
+            {why.map(({ item: { icon: Icon, title, body }, key, id }, i) => (
+              <Reveal key={id} delay={i * 0.08}>
                 <li className="group flex gap-4 py-5">
                   <span className="pt-1 font-mono text-[11px] text-ink-faint">0{i + 1}</span>
                   <div className="min-w-0">
                     <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-black">
-                      <Icon className="h-4 w-4 text-meta-500" aria-hidden />
-                      {title}
+                      <CmsIcon k={`${key}.icon`} fallback={Icon} className="h-4 w-4 shrink-0 text-meta-500" aria-hidden />
+                      <T k={`${key}.title`}>{title}</T>
                     </h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{body}</p>
+                    <T k={`${key}.body`} long as="p" className="mt-1.5 text-sm leading-relaxed text-ink-muted">{body}</T>
                   </div>
                 </li>
               </Reveal>
@@ -232,7 +235,7 @@ export function WhyRadar() {
           <Pipeline />
         </Reveal>
       </div>
-    </section>
+    </CmsSection>
   );
 }
 

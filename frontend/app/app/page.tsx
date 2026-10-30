@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Header from "@/components/Header";
+import { CmsSection } from "@/components/cms/Cms";
 import DeckRail from "@/components/DeckRail";
 import ThemeDock from "@/components/ThemeDock";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
@@ -495,7 +496,10 @@ export default function WorkspacePage() {
           ) : null}
 
           {/* Stepper ------------------------------------------------- */}
-          <nav
+          <CmsSection
+            k="workspace.stepper"
+            label="Step bar"
+            as="nav"
             aria-label="Workspace steps"
             className="rounded-2xl border border-black/[0.08] bg-white/80 px-3 py-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/60 sm:px-4"
           >
@@ -550,10 +554,10 @@ export default function WorkspacePage() {
                 );
               })}
             </ol>
-          </nav>
+          </CmsSection>
 
           {/* Status strip: plan, files, layers, engine, outputs --------- */}
-          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+          <CmsSection k="workspace.status" label="Status chips" as="div" className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
             {user && tokenMode ? (
               <Link
                 href="/app/plan"
@@ -616,7 +620,7 @@ export default function WorkspacePage() {
               Ready {outputsReady}
               {batch ? `/${batch.total}` : ""}
             </button>
-          </div>
+          </CmsSection>
 
           {/* The one step card ------------------------------------------ */}
           <NeonCard glow padding="lg" radius="xl" id={STEPS[step].id}>
@@ -659,7 +663,7 @@ export default function WorkspacePage() {
 
                 {step === 2 ? (
                   <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-                    <div className="min-w-0">
+                    <CmsSection k="workspace.overlayTool" label="Brand overlay tool" as="div" className="min-w-0">
                       <p className="label mb-3 flex items-center gap-1.5">
                         <ImagePlus className="h-3.5 w-3.5" aria-hidden />
                         Brand overlay · optional
@@ -669,8 +673,8 @@ export default function WorkspacePage() {
                         onChange={setOverlayLayers}
                         disabled={uploading}
                       />
-                    </div>
-                    <div className="min-w-0 border-t border-black/[0.07] pt-6 dark:border-white/10 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                    </CmsSection>
+                    <CmsSection k="workspace.posterTool" label="Poster frame tool" as="div" className="min-w-0 border-t border-black/[0.07] pt-6 dark:border-white/10 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
                       <p className="label mb-3 flex items-center gap-1.5">
                         <Film className="h-3.5 w-3.5" aria-hidden />
                         Poster frame · optional
@@ -681,7 +685,7 @@ export default function WorkspacePage() {
                         video={firstVideo}
                         disabled={uploading}
                       />
-                    </div>
+                    </CmsSection>
                   </div>
                 ) : null}
 
@@ -840,7 +844,7 @@ export default function WorkspacePage() {
             </div>
           </NeonCard>
 
-          <footer className="mt-6 flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
+          <CmsSection k="workspace.footer" label="Footer" as="footer" className="mt-6 flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
             <p>
               AdCamouflage {health?.version ? `v${health.version}` : ""} · FastAPI · Celery · FFmpeg
               · OpenCV
@@ -849,7 +853,7 @@ export default function WorkspacePage() {
               Use only on creatives you own or are licensed to distribute, and within the terms of
               the platforms you publish to.
             </p>
-          </footer>
+          </CmsSection>
         </main>
       </div>
       <ThemeDock />

@@ -3,8 +3,13 @@
 import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
 import { useEffect, useState } from "react";
 
+import { useCms } from "@/components/cms/ContentProvider";
+
 /** A blue ring that trails the mouse on desktop and grows over links and buttons. */
 export function CursorRing() {
+  const cms = useCms();
+  cms.register({ key: "cursorRing", type: "toggle", label: "Cursor ring that follows the mouse" });
+  const off = cms.hidden("cursorRing");
   const reduce = useReducedMotion();
   const [enabled, setEnabled] = useState(false);
   const [hover, setHover] = useState(false);
@@ -14,7 +19,7 @@ export function CursorRing() {
   const sy = useSpring(y, { stiffness: 500, damping: 40, mass: 0.6 });
 
   useEffect(() => {
-    if (reduce || !window.matchMedia("(pointer: fine)").matches) return;
+    if (off || reduce || !window.matchMedia("(pointer: fine)").matches) return;
     setEnabled(true);
     const onMove = (e: PointerEvent) => {
       x.set(e.clientX);
@@ -24,9 +29,9 @@ export function CursorRing() {
     };
     window.addEventListener("pointermove", onMove);
     return () => window.removeEventListener("pointermove", onMove);
-  }, [reduce, x, y]);
+  }, [off, reduce, x, y]);
 
-  if (!enabled) return null;
+  if (!enabled || off) return null;
   return (
     <motion.div
       className="pointer-events-none fixed left-0 top-0 z-[60] rounded-full border-2 border-meta-500 mix-blend-normal"

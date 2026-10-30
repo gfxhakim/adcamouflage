@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { Moon, Sun, type LucideIcon } from "lucide-react";
 
+import { useCms } from "@/components/cms/ContentProvider";
 import { setDeckTheme, useDeckTheme, type DeckTheme } from "@/lib/deckTheme";
 
 const OPTIONS: { theme: DeckTheme; label: string; icon: LucideIcon }[] = [
@@ -16,6 +17,9 @@ const OPTIONS: { theme: DeckTheme; label: string; icon: LucideIcon }[] = [
  */
 export function ThemeDock() {
   const theme = useDeckTheme();
+  const cms = useCms();
+  cms.register({ key: "themeToggle", type: "toggle", label: "Black / white background switch" });
+  if (cms.hidden("themeToggle")) return null;
 
   return (
     <div

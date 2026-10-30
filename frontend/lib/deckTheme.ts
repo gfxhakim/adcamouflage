@@ -12,7 +12,8 @@ import { DECK_THEME_ATTR as ATTR, DECK_THEME_STORAGE_KEY as STORAGE_KEY } from "
  */
 export type DeckTheme = "dark" | "light";
 
-const EVENT = "bc-deck-theme";
+export const DECK_THEME_EVENT = "bc-deck-theme";
+const EVENT = DECK_THEME_EVENT;
 
 function read(): DeckTheme {
   return document.documentElement.getAttribute(ATTR) === "light" ? "light" : "dark";
@@ -23,8 +24,8 @@ export function setDeckTheme(theme: DeckTheme) {
   if (theme === "light") root.setAttribute(ATTR, "light");
   else root.removeAttribute(ATTR);
   try {
-    if (theme === "light") localStorage.setItem(STORAGE_KEY, "light");
-    else localStorage.removeItem(STORAGE_KEY);
+    // Remember "dark" too, so an admin-set light default does not override it.
+    localStorage.setItem(STORAGE_KEY, theme);
   } catch {
     // Private mode / blocked storage: the switch still works for this visit.
   }

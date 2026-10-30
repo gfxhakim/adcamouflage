@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 
+import { CmsOrder, CmsSection } from "@/components/cms/Cms";
+import { ContentProvider } from "@/components/cms/ContentProvider";
+
 import BeforeAfter from "@/components/landing/BeforeAfter";
 import ClosingCta from "@/components/landing/ClosingCta";
 import CursorRing from "@/components/landing/CursorRing";
@@ -12,13 +15,25 @@ import WhyRadar from "@/components/landing/WhyRadar";
 import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
+import { loadPublishedContent } from "@/lib/siteContent";
 import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 
-export const metadata: Metadata = {
+const METADATA: Metadata = {
   title: "AdCamouflage — One winning ad, endless fresh copies",
   description:
     "Turn one winning creative into fresh, unique files. Each copy looks the same to people but carries a new fingerprint, new timing and zero metadata, so reused ads stop being matched as duplicates.",
 };
+
+// Admin > Landing can override the tab title, description and icon.
+export async function generateMetadata(): Promise<Metadata> {
+  const meta = (await loadPublishedContent("landing")).meta ?? {};
+  return {
+    ...METADATA,
+    ...(meta.title ? { title: meta.title } : {}),
+    ...(meta.description ? { description: meta.description } : {}),
+    ...(meta.favicon ? { icons: { icon: meta.favicon } } : {}),
+  };
+}
 
 // Shown only if the API cannot be reached or sends a price list this page
 // cannot show; normally the admin panel's price list is used.
@@ -102,34 +117,46 @@ export default async function LandingPage() {
   // Everyone sees the visitor version of this page, and every start button
   // opens the login page, which also offers to create an account.
   const startHref = "/login";
-  const pricing = await loadPricing();
+  const [pricing, content] = await Promise.all([loadPricing(), loadPublishedContent("landing")]);
 
   return (
-    <>
+    <ContentProvider namespace="landing" initial={content}>
       <SiteHeader floating nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />
       <CursorRing />
 
       <main className="overflow-x-clip">
-        <Hero startHref={startHref} />
-        <WhyRadar />
-        <FeaturePanels />
-        <BeforeAfter />
-        <ReportBand />
-        <section id="pricing" className="scroll-mt-24 bg-black py-20 text-white sm:py-28">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <PricingSection
-              plans={pricing.plans}
-              topups={pricing.topups}
-              currency={pricing.currency}
-              ctaHref={startHref}
-            />
-          </div>
-        </section>
-        <Faq />
-        <ClosingCta startHref={startHref} />
+        <CmsOrder
+          k="page.sections"
+          label="Sections (order and visibility)"
+          items={[
+            { id: "hero", label: "Hero", node: <Hero startHref={startHref} /> },
+            { id: "how-it-works", label: "How it works", node: <WhyRadar /> },
+            { id: "features", label: "Features", node: <FeaturePanels /> },
+            { id: "proof", label: "Before / after", node: <BeforeAfter /> },
+            { id: "report", label: "Report band", node: <ReportBand /> },
+            {
+              id: "pricing",
+              label: "Pricing",
+              node: (
+                <CmsSection k="pricing" label="Pricing" id="pricing" className="scroll-mt-24 bg-black py-20 text-white sm:py-28">
+                  <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <PricingSection
+                      plans={pricing.plans}
+                      topups={pricing.topups}
+                      currency={pricing.currency}
+                      ctaHref={startHref}
+                    />
+                  </div>
+                </CmsSection>
+              ),
+            },
+            { id: "faq", label: "FAQ", node: <Faq /> },
+            { id: "get-started", label: "Closing call to action", node: <ClosingCta startHref={startHref} /> },
+          ]}
+        />
       </main>
       <SiteFooter />
-    </>
+    </ContentProvider>
   );
 }

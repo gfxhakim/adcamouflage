@@ -3,7 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
-import { EASE, Headline, Reveal, SectionTag } from "@/components/landing/primitives";
+import { CmsSection, T } from "@/components/cms/Cms";
+import { useCms } from "@/components/cms/ContentProvider";
+import { EASE, Reveal, SectionTag } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 type Stat = { label: string; value: string; note: string };
@@ -51,30 +53,35 @@ function Spark({ seed }: { seed: number }) {
   });
   return (
     <svg viewBox="0 0 120 40" className="mt-4 h-10 w-full" preserveAspectRatio="none" aria-hidden>
-      <polyline points={`0,40 ${pts.join(" ")} 120,40`} fill="rgba(8,102,255,0.2)" stroke="none" />
-      <polyline points={pts.join(" ")} fill="none" stroke="#3385ff" strokeWidth="1.5" />
+      <polyline points={`0,40 ${pts.join(" ")} 120,40`} fill="rgb(var(--meta-500-rgb, 8 102 255) / 0.2)" stroke="none" />
+      <polyline points={pts.join(" ")} fill="none" stroke="rgb(var(--meta-400-rgb, 51 133 255))" strokeWidth="1.5" />
     </svg>
   );
 }
 
 export function ReportBand() {
-  const [tab, setTab] = useState<keyof typeof TABS>("Overview");
+  const cms = useCms();
+  const tabs = cms.list("report.tabs", Object.keys(TABS), "Report tabs", Object.keys(TABS));
+  const [tab, setTab] = useState<string>("Overview");
+  const current = tabs.find((t) => t.id === tab) ?? tabs[0];
+  const stats = current ? cms.list(`${current.key}.stats`, TABS[current.item] ?? [], `${current.item} stats`) : [];
+  const ticker = cms.list("report.ticker", TICKER, "Ticker lines", TICKER);
 
   return (
-    <section id="report" className="scroll-mt-24 overflow-hidden bg-meta-500 py-20 text-white sm:py-28">
+    <CmsSection k="report" label="Report band" id="report" className="scroll-mt-24 overflow-hidden bg-meta-500 py-20 text-white sm:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <SectionTag index="04" className="!bg-black/20 !text-white">
+            <SectionTag k="report.tag" index="04" className="!bg-black/20 !text-white">
               INFRASTRUCTURE CAPABILITIES
             </SectionTag>
-            <h2 className="mt-5 text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
+            <T k="report.headline" as="h2" className="mt-5 text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
               Engineered for Media Buyers Who Live on Scale and Contingency.
-            </h2>
+            </T>
           </div>
-          <p className="text-sm leading-relaxed text-white/80">
+          <T k="report.lede" long as="p" className="text-sm leading-relaxed text-white/80">
             Every tool required to keep your creatives live, isolated, and undetectable across ad networks.
-          </p>
+          </T>
         </div>
 
         <Reveal className="mt-10">
@@ -82,24 +89,24 @@ export function ReportBand() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-white/70">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-400" />
-                Render report · example batch
-                <span className="rounded bg-meta-500 px-1.5 py-0.5 text-[9px] text-white">Sample</span>
+                <T k="report.card.title">Render report · example batch</T>
+                <T k="report.card.badge" className="rounded bg-meta-500 px-1.5 py-0.5 text-[9px] text-white">Sample</T>
               </span>
-              <div className="flex rounded-full bg-white/[0.08] p-1">
-                {Object.keys(TABS).map((name) => (
+              <div className="flex max-w-full overflow-x-auto rounded-full bg-white/[0.08] p-1 [scrollbar-width:none]">
+                {tabs.map(({ id, item: name, key }) => (
                   <button
-                    key={name}
+                    key={id}
                     type="button"
-                    onClick={() => setTab(name)}
+                    onClick={() => setTab(id)}
                     className={cn(
                       "relative rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors",
-                      tab === name ? "text-white" : "text-white/50 hover:text-white/80",
+                      current?.id === id ? "text-white" : "text-white/50 hover:text-white/80",
                     )}
                   >
-                    {tab === name ? (
+                    {current?.id === id ? (
                       <motion.span layoutId="report-tab" className="absolute inset-0 rounded-full bg-meta-500" transition={{ duration: 0.4, ease: EASE }} />
                     ) : null}
-                    <span className="relative">{name}</span>
+                    <T k={`${key}.label`} className="relative whitespace-nowrap">{name}</T>
                   </button>
                 ))}
               </div>
@@ -107,9 +114,9 @@ export function ReportBand() {
 
             <div className="mt-6 grid gap-px overflow-hidden rounded-2xl bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
               <AnimatePresence mode="popLayout" initial={false}>
-                {TABS[tab].map((stat, i) => (
+                {stats.map(({ item: stat, key, id }, i) => (
                   <motion.div
-                    key={`${tab}-${stat.label}`}
+                    key={`${current?.id}-${id}`}
                     className="bg-black p-5"
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -117,14 +124,14 @@ export function ReportBand() {
                     transition={{ duration: 0.45, delay: i * 0.05, ease: EASE }}
                   >
                     <p className="font-mono text-[10px] uppercase tracking-wider text-white/50">
-                      0{i + 1} · {stat.label}
+                      0{i + 1} · <T k={`${key}.label`}>{stat.label}</T>
                     </p>
-                    <p className="mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{stat.value}</p>
+                    <T k={`${key}.value`} as="p" className="mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">{stat.value}</T>
                     <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-meta-500/20 px-2 py-0.5 font-mono text-[10px] text-meta-300">
                       <span className="h-1 w-1 rounded-full bg-meta-400" />
-                      {stat.note}
+                      <T k={`${key}.note`}>{stat.note}</T>
                     </span>
-                    <Spark seed={i + tab.length} />
+                    <Spark seed={i + (current?.item.length ?? 0)} />
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -136,16 +143,16 @@ export function ReportBand() {
       <div className="mt-8 flex overflow-hidden border-y border-white/20 py-3" aria-hidden>
         {[0, 1].map((copy) => (
           <div key={copy} className="flex shrink-0 animate-marquee gap-10 pr-10">
-            {TICKER.map((t) => (
-              <span key={t} className="flex items-center gap-2 whitespace-nowrap font-mono text-[11px] uppercase tracking-wider text-white/85">
+            {ticker.map(({ item: t, key, id }) => (
+              <span key={id} className="flex items-center gap-2 whitespace-nowrap font-mono text-[11px] uppercase tracking-wider text-white/85">
                 <span className="h-1.5 w-1.5 rounded-full bg-white" />
-                {t}
+                <T k={`${key}.text`}>{t}</T>
               </span>
             ))}
           </div>
         ))}
       </div>
-    </section>
+    </CmsSection>
   );
 }
 

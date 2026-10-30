@@ -18,23 +18,25 @@ module.exports = {
     extend: {
       colors: {
         // Single accent family for the whole product: Meta blue.
+        // Colours read CSS variables so Admin > Landing / Workspace can
+        // recolour a page; the fallbacks are the built-in values.
         meta: {
-          50: "#E7F0FF",
-          100: "#CCE0FF",
-          200: "#99C2FF",
-          300: "#66A3FF",
-          400: "#3385FF",
-          500: "#0866FF", // Meta / Facebook primary blue
-          600: "#0052CC",
-          700: "#003D99",
-          800: "#002966",
-          900: "#001433",
+          50: "rgb(var(--meta-50-rgb, 231 240 255) / <alpha-value>)",
+          100: "rgb(var(--meta-100-rgb, 204 224 255) / <alpha-value>)",
+          200: "rgb(var(--meta-200-rgb, 153 194 255) / <alpha-value>)",
+          300: "rgb(var(--meta-300-rgb, 102 163 255) / <alpha-value>)",
+          400: "rgb(var(--meta-400-rgb, 51 133 255) / <alpha-value>)",
+          500: "rgb(var(--meta-500-rgb, 8 102 255) / <alpha-value>)", // Meta / Facebook primary blue
+          600: "rgb(var(--meta-600-rgb, 0 82 204) / <alpha-value>)",
+          700: "rgb(var(--meta-700-rgb, 0 61 153) / <alpha-value>)",
+          800: "rgb(var(--meta-800-rgb, 0 41 102) / <alpha-value>)",
+          900: "rgb(var(--meta-900-rgb, 0 20 51) / <alpha-value>)",
         },
         ink: {
-          DEFAULT: "#000000",
-          muted: "#4B4F56",
-          subtle: "#65676B",
-          faint: "#8A8D91",
+          DEFAULT: "rgb(var(--ink-rgb, 0 0 0) / <alpha-value>)",
+          muted: "rgb(var(--ink-muted-rgb, 75 79 86) / <alpha-value>)",
+          subtle: "rgb(var(--ink-subtle-rgb, 101 103 107) / <alpha-value>)",
+          faint: "rgb(var(--ink-faint-rgb, 138 141 145) / <alpha-value>)",
         },
       },
       fontFamily: {

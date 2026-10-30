@@ -2,10 +2,11 @@
 
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "framer-motion";
 import { Check, Minus, Plus } from "lucide-react";
-import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 
-import { EASE, Headline, PillArrow, SectionTag } from "@/components/landing/primitives";
+import { CmsLink, CmsSection, CmsSlot, T } from "@/components/cms/Cms";
+import { useCms, type CmsApi } from "@/components/cms/ContentProvider";
+import { CmsHeadline, EASE, PillArrow, SectionTag } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 type Look = "gray" | "black" | "white" | "blue";
@@ -150,40 +151,71 @@ const PANELS: Panel[] = [
   },
 ];
 
-function PanelBody({ panel, index }: { panel: Panel; index: number }) {
+/** A panel with the admin's text and look applied. */
+interface ShownPanel extends Panel {
+  id: string;
+  key: string;
+}
+
+function resolvePanels(cms: CmsApi): ShownPanel[] {
+  return cms.list("features.panels", PANELS, "Panels", PANELS.map((p) => p.name)).map(({ item, key, id }) => {
+    const look = cms.text(`${key}.look`, item.look, "text", "Look: gray, black, white or blue") as Look;
+    return {
+      ...item,
+      id,
+      key,
+      name: cms.text(`${key}.name`, item.name, "text", "Tab name"),
+      look: LOOKS[look] ? look : item.look,
+    };
+  });
+}
+
+function PanelBody({ panel, index }: { panel: ShownPanel; index: number }) {
+  const cms = useCms();
   const look = LOOKS[panel.look];
+  const points = cms.list(`${panel.key}.points`, panel.points, "Points", panel.points);
   return (
     <div className="grid h-full gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center">
-      <div className="flex items-center justify-center">{panel.visual}</div>
+      <div className="flex items-center justify-center">
+        <CmsSlot k={`${panel.key}.visual`} label="Visual" className="max-h-[320px] rounded-2xl">
+          {panel.visual}
+        </CmsSlot>
+      </div>
       <div className={cn("flex flex-col", look.text)}>
         <span className="font-mono text-[11px] opacity-60">0{index + 1} · {panel.name}</span>
-        <h3 className="mt-2 text-3xl font-semibold tracking-[-0.03em] lg:text-4xl">{panel.title}</h3>
-        <p className={cn("mt-3 text-sm leading-relaxed", look.muted)}>{panel.body}</p>
-        <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.14em] opacity-60">What changes</p>
+        <T k={`${panel.key}.title`} as="h3" className="mt-2 text-2xl font-semibold tracking-[-0.03em] sm:text-3xl lg:text-4xl">{panel.title}</T>
+        <T k={`${panel.key}.body`} long as="p" className={cn("mt-3 text-sm leading-relaxed", look.muted)}>{panel.body}</T>
+        <T k="features.pointsTitle" as="p" className="mt-5 font-mono text-[10px] uppercase tracking-[0.14em] opacity-60">What changes</T>
         <ul className="mt-2 space-y-1.5">
-          {panel.points.map((p) => (
-            <li key={p} className="flex items-center gap-2 text-sm">
+          {points.map(({ item: p, key, id }) => (
+            <li key={id} className="flex items-center gap-2 text-sm">
               <span className={cn("grid h-4 w-4 place-items-center rounded-full", panel.look === "blue" ? "bg-white text-meta-600" : "bg-meta-500 text-white")}>
                 <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
               </span>
-              {p}
+              <T k={`${key}.text`}>{p}</T>
             </li>
           ))}
         </ul>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <span className={cn("rounded-full px-2.5 py-1 font-mono text-[11px]", panel.look === "blue" ? "bg-black text-white" : "bg-meta-500 text-white")}>
+          <T k={`${panel.key}.stat`} className={cn("rounded-full px-2.5 py-1 font-mono text-[11px]", panel.look === "blue" ? "bg-black text-white" : "bg-meta-500 text-white")}>
             {panel.stat}
-          </span>
-          <Link
+          </T>
+          <CmsLink
+            k="features.cta"
             href="/login"
+            label="Camouflage my ad"
             className={cn(
               "group inline-flex items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5 text-sm font-semibold",
               panel.look === "black" || panel.look === "blue" ? "bg-white text-black" : "bg-black text-white",
             )}
           >
-            Camouflage my ad
-            <PillArrow dark={!(panel.look === "black" || panel.look === "blue")} />
-          </Link>
+            {(label) => (
+              <>
+                {label}
+                <PillArrow dark={!(panel.look === "black" || panel.look === "blue")} />
+              </>
+            )}
+          </CmsLink>
         </div>
       </div>
     </div>
@@ -191,6 +223,8 @@ function PanelBody({ panel, index }: { panel: Panel; index: number }) {
 }
 
 export function FeaturePanels() {
+  const cms = useCms();
+  const PANELS = resolvePanels(cms);
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const { scrollYProgress } = useScroll({ target: track, offset: ["start start", "end end"] });
@@ -208,16 +242,16 @@ export function FeaturePanels() {
   };
 
   return (
-    <section id="features" className="scroll-mt-24 bg-[#F4F5F7] pt-4">
+    <CmsSection k="features" label="Features" id="features" className="scroll-mt-24 bg-[#F4F5F7] pt-4">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <SectionTag index="02">THE SANITIZATION PIPELINE</SectionTag>
-            <Headline text="Flagged In. | [Unstoppable Out.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+            <SectionTag k="features.tag" index="02">THE SANITIZATION PIPELINE</SectionTag>
+            <CmsHeadline k="features.headline" text="Flagged In. | [Unstoppable Out.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
           </div>
-          <p className="text-sm leading-relaxed text-ink-muted">
+          <T k="features.lede" long as="p" className="text-sm leading-relaxed text-ink-muted">
             Three layers. One click. Your winning ad comes back with a fingerprint the platforms have never seen.
-          </p>
+          </T>
         </div>
       </div>
 
@@ -225,7 +259,7 @@ export function FeaturePanels() {
       <div className="mx-auto mt-10 max-w-7xl space-y-4 px-4 pb-20 sm:px-6 lg:hidden">
         {PANELS.map((panel, i) => (
           <motion.div
-            key={panel.name}
+            key={panel.id}
             className={cn("rounded-3xl p-5 sm:p-7", LOOKS[panel.look].panel)}
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -246,7 +280,7 @@ export function FeaturePanels() {
               const look = LOOKS[panel.look];
               return (
                 <motion.div
-                  key={panel.name}
+                  key={panel.id}
                   layout
                   transition={{ duration: 0.6, ease: EASE }}
                   className={cn(
@@ -267,7 +301,7 @@ export function FeaturePanels() {
                   {open ? (
                     <AnimatePresence mode="wait">
                       <motion.div
-                        key={panel.name}
+                        key={panel.id}
                         className="h-full pl-10"
                         initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -299,22 +333,22 @@ export function FeaturePanels() {
             <div className="flex items-center gap-4">
               <div className="flex gap-1">
                 {PANELS.map((p, i) => (
-                  <span key={p.name} className={cn("h-0.5 w-8 rounded-full transition-colors", i <= active ? "bg-black" : "bg-black/15")} />
+                  <span key={p.id} className={cn("h-0.5 w-8 rounded-full transition-colors", i <= active ? "bg-black" : "bg-black/15")} />
                 ))}
               </div>
               <span className="rounded-full bg-meta-500 px-2 py-0.5 font-mono text-[11px] text-white">
                 0{active + 1} / 0{PANELS.length}
               </span>
-              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-subtle">{PANELS[active].name}</span>
+              <span className="font-mono text-[11px] uppercase tracking-wider text-ink-subtle">{PANELS[Math.min(active, PANELS.length - 1)]?.name}</span>
             </div>
             <span className="font-mono text-[11px] uppercase tracking-wider text-ink-faint">
               <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-meta-500" />
-              Scroll to switch layers
+              <T k="features.scrollHint">Scroll to switch layers</T>
             </span>
           </div>
         </div>
       </div>
-    </section>
+    </CmsSection>
   );
 }
 

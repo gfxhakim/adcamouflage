@@ -1,8 +1,11 @@
+"use client";
+
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import BrandLogo from "@/components/BrandLogo";
+import { CmsIcon, CmsLink } from "@/components/cms/Cms";
 import { cn } from "@/lib/utils";
 
 interface SiteHeaderProps {
@@ -56,27 +59,33 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
         {minimal ? null : (
           // Both open the login page, which also offers to create an account.
           <nav className="pointer-events-auto flex shrink-0 items-center gap-2 justify-self-end">
-            <Link
+            <CmsLink
+              k="header.login"
               href="/login"
+              label="Log in"
               className={
                 floating
-                  ? "glass-shine rounded-full px-4 py-2 text-sm font-semibold"
+                  ? "glass-shine rounded-full px-3.5 py-2 text-sm font-semibold sm:px-4"
                   : "btn-ghost !px-3 !py-2 sm:!px-4"
               }
-            >
-              Log in
-            </Link>
-            <Link
+            />
+            <CmsLink
+              k="header.start"
               href="/login"
+              label="Get started"
               className={
                 floating
-                  ? "glass-shine-primary inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+                  ? "glass-shine-primary inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold sm:px-4"
                   : "btn-primary !px-3 !py-2 sm:!px-4"
               }
             >
-              Get started
-              <ArrowRight className="hidden h-3.5 w-3.5 sm:block" aria-hidden />
-            </Link>
+              {(label) => (
+                <>
+                  {label}
+                  <CmsIcon k="header.start.icon" fallback={ArrowRight} className="hidden h-3.5 w-3.5 sm:block" aria-hidden />
+                </>
+              )}
+            </CmsLink>
           </nav>
         )}
       </div>

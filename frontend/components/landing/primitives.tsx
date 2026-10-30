@@ -1,7 +1,9 @@
 "use client";
 
 import { animate, motion, useInView, useReducedMotion } from "framer-motion";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+
+import { useCms } from "@/components/cms/ContentProvider";
 
 import { cn } from "@/lib/utils";
 
@@ -9,18 +11,29 @@ export const EASE = [0.16, 1, 0.3, 1] as const;
 
 /** The "(01) Why" pill that opens every landing section. */
 export function SectionTag({
+  k,
   index,
   children,
   dark = false,
   className,
 }: {
+  /** Content key: makes the number and the label editable in Admin > Landing. */
+  k?: string;
   index: string;
   children: ReactNode;
   dark?: boolean;
   className?: string;
 }) {
+  const cms = useCms();
+  if (k) {
+    index = cms.text(`${k}.index`, index, "text", "Tag number");
+    if (typeof children === "string") children = cms.text(k, children, "text", "Tag");
+    if (cms.hidden(k)) return null;
+  }
   return (
     <span
+      {...(k ? cms.mark(k) : {})}
+      style={k ? cms.textStyle(k) : undefined}
       className={cn(
         "inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[11px] tracking-wide",
         dark ? "bg-white/[0.08] text-white/70" : "bg-black/[0.05] text-ink-muted",
@@ -42,11 +55,15 @@ export function Headline({
   as: Tag = "h2",
   dark = false,
   className,
+  style,
+  ...rest
 }: {
   text: string;
   as?: "h1" | "h2";
   dark?: boolean;
   className?: string;
+  style?: CSSProperties;
+  "data-cms"?: string;
 }) {
   const ref = useRef<HTMLHeadingElement>(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
@@ -58,7 +75,9 @@ export function Headline({
 
   return (
     <Tag
+      {...rest}
       ref={ref}
+      style={style}
       aria-label={text.replace(/[[\]|]/g, (c) => (c === "|" ? " " : ""))}
       className={cn(
         "font-sans font-semibold leading-[0.98] tracking-[-0.045em]",
@@ -190,4 +209,12 @@ export function PillArrow({ dark = false }: { dark?: boolean }) {
       </svg>
     </span>
   );
+}
+
+/** A Headline whose text, style and visibility come from Admin > Landing. */
+export function CmsHeadline({ k, text, ...props }: { k: string; text: string; as?: "h1" | "h2"; dark?: boolean; className?: string }) {
+  const cms = useCms();
+  const value = cms.text(k, text, "headline", "Headline");
+  if (cms.hidden(k)) return null;
+  return <Headline {...props} text={value} style={cms.textStyle(k)} {...cms.mark(k)} />;
 }

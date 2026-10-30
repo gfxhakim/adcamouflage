@@ -16,6 +16,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { useCms } from "@/components/cms/ContentProvider";
+import { ICONS } from "@/components/cms/icons";
 import { signOut, type UserProfile } from "@/lib/auth";
 import { formatTokens } from "@/lib/format";
 
@@ -64,6 +66,15 @@ function compactTokens(value: number): string {
 
 export function DeckRail({ onDark = true, user }: DeckRailProps) {
   const pathname = usePathname() ?? "";
+  // Admin > Workspace can rename, re-icon, reorder or hide each item.
+  const cms = useCms();
+  const brandMark = cms.media("brand.mark", { src: BRAND_MARK, kind: "image", alt: "" }, "Logo shield").src || BRAND_MARK;
+  const items = cms.list("rail.items", ITEMS, "Navigation items", ITEMS.map((i) => i.label)).map(({ item, key }) => {
+    const icon = cms.iconName(`${key}.icon`, "");
+    return { ...item, icon: (icon && ICONS[icon]) || item.icon };
+  });
+  const showSignOut = !cms.hidden("rail.signOut");
+  cms.register({ key: "rail.signOut", type: "toggle", label: "Sign out button" });
   const [signingOut, setSigningOut] = useState(false);
 
   // The token chip: only for token accounts; red once there is nothing to spend.
@@ -116,7 +127,7 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
           className="group relative mb-1 grid h-11 w-11 place-items-center rounded-xl transition hover:bg-meta-500/15"
         >
           <img
-            src={BRAND_MARK}
+            src={brandMark}
             alt="BluCloacking"
             width={28}
             height={28}
@@ -135,7 +146,7 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
 
         <span className={clsx("mb-1 h-px", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />
 
-        {ITEMS.map(({ href, label, icon: Icon }) => {
+        {items.map(({ href, label, icon: Icon }) => {
           const current = isActive(pathname, href);
           return (
             <Link
@@ -181,6 +192,7 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
 
         <span className={clsx("my-1 h-px", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />
 
+        {showSignOut ? (
         <button
           type="button"
           onClick={handleSignOut}
@@ -203,6 +215,7 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
             {signingOut ? "Signing out…" : "Sign out"}
           </span>
         </button>
+        ) : null}
       </nav>
 
       {/* Phone / tablet — floating pill ---------------------------------- */}
@@ -216,10 +229,10 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
         <Link
           href="/app"
           title="BluCloacking"
-          className="flex h-11 min-w-[2.75rem] items-center justify-center rounded-xl px-2 transition hover:bg-meta-500/15"
+          className="flex h-11 min-w-[2.4rem] items-center justify-center rounded-xl px-1 transition hover:bg-meta-500/15"
         >
           <img
-            src={BRAND_MARK}
+            src={brandMark}
             alt="BluCloacking"
             width={24}
             height={24}
@@ -227,7 +240,7 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
           />
         </Link>
         <span className={clsx("mx-0.5 h-7 w-px self-center", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />
-        {ITEMS.map(({ href, label, icon: Icon }) => {
+        {items.map(({ href, label, icon: Icon }) => {
           const current = isActive(pathname, href);
           return (
             <Link
@@ -235,30 +248,32 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
               href={href}
               aria-current={current ? "page" : undefined}
               className={clsx(
-                "flex h-11 min-w-[2.75rem] flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-2 transition",
+                "flex h-11 min-w-[2.4rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-1 transition",
                 idle,
                 current && active,
               )}
             >
               <Icon className="h-[1.1rem] w-[1.1rem]" aria-hidden />
-              <span className={clsx("text-[9px] font-medium leading-none", href === "/app/plan" && tokensLow && "text-red-600 dark:text-red-300")}>
+              <span className={clsx("text-[8.5px] font-medium leading-none whitespace-nowrap", href === "/app/plan" && tokensLow && "text-red-600 dark:text-red-300")}>
                 {href === "/app/plan" && tokens !== null ? `${compactTokens(tokens)} tok` : label}
               </span>
             </Link>
           );
         })}
+        {showSignOut ? (
         <button
           type="button"
           onClick={handleSignOut}
           disabled={signingOut}
           className={clsx(
-            "flex h-11 min-w-[2.75rem] flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-2 transition disabled:opacity-60",
+            "flex h-11 min-w-[2.4rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-1 transition disabled:opacity-60",
             signOutIdle,
           )}
         >
           <LogOut className="h-[1.1rem] w-[1.1rem]" aria-hidden />
-          <span className="text-[9px] font-medium leading-none">Sign out</span>
+          <span className="text-[8.5px] font-medium leading-none whitespace-nowrap">Sign out</span>
         </button>
+        ) : null}
       </nav>
     </>
   );

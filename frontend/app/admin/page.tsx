@@ -1,11 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, BarChart3, LayoutDashboard, Loader2, LogOut, RefreshCw, Settings2, Users } from "lucide-react";
+import { AppWindow, ArrowLeft, BarChart3, LayoutDashboard, Loader2, LogOut, PanelsTopLeft, RefreshCw, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
+import ContentEditor from "@/components/admin/ContentEditor";
 import OverviewTab from "@/components/admin/OverviewTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 import UserPanel from "@/components/admin/UserPanel";
@@ -22,7 +23,18 @@ const TABS = [
   { id: "users", label: "Users", icon: Users },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings2 },
+  { id: "landing", label: "Landing page", icon: PanelsTopLeft },
+  { id: "workspace", label: "Workspace", icon: AppWindow },
 ] as const;
+
+const WORKSPACE_PAGES = [
+  { path: "/app", label: "Workspace · step flow" },
+  { path: "/app/meta", label: "Meta studio" },
+  { path: "/app/tiktok", label: "TikTok studio" },
+  { path: "/app/youtube", label: "YouTube studio" },
+  { path: "/app/history", label: "History" },
+  { path: "/app/plan", label: "My plan" },
+];
 
 type TabId = (typeof TABS)[number]["id"];
 
@@ -136,11 +148,12 @@ export default function AdminPage() {
 
   const currency = overview?.currency ?? "USD";
   const activeTab = TABS.find((t) => t.id === tab);
+  const editing = tab === "landing" || tab === "workspace";
 
   return (
     <div className="deck deck-fixed min-h-screen">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className={clsx("mx-auto flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8", editing ? "max-w-[1800px]" : "max-w-7xl")}>
           <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">
             <BrandLogo caption="Admin · Command deck" captionClassName="hidden sm:block" onDark />
           </Link>
@@ -161,7 +174,7 @@ export default function AdminPage() {
         </div>
 
         {/* Phones keep the section controls as a scrollable tab row. */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:hidden">
+        <div className={clsx("mx-auto px-4 sm:px-6 lg:hidden", editing ? "max-w-[1800px]" : "max-w-7xl")}>
           <div className="-mb-px flex gap-1 overflow-x-auto" role="tablist" aria-label="Admin sections">
             {TABS.map((item) => (
               <button
@@ -185,7 +198,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">
+      <div className={clsx("mx-auto flex gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8", editing ? "max-w-[1800px]" : "max-w-7xl")}>
         {/* Left rail — section switcher (desktop) ---------------------- */}
         <nav className="deck-rail" role="tablist" aria-label="Admin sections">
           {TABS.map((item) => (
@@ -234,6 +247,10 @@ export default function AdminPage() {
             />
           ) : tab === "analytics" ? (
             <AnalyticsTab refreshKey={refreshKey} onSelectUser={setSelected} />
+          ) : tab === "landing" ? (
+            <ContentEditor key="landing" namespace="landing" pages={[{ path: "/", label: "Landing page" }]} />
+          ) : tab === "workspace" ? (
+            <ContentEditor key="workspace" namespace="workspace" pages={WORKSPACE_PAGES} />
           ) : (
             <SettingsTab plans={plans} onPlansChanged={refreshAll} />
           )}
