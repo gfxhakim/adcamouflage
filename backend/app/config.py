@@ -121,12 +121,15 @@ class Settings(BaseSettings):
     volet_sci_secret: SecretStr | None = None
     volet_sci_url: str = "https://account.volet.com/sci/"
     # Addresses (or ranges such as 203.0.113.0/24) a Volet status notification
-    # may come from, comma separated; the default is the three senders Volet's
-    # SCI document lists. The hash on a notification does not cover its status
-    # field, so a buyer who receives a genuine one could send it again as
-    # COMPLETED; checking the sender closes that. Empty turns the check off.
+    # may come from, comma separated. The default is the three senders Volet's
+    # SCI document lists plus the "notification server" address Volet's
+    # dashboard shows on a Hosted Checkout's Payment methods tab (seen
+    # 2026-10-30), which the document does not mention. The hash on a
+    # notification does not cover its status field, so a buyer who receives a
+    # genuine one could send it again as COMPLETED; checking the sender closes
+    # that. Empty turns the check off.
     volet_notify_ips: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["50.7.115.5", "51.255.40.139", "13.53.55.89"]
+        default_factory=lambda: ["50.7.115.5", "51.255.40.139", "13.53.55.89", "13.61.247.159"]
     )
 
     # --- email (Resend) ---------------------------------------------------

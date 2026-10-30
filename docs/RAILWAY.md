@@ -270,7 +270,7 @@ ADCAM_VOLET_ACCOUNT_EMAIL=<the e-mail of your Volet.com account>
 ADCAM_VOLET_SCI_NAME=<the Hosted Checkout (SCI) name, exactly as created in Volet>
 ADCAM_VOLET_SCI_SECRET=<the Hosted Checkout password set when creating it>
 ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # required for Volet; 40 characters or fewer
-ADCAM_VOLET_NOTIFY_IPS=50.7.115.5,51.255.40.139,13.53.55.89   # optional; this is the built-in default
+ADCAM_VOLET_NOTIFY_IPS=50.7.115.5,51.255.40.139,13.53.55.89,13.61.247.159   # optional; built-in default (SCI doc + the dashboard's notification server)
 ```
 
 `ADCAM_PUBLIC_URL` is the base of the success, fail and status addresses
@@ -282,8 +282,10 @@ URL at 40. In Volet, the Hosted Checkout's Status URL is
 "Use a digital signature" must be on. The app acts on a notification only
 when its hash checks out and it was sent from one of Volet's sender
 addresses (`ADCAM_VOLET_NOTIFY_IPS`; the default is the list in Volet's SCI
-document, and an empty value turns the check off - see VOLET.md section 6
-before changing it). The status notification is the only thing that credits
+document plus the "notification server" address Volet's dashboard shows on
+the Hosted Checkout's Payment methods tab - compare that tab with the
+default before the first payment - and an empty value turns the check off;
+see VOLET.md sections 4 and 6 before changing it). The status notification is the only thing that credits
 a Volet order (there is no polling fallback), so an order whose notification
 never arrives stays pending until you settle it by hand from the admin panel.
 

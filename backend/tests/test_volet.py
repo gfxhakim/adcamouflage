@@ -605,8 +605,9 @@ def test_sender_allowed_unit(monkeypatch):
     # An empty list turns the check off; the default list is the one in the settings.
     assert volet.sender_allowed("203.0.113.9", []) is True
     assert volet.sender_allowed("203.0.113.9", ["", "  "]) is True
-    assert settings.volet_notify_ips == ["50.7.115.5", "51.255.40.139", "13.53.55.89"]
+    assert settings.volet_notify_ips == ["50.7.115.5", "51.255.40.139", "13.53.55.89", "13.61.247.159"]
     assert volet.sender_allowed("51.255.40.139") is True and volet.sender_allowed("203.0.113.9") is False
+    assert volet.sender_allowed("13.61.247.159") is True  # the dashboard's "notification server"
     monkeypatch.setattr(settings, "volet_notify_ips", [])
     assert volet.sender_allowed("203.0.113.9") is True
     # The variable is comma separated; empty turns it off.

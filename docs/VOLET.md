@@ -292,12 +292,16 @@ the case where Volet publishes a new one.
 
 One more optional variable, `ADCAM_VOLET_NOTIFY_IPS`, says which addresses
 a status notification may come from. The app only acts on a notification
-sent from one of the addresses Volet's SCI document lists as its senders,
-`50.7.115.5`, `51.255.40.139` and `13.53.55.89`; that list is built in, so
-normally there is nothing to set. Set the variable only if Volet announces
-a new address (comma-separated addresses or ranges such as
-`203.0.113.0/24`), or to an empty value to turn the check off and rely on
-the hash alone (section 6 says when that is needed and what it costs).
+sent from one of Volet's addresses. Built in are the three the SCI document
+lists, `50.7.115.5`, `51.255.40.139` and `13.53.55.89`, plus `13.61.247.159`,
+which Volet's dashboard shows as the "IP address of the notification
+server" on the Hosted Checkout's **Payment methods** tab (as of 30 October
+2026) and which the document does not mention. **Check that tab**: if the
+address shown there is not one of these four, set the variable to all five
+(comma-separated addresses or ranges such as `203.0.113.0/24`) before the
+first payment, or Volet's notifications are refused and nothing is
+credited. An empty value turns the check off and relies on the hash alone
+(section 6 says when that is needed and what it costs).
 
 ---
 
@@ -411,9 +415,11 @@ never arrived. Check, in Volet, that the Status URL is exactly
 `https://blucloack.online/api/v1/billing/volet/status` with method **POST**,
 that the gateway is approved, and that the web domain is reachable from the
 public internet. If you put a firewall or allow-list in front of the domain,
-the SCI document lists the addresses Volet sends notifications from:
-`50.7.115.5`, `51.255.40.139` and `13.53.55.89` (the same ones the app
-accepts, section 4). Whether Volet retries a failed notification, and
+Volet sends notifications from the addresses in the SCI document,
+`50.7.115.5`, `51.255.40.139` and `13.53.55.89`, and from the "notification
+server" address shown on the Hosted Checkout's Payment methods tab,
+`13.61.247.159` when last checked (the same ones the app accepts, section
+4). Whether Volet retries a failed notification, and
 whether its dashboard shows a delivery log: **check in your Volet account**.
 
 **The order stays `pending` and the log shows the notification with status
