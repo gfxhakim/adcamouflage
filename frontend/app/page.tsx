@@ -12,7 +12,7 @@ import WhyRadar from "@/components/landing/WhyRadar";
 import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
-import type { PublicPricing } from "@/lib/types";
+import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "AdCamouflage — One winning ad, endless fresh copies",
@@ -20,7 +20,8 @@ export const metadata: Metadata = {
     "Turn one winning creative into fresh, unique files. Each copy looks the same to people but carries a new fingerprint, new timing and zero metadata, so reused ads stop being matched as duplicates.",
 };
 
-// Shown only if the API cannot be reached; normally the admin panel's price list is used.
+// Shown only if the API cannot be reached or sends a price list this page
+// cannot show; normally the admin panel's price list is used.
 const FALLBACK_PRICING: PublicPricing = {
   currency: "USD",
   plans: [
@@ -38,6 +39,40 @@ const FALLBACK_PRICING: PublicPricing = {
   },
 };
 
+// The numbers each pricing card prints. An API still on the old monthly-file
+// price list (for example while it redeploys after the web service) sends
+// plans without them, and printing those took the whole page down.
+const PLAN_NUMBERS = [
+  "price",
+  "tokens",
+  "tokens_per_generation",
+  "generations",
+  "price_per_generation",
+  "rollover_months",
+  "topup_rate",
+] as const;
+
+function isTokenPlan(plan: unknown): plan is TokenPlanCard {
+  if (!plan || typeof plan !== "object") return false;
+  const fields = plan as Record<string, unknown>;
+  return (
+    typeof fields.id === "string" &&
+    typeof fields.label === "string" &&
+    PLAN_NUMBERS.every((key) => typeof fields[key] === "number" && Number.isFinite(fields[key]))
+  );
+}
+
+function isTopupTable(table: unknown): table is TopupTable {
+  if (!table || typeof table !== "object") return false;
+  const { amounts, bonus } = table as Record<string, unknown>;
+  return (
+    Array.isArray(amounts) &&
+    amounts.every((amount) => typeof amount === "number" && Number.isFinite(amount)) &&
+    !!bonus &&
+    typeof bonus === "object"
+  );
+}
+
 async function loadPricing(): Promise<PublicPricing> {
   // Server-side, so talk to the API service directly rather than through the /api rewrite.
   const origin = (process.env.API_ORIGIN || "http://127.0.0.1:8000").replace(/\/+$/, "");
@@ -48,11 +83,11 @@ async function loadPricing(): Promise<PublicPricing> {
     });
     if (response.ok) {
       const data = (await response.json()) as Partial<PublicPricing>;
-      if (data.plans?.length) {
+      if (data.plans?.length && data.plans.every(isTokenPlan)) {
         return {
           currency: data.currency || "USD",
           plans: data.plans,
-          topups: data.topups ?? FALLBACK_PRICING.topups,
+          topups: isTopupTable(data.topups) ? data.topups : FALLBACK_PRICING.topups,
           rules: data.rules,
         };
       }
