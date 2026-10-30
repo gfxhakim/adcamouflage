@@ -2,21 +2,24 @@
 
 import Header from "@/components/Header";
 import DeckRail from "@/components/DeckRail";
+import ThemeDock from "@/components/ThemeDock";
 import PlatformStudio from "@/components/platform/PlatformStudio";
 import { useRequireUser } from "@/lib/useRequireUser";
 import type { PlatformConfig } from "@/lib/platforms";
+import { useDeckTheme } from "@/lib/deckTheme";
 
 /** The workspace shell for one per-platform format studio. */
 export default function PlatformPage({ platform }: { platform: PlatformConfig }) {
+  const onDark = useDeckTheme() === "dark";
   const user = useRequireUser();
   const Icon = platform.icon;
 
   return (
     <div className="deck min-h-screen">
-      <Header user={user} onDark />
+      <Header user={user} onDark={onDark} />
 
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        <DeckRail />
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 md:pb-24 sm:px-6 sm:pt-8 lg:px-8">
+        <DeckRail onDark={onDark} />
 
         <main className="min-w-0 flex-1">
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
@@ -36,6 +39,7 @@ export default function PlatformPage({ platform }: { platform: PlatformConfig })
           <PlatformStudio platform={platform} />
         </main>
       </div>
+      <ThemeDock />
     </div>
   );
 }

@@ -2,8 +2,13 @@
 module.exports = {
   // Dark "Command Deck" theme is scoped to the workspace and admin shells:
   // a `.deck` wrapper turns on every `dark:` variant beneath it, so the
-  // landing, auth and plan pages keep their light look untouched.
-  darkMode: ["selector", ".deck"],
+  // landing, auth and plan pages keep their light look untouched. The
+  // workspace's white-background switch sets <html data-deck-theme="light">,
+  // which turns the deck off; `.deck-fixed` (admin) stays dark regardless.
+  darkMode: [
+    "variant",
+    "&:where(html:not([data-deck-theme=light]) .deck, html:not([data-deck-theme=light]) .deck *, .deck-fixed, .deck-fixed *)",
+  ],
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",

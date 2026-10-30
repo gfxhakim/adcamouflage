@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
 import IntroScreen from "@/components/IntroScreen";
+import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
 import { INTRO_GATE_SCRIPT } from "@/lib/intro";
 import "./globals.css";
 
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: INTRO_GATE_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: DECK_THEME_SCRIPT }} />
       </head>
       <body className="min-h-screen">
         <IntroScreen />

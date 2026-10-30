@@ -1,7 +1,11 @@
 "use client";
 
+import clsx from "clsx";
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
   Film,
   Megaphone,
   ImagePlus,
@@ -14,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Header from "@/components/Header";
 import DeckRail from "@/components/DeckRail";
+import ThemeDock from "@/components/ThemeDock";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
 import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
@@ -41,6 +46,7 @@ import type {
   PosterSettings,
   PresetCatalogue,
 } from "@/lib/types";
+import { useDeckTheme } from "@/lib/deckTheme";
 
 /** A queued file is treated as a video by its extension (matches the API's own classifier). */
 function isVideoFile(file: File): boolean {
@@ -86,12 +92,21 @@ const DEFAULT_OPTIONS: MutationOptions = {
   upscale_to: null,
 };
 
+/** The workspace runs as four steps, one card at a time. */
+const STEPS = [
+  { label: "Load" },
+  { label: "Settings" },
+  { label: "Overlay" },
+  { label: "Render" },
+] as const;
+
 const POLL_INTERVAL_MS = 1200;
 const HEALTH_INTERVAL_MS = 15000;
 
-
 export default function WorkspacePage() {
+  const onDark = useDeckTheme() === "dark";
   const [files, setFiles] = useState<File[]>([]);
+  const [step, setStep] = useState(0);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayer[]>([createOverlayLayer()]);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [options, setOptions] = useState<MutationOptions>(DEFAULT_OPTIONS);
@@ -302,10 +317,7 @@ export default function WorkspacePage() {
   const maxFiles = limits?.max_batch_files ?? 25;
   const maxSizeMb = limits?.max_upload_mb ?? 2048;
 
-  const queuedBytes = useMemo(
-    () => files.reduce((sum, file) => sum + file.size, 0),
-    [files],
-  );
+  const queuedBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
 
   const activeLayers = useMemo(
     () =>
@@ -346,82 +358,155 @@ export default function WorkspacePage() {
 
   return (
     <div className="deck min-h-screen">
-      <Header health={health} healthError={healthError} user={user} onDark />
+      <Header health={health} healthError={healthError} user={user} onDark={onDark} />
 
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-          {/* Left rail — signed-in navigation -------------------------- */}
-          <DeckRail />
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 md:pb-24 sm:px-6 sm:pt-8 lg:px-8">
+        {/* Left rail — signed-in navigation -------------------------- */}
+        <DeckRail onDark={onDark} />
 
-          {/* Main console --------------------------------------------- */}
-          <main className="relative min-w-0 flex-1">
-            {/* Intro ------------------------------------------------- */}
-            <section className="mb-6 flex flex-col gap-1 sm:mb-8">
-              <p className="label">Workspace</p>
-              <h1 className="font-display text-4xl font-normal leading-tight text-black dark:text-slate-50 sm:text-5xl">
-                {user ? `Welcome back${user.display_name ? `, ${user.display_name}` : ""}` : "Your workspace"}
-              </h1>
-              <p className="max-w-2xl text-sm text-ink-muted dark:text-slate-400">
-                Load assets, choose how hard to camouflage them, optionally add an overlay, then run.
-                Batch up to {maxFiles} files; outputs are deleted after{" "}
-                {limits?.retention_hours ?? 24} hours.
+        {/* Main console --------------------------------------------- */}
+        <main className="relative min-w-0 flex-1">
+          {/* Intro ------------------------------------------------- */}
+          <section className="mb-6 flex flex-col gap-1 sm:mb-8">
+            <p className="label">Workspace</p>
+            <h1 className="font-display text-4xl font-normal leading-tight text-black dark:text-slate-50 sm:text-5xl">
+              {user
+                ? `Welcome back${user.display_name ? `, ${user.display_name}` : ""}`
+                : "Your workspace"}
+            </h1>
+            <p className="max-w-2xl text-sm text-ink-muted dark:text-slate-400">
+              Load assets, choose how hard to camouflage them, optionally add an overlay, then run.
+              Batch up to {maxFiles} files; outputs are deleted after{" "}
+              {limits?.retention_hours ?? 24} hours.
+            </p>
+          </section>
+
+          {user?.announcement ? (
+            <div className="mb-6 flex items-start gap-3 rounded-xl border border-meta-500/30 bg-meta-50 px-4 py-3 dark:bg-meta-500/10">
+              <Megaphone
+                className="mt-0.5 h-4 w-4 shrink-0 text-meta-600 dark:text-meta-300"
+                aria-hidden
+              />
+              <p className="whitespace-pre-line text-sm leading-relaxed text-meta-900 dark:text-meta-100">
+                {user.announcement}
               </p>
-            </section>
+            </div>
+          ) : null}
 
-            {user?.announcement ? (
-              <div className="mb-6 flex items-start gap-3 rounded-xl border border-meta-500/30 bg-meta-50 px-4 py-3 dark:bg-meta-500/10">
-                <Megaphone className="mt-0.5 h-4 w-4 shrink-0 text-meta-600 dark:text-meta-300" aria-hidden />
-                <p className="whitespace-pre-line text-sm leading-relaxed text-meta-900 dark:text-meta-100">{user.announcement}</p>
-              </div>
-            ) : null}
+          {user ? <PlanSummary user={user} /> : null}
 
-            {user ? <PlanSummary user={user} /> : null}
+          {/* Readout strip ----------------------------------------- */}
+          <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <div className="readout">
+              <p className="readout-k">Queued</p>
+              <p className="readout-v tabular-nums">{files.length}</p>
+              <p className="readout-h">
+                {files.length ? formatBytes(queuedBytes) : `up to ${maxFiles} per batch`}
+              </p>
+            </div>
+            <div className="readout">
+              <p className="readout-k">Active layers</p>
+              <p className="readout-v tabular-nums">{activeLayers}/9</p>
+              <p className="readout-h">
+                intensity {options.intensity} · {options.preset}
+              </p>
+            </div>
+            <div className="readout" data-tone={healthError ? "danger" : undefined}>
+              <p className="readout-k">Engine</p>
+              <p className="readout-v">{health ? health.worker_mode : "—"}</p>
+              <p className="readout-h">
+                {health
+                  ? `${health.active_jobs} active · ${health.queue_depth} queued`
+                  : healthError
+                    ? "unreachable"
+                    : "connecting"}
+              </p>
+            </div>
+            <div className="readout" data-tone={outputsReady > 0 ? "success" : "muted"}>
+              <p className="readout-k">Outputs ready</p>
+              <p className="readout-v tabular-nums">{outputsReady}</p>
+              <p className="readout-h">{batch ? `${batch.total} in this batch` : "no batch yet"}</p>
+            </div>
+          </section>
 
-            {/* Readout strip ----------------------------------------- */}
-            <section className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-              <div className="readout">
-                <p className="readout-k">Queued</p>
-                <p className="readout-v tabular-nums">{files.length}</p>
-                <p className="readout-h">{files.length ? formatBytes(queuedBytes) : `up to ${maxFiles} per batch`}</p>
-              </div>
-              <div className="readout">
-                <p className="readout-k">Active layers</p>
-                <p className="readout-v tabular-nums">{activeLayers}/9</p>
-                <p className="readout-h">intensity {options.intensity} · {options.preset}</p>
-              </div>
-              <div className="readout" data-tone={healthError ? "danger" : undefined}>
-                <p className="readout-k">Engine</p>
-                <p className="readout-v">{health ? health.worker_mode : "—"}</p>
-                <p className="readout-h">
-                  {health
-                    ? `${health.active_jobs} active · ${health.queue_depth} queued`
-                    : healthError
-                      ? "unreachable"
-                      : "connecting"}
+          {engineBlocked ? (
+            <NeonCard tone="danger" padding="md" radius="lg" className="mb-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle
+                  className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400"
+                  aria-hidden
+                />
+                <p className="text-xs leading-relaxed text-red-700 dark:text-red-300">
+                  The API is up but <span className="font-mono">ffmpeg</span> is missing on the
+                  worker host. Renders will fail until it is installed — see the README for the
+                  one-line install per platform.
                 </p>
               </div>
-              <div className="readout" data-tone={outputsReady > 0 ? "success" : "muted"}>
-                <p className="readout-k">Outputs ready</p>
-                <p className="readout-v tabular-nums">{outputsReady}</p>
-                <p className="readout-h">{batch ? `${batch.total} in this batch` : "no batch yet"}</p>
-              </div>
-            </section>
+            </NeonCard>
+          ) : null}
 
-            {engineBlocked ? (
-              <NeonCard tone="danger" padding="md" radius="lg" className="mb-6">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden />
-                  <p className="text-xs leading-relaxed text-red-700 dark:text-red-300">
-                    The API is up but <span className="font-mono">ffmpeg</span> is missing on the worker
-                    host. Renders will fail until it is installed — see the README for the one-line
-                    install per platform.
-                  </p>
-                </div>
-              </NeonCard>
-            ) : null}
+          {/* Step flow: one step at a time ------------------------- */}
+          <nav aria-label="Workspace steps" className="mb-5">
+            <ol className="flex items-center gap-2 sm:gap-3">
+              {STEPS.map(({ label }, index) => {
+                const done = index < step;
+                const current = index === step;
+                const locked = index > 0 && files.length === 0 && !batch;
+                return (
+                  <li
+                    key={label}
+                    className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 last:flex-none"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setStep(index)}
+                      disabled={locked}
+                      aria-current={current ? "step" : undefined}
+                      className="group flex shrink-0 items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span
+                        className={clsx(
+                          "grid h-7 w-7 place-items-center rounded-full border font-mono text-xs tabular-nums transition",
+                          current || done
+                            ? "border-meta-500 bg-meta-500 text-white shadow-[0_0_14px_-3px_rgb(8_102_255/0.8)]"
+                            : "border-black/15 text-ink-muted group-hover:border-meta-500 dark:border-white/15 dark:text-slate-400",
+                        )}
+                      >
+                        {done ? <Check className="h-3.5 w-3.5" aria-hidden /> : index + 1}
+                      </span>
+                      <span
+                        className={clsx(
+                          "hidden text-sm sm:inline",
+                          current
+                            ? "font-medium text-black dark:text-slate-50"
+                            : "text-ink-muted dark:text-slate-400",
+                        )}
+                      >
+                        {label}
+                      </span>
+                    </button>
+                    {index < STEPS.length - 1 ? (
+                      <span
+                        className={clsx(
+                          "h-px min-w-[1rem] flex-1 rounded-full",
+                          done ? "bg-meta-500" : "bg-black/10 dark:bg-white/10",
+                        )}
+                        aria-hidden
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+            <p className="mt-2 text-xs text-ink-muted dark:text-slate-400 sm:hidden">
+              Step {step + 1} of {STEPS.length} · {STEPS[step].label}
+            </p>
+          </nav>
 
-            {/* Console ------------------------------------------------- */}
-            <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-              <div className="space-y-6">
+          {/* Console: current step on the left, queue docked right -- */}
+          <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+            <div className="min-w-0 space-y-6">
+              {step === 0 ? (
                 <NeonCard glow padding="lg" radius="xl" id="upload">
                   <div className="mb-5 flex items-center gap-2">
                     <span className="panel-step hidden dark:inline">01</span>
@@ -438,8 +523,10 @@ export default function WorkspacePage() {
                     disabled={uploading}
                   />
                 </NeonCard>
+              ) : null}
 
-                <NeonCard tone="slow" padding="lg" radius="xl" id="configure">
+              {step === 1 ? (
+                <NeonCard glow tone="slow" padding="lg" radius="xl" id="configure">
                   <div className="mb-5 flex items-center gap-2">
                     <span className="panel-step hidden dark:inline">02</span>
                     <Layers3 className="h-4 w-4 text-meta-600 dark:text-meta-300" aria-hidden />
@@ -454,46 +541,54 @@ export default function WorkspacePage() {
                     disabled={uploading}
                   />
                 </NeonCard>
+              ) : null}
 
-                <NeonCard padding="lg" radius="xl" id="overlay">
-                  <div className="mb-5 flex items-center gap-2">
-                    <span className="panel-step hidden dark:inline">03</span>
-                    <ImagePlus className="h-4 w-4 text-meta-500 dark:text-meta-300" aria-hidden />
-                    <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">
-                      <span className="dark:hidden">3 · </span>Brand overlay
-                    </h2>
-                    <span className="chip !text-[10px]">optional</span>
-                  </div>
-                  <OverlayPanel
-                    layers={overlayLayers}
-                    onChange={setOverlayLayers}
-                    disabled={uploading}
-                  />
-                </NeonCard>
+              {step === 2 ? (
+                <div className="space-y-6">
+                  <NeonCard glow padding="lg" radius="xl" id="overlay">
+                    <div className="mb-5 flex items-center gap-2">
+                      <span className="panel-step hidden dark:inline">03</span>
+                      <ImagePlus className="h-4 w-4 text-meta-500 dark:text-meta-300" aria-hidden />
+                      <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">
+                        <span className="dark:hidden">3 · </span>Brand overlay
+                      </h2>
+                      <span className="chip !text-[10px]">optional</span>
+                    </div>
+                    <OverlayPanel
+                      layers={overlayLayers}
+                      onChange={setOverlayLayers}
+                      disabled={uploading}
+                    />
+                  </NeonCard>
+                  <NeonCard padding="lg" radius="xl" id="poster">
+                    <div className="mb-5 flex items-center gap-2">
+                      <Film className="h-4 w-4 text-meta-500 dark:text-meta-300" aria-hidden />
+                      <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">
+                        Poster frame
+                      </h2>
+                      <span className="chip !text-[10px]">optional</span>
+                    </div>
+                    <PosterPicker
+                      poster={options.poster}
+                      onChange={(poster: PosterSettings) => setOptions({ ...options, poster })}
+                      video={firstVideo}
+                      disabled={uploading}
+                    />
+                  </NeonCard>
+                </div>
+              ) : null}
 
-                <NeonCard padding="lg" radius="xl" id="poster">
-                  <div className="mb-5 flex items-center gap-2">
-                    <Film className="h-4 w-4 text-meta-500 dark:text-meta-300" aria-hidden />
-                    <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">
-                      Poster frame
-                    </h2>
-                    <span className="chip !text-[10px]">optional</span>
-                  </div>
-                  <PosterPicker
-                    poster={options.poster}
-                    onChange={(poster: PosterSettings) => setOptions({ ...options, poster })}
-                    video={firstVideo}
-                    disabled={uploading}
-                  />
-                </NeonCard>
-
-                <NeonCard padding="lg" radius="xl" id="run">
+              {step === 3 ? (
+                <NeonCard glow padding="lg" radius="xl" id="run">
                   <div className="space-y-4">
                     <button
                       type="button"
                       onClick={handleSubmit}
                       disabled={
-                        files.length === 0 || uploading || Boolean(healthError) || Boolean(overlayProblem)
+                        files.length === 0 ||
+                        uploading ||
+                        Boolean(healthError) ||
+                        Boolean(overlayProblem)
                       }
                       className="btn-primary w-full !py-3 !text-sm"
                     >
@@ -535,49 +630,74 @@ export default function WorkspacePage() {
                     ) : null}
 
                     <p className="text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
-                      Renders run on the worker queue, so large batches keep going after you close this
-                      tab. Files and download links are purged after{" "}
+                      Renders run on the worker queue, so large batches keep going after you close
+                      this tab. Files and download links are purged after{" "}
                       {limits?.retention_hours ?? 24} hours.
                     </p>
                   </div>
                 </NeonCard>
-              </div>
+              ) : null}
 
-              <div id="queue" className="lg:sticky lg:top-24 lg:self-start">
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="panel-step hidden dark:inline">04</span>
-                  <Radar className="h-4 w-4 text-meta-500 dark:text-meta-300" aria-hidden />
-                  <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">
-                    <span className="dark:hidden">4 · </span>Mutation queue
-                  </h2>
-                </div>
-                <div className="max-h-[calc(100vh-11rem)] overflow-y-auto rounded-2xl border border-transparent pr-1 dark:border-white/5 dark:bg-white/[0.015] dark:p-2">
-                  <JobQueue
-                    batch={batch}
-                    polling={polling}
-                    error={pollError}
-                    onCancel={handleCancel}
-                    onRefresh={handleRefresh}
-                    onDiscard={handleDiscard}
-                  />
-                </div>
+              {/* Back / Next ------------------------------------------- */}
+              <div className="flex items-center justify-between gap-3">
+                {step > 0 ? (
+                  <button type="button" onClick={() => setStep(step - 1)} className="btn-ghost">
+                    <ArrowLeft className="h-4 w-4" aria-hidden />
+                    Back
+                  </button>
+                ) : (
+                  <span />
+                )}
+                {step < STEPS.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setStep(step + 1)}
+                    disabled={files.length === 0 && !batch}
+                    className="btn-primary"
+                  >
+                    Next · {STEPS[step + 1].label}
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </button>
+                ) : null}
               </div>
-            </section>
+            </div>
 
-            <footer className="mt-12 border-t border-black/[0.07] pt-6 dark:border-white/10">
-              <div className="flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
-                <p>
-                  AdCamouflage {health?.version ? `v${health.version}` : ""} · FastAPI · Celery · FFmpeg
-                  · OpenCV
-                </p>
-                <p>
-                  Use only on creatives you own or are licensed to distribute, and within the terms of
-                  the platforms you publish to.
-                </p>
+            <div id="queue" className="lg:sticky lg:top-24 lg:self-start">
+              <div className="mb-4 flex items-center gap-2">
+                <span className="panel-step hidden dark:inline">04</span>
+                <Radar className="h-4 w-4 text-meta-500 dark:text-meta-300" aria-hidden />
+                <h2 className="text-sm font-semibold tracking-tight text-black dark:text-slate-100">
+                  <span className="dark:hidden">4 · </span>Mutation queue
+                </h2>
               </div>
-            </footer>
+              <div className="max-h-[calc(100vh-11rem)] overflow-y-auto rounded-2xl border border-transparent pr-1 dark:border-white/5 dark:bg-white/[0.015] dark:p-2">
+                <JobQueue
+                  batch={batch}
+                  polling={polling}
+                  error={pollError}
+                  onCancel={handleCancel}
+                  onRefresh={handleRefresh}
+                  onDiscard={handleDiscard}
+                />
+              </div>
+            </div>
+          </section>
+
+          <footer className="mt-12 border-t border-black/[0.07] pt-6 dark:border-white/10">
+            <div className="flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
+              <p>
+                AdCamouflage {health?.version ? `v${health.version}` : ""} · FastAPI · Celery ·
+                FFmpeg · OpenCV
+              </p>
+              <p>
+                Use only on creatives you own or are licensed to distribute, and within the terms of
+                the platforms you publish to.
+              </p>
+            </div>
+          </footer>
         </main>
       </div>
+      <ThemeDock />
     </div>
   );
 }
