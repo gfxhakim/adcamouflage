@@ -7,6 +7,7 @@
  */
 export const INTRO_GATE_SCRIPT = `(function(){try{
 var d=document.documentElement;
+if(location.search.indexOf("cms_preview")>-1){d.setAttribute("data-intro","off");return;}
 var nav=performance.getEntriesByType&&performance.getEntriesByType("navigation")[0];
 if(nav&&nav.type==="reload")return;
 var r=document.referrer;

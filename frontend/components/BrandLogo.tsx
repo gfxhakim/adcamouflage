@@ -1,4 +1,7 @@
+"use client";
+
 /* eslint-disable @next/next/no-img-element -- small static brand PNGs; the image optimizer adds nothing here. */
+import { useCms } from "@/components/cms/ContentProvider";
 import { cn } from "@/lib/utils";
 
 interface BrandLogoProps {
@@ -41,7 +44,16 @@ export function BrandLogo({
   animated = false,
   className,
 }: BrandLogoProps) {
-  const wordmark = onDark ? "/brand/blucloacking-wordmark-light.png" : "/brand/blucloacking-wordmark.png";
+  const cms = useCms();
+  const mark = cms.media("brand.mark", { src: MARK, kind: "image", alt: "" }, "Logo shield").src || MARK;
+  const wordmark =
+    (onDark
+      ? cms.media("brand.wordmarkLight", { src: "/brand/blucloacking-wordmark-light.png", kind: "image", alt: "BluCloacking" }, "Logo name (on dark)").src
+      : cms.media("brand.wordmark", { src: "/brand/blucloacking-wordmark.png", kind: "image", alt: "BluCloacking" }, "Logo name (on light)").src) ||
+    "/brand/blucloacking-wordmark.png";
+  const name = cms.text("brand.name", "BluCloacking", "text", "Brand name");
+  const showMark = !cms.hidden("brand.mark");
+  const showWordmark = !cms.hidden("brand.wordmark");
   return (
     <span className={cn("flex min-w-0 items-center gap-2.5", className)}>
       <span
@@ -50,14 +62,18 @@ export function BrandLogo({
           animated && "animate-logo-float drop-shadow-[0_0_10px_rgba(51,133,255,0.65)]",
         )}
       >
-        <img src={MARK} alt="" width={40} height={40} className="h-10 w-10" />
-        {animated ? <Shine src={MARK} /> : null}
+        {showMark ? <img src={mark} alt="" width={40} height={40} className="h-10 w-10 object-contain" {...cms.mark("brand.mark")} /> : null}
+        {animated && showMark ? <Shine src={mark} /> : null}
       </span>
       <span className="min-w-0 leading-tight">
-        <span className="relative block w-fit">
-          <img src={wordmark} alt="BluCloacking" width={120} height={20} className="block h-5 w-auto" />
-          {animated ? <Shine src={wordmark} /> : null}
-        </span>
+        {showWordmark ? (
+          <span className="relative block w-fit">
+            <img src={wordmark} alt={name} width={120} height={20} className="block h-5 w-auto" {...cms.mark("brand.wordmark")} />
+            {animated ? <Shine src={wordmark} /> : null}
+          </span>
+        ) : (
+          <span className={cn("block text-base font-semibold tracking-tight", onDark ? "text-white" : "text-black")}>{name}</span>
+        )}
         {caption ? (
           <span className={cn("mt-0.5 block text-[11px]", onDark ? "text-white/55" : "text-ink-subtle", captionClassName)}>
             {caption}
@@ -70,10 +86,12 @@ export function BrandLogo({
 
 /** The full stacked logo (shield above the name) on its dark tile, for the login and sign-up pages. */
 export function BrandLogoFull({ className }: { className?: string }) {
+  const cms = useCms();
+  const logo = cms.media("brand.full", { src: "/brand/blucloacking-logo-dark.jpg", kind: "image", alt: "BluCloacking" }, "Full logo tile");
   return (
     <img
-      src="/brand/blucloacking-logo-dark.jpg"
-      alt="BluCloacking"
+      src={logo.src || "/brand/blucloacking-logo-dark.jpg"}
+      alt={logo.alt || "BluCloacking"}
       width={640}
       height={640}
       className={cn(

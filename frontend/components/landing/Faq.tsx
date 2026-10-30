@@ -2,10 +2,11 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
-import { EASE, Headline, PillArrow, SectionTag } from "@/components/landing/primitives";
+import { CmsIcon, CmsLink, CmsSection, T } from "@/components/cms/Cms";
+import { useCms } from "@/components/cms/ContentProvider";
+import { CmsHeadline, EASE, PillArrow, SectionTag } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 const FAQS = [
@@ -42,41 +43,49 @@ const FAQS = [
 ];
 
 export function Faq() {
+  const cms = useCms();
+  const faqs = cms.list("faq.items", FAQS, "Questions", FAQS.map((f) => f.q));
   const [open, setOpen] = useState(0);
 
   return (
-    <section id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
+    <CmsSection k="faq" label="FAQ" id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <SectionTag index="06">FREQUENTLY ASKED QUESTIONS</SectionTag>
-          <Headline text="Everything You Need to Know Before You Upload." className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+          <SectionTag k="faq.tag" index="06">FREQUENTLY ASKED QUESTIONS</SectionTag>
+          <CmsHeadline k="faq.headline" text="Everything You Need to Know Before You Upload." className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
 
-          <div className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
+          <CmsSection k="faq.card" label="Help card" as="div" className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-white/60">
               <span className="h-1.5 w-1.5 rounded-full bg-meta-400" />
-              Still unsure?
+              <T k="faq.card.kicker">Still unsure?</T>
             </p>
-            <p className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
+            <T k="faq.card.title" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
               Camouflage your first creative in under a minute.
-            </p>
-            <p className="mt-2 text-sm text-white/60">
+            </T>
+            <T k="faq.card.body" long as="p" className="mt-2 text-sm text-white/60">
               Create an account, drop in a file, and process a clean variant before the next moderation loop hits.
-            </p>
-            <Link
+            </T>
+            <CmsLink
+              k="faq.card.cta"
               href="/login"
+              label="Test the Engine Now"
               className="group mt-5 inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white"
             >
-              Test the Engine Now
-              <PillArrow dark />
-            </Link>
-          </div>
+              {(label) => (
+                <>
+                  {label}
+                  <PillArrow dark />
+                </>
+              )}
+            </CmsLink>
+          </CmsSection>
         </div>
 
         <ul className="relative border-l border-black/10">
-          {FAQS.map((item, i) => {
+          {faqs.map(({ item, key, id }, i) => {
             const on = open === i;
             return (
-              <li key={item.q} className="relative">
+              <li key={id} className="relative">
                 <span
                   className={cn(
                     "absolute -left-[5px] top-7 h-2.5 w-2.5 rounded-full border-2 transition-colors",
@@ -87,24 +96,24 @@ export function Faq() {
                 <button
                   type="button"
                   className={cn(
-                    "flex w-full items-center gap-4 rounded-2xl py-5 pl-6 pr-3 text-left transition-colors",
+                    "flex w-full items-center gap-3 rounded-2xl py-5 pl-5 pr-2 text-left transition-colors sm:gap-4 sm:pl-6 sm:pr-3",
                     on ? "bg-[#F4F5F7]" : "hover:bg-[#F4F5F7]/60",
                   )}
                   onClick={() => setOpen(on ? -1 : i)}
                   aria-expanded={on}
                 >
                   <span className="font-mono text-[11px] text-ink-faint">0{i + 1}</span>
-                  <span className="flex-1 text-base font-semibold tracking-tight text-black sm:text-lg">{item.q}</span>
-                  <span className="hidden font-mono text-[10px] uppercase tracking-wider text-ink-faint sm:inline">
+                  <T k={`${key}.q`} className="min-w-0 flex-1 text-base font-semibold tracking-tight text-black sm:text-lg">{item.q}</T>
+                  <T k={`${key}.tag`} className="hidden font-mono text-[10px] uppercase tracking-wider text-ink-faint sm:inline">
                     {item.tag}
-                  </span>
+                  </T>
                   <span
                     className={cn(
                       "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition-all duration-300",
                       on ? "rotate-45 border-meta-500 bg-meta-500 text-white" : "border-black/15 text-black",
                     )}
                   >
-                    <Plus className="h-4 w-4" aria-hidden />
+                    <CmsIcon k="faq.toggle.icon" fallback={Plus} className="h-4 w-4" aria-hidden />
                   </span>
                 </button>
                 <AnimatePresence initial={false}>
@@ -116,7 +125,7 @@ export function Faq() {
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.45, ease: EASE }}
                     >
-                      <p className="max-w-2xl pb-6 pl-14 pr-6 text-sm leading-relaxed text-ink-muted">{item.a}</p>
+                      <T k={`${key}.a`} long as="p" className="max-w-2xl pb-6 pl-12 pr-4 text-sm leading-relaxed text-ink-muted sm:pl-14 sm:pr-6">{item.a}</T>
                     </motion.div>
                   ) : null}
                 </AnimatePresence>
@@ -125,7 +134,7 @@ export function Faq() {
           })}
         </ul>
       </div>
-    </section>
+    </CmsSection>
   );
 }
 
