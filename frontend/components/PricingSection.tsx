@@ -5,17 +5,12 @@ import { ArrowRight, Check, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { Headline, SectionTag } from "@/components/landing/primitives";
+import { rolloverCap, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export interface PublicPlan {
-  id: string;
-  label: string;
-  monthly_quota: number | null;
-  price: number;
-}
-
 interface PricingSectionProps {
-  plans: PublicPlan[];
+  plans: TokenPlanCard[];
+  topups: TopupTable;
   currency: string;
   /** Where the plan buttons go: sign-up for visitors, the workspace once signed in. */
   ctaHref: string;
@@ -25,10 +20,9 @@ interface PricingSectionProps {
 const POPULAR = "pro";
 
 const BLURBS: Record<string, string> = {
-  free: "For solo media buyers validating new offers and protecting initial ad accounts.",
-  starter: "For daily media buyers running aggressive campaigns across multiple accounts.",
-  pro: "For high-volume teams, agencies, and heavy contingency operations.",
-  unlimited: "For teams that never stop launching and need unlimited asset mutations.",
+  starter: "For solo media buyers refreshing a handful of creatives a month.",
+  pro: "For daily media buyers who launch new variations every week.",
+  max: "For teams and agencies producing creatives at volume.",
 };
 
 const INCLUDED = [
@@ -39,24 +33,45 @@ const INCLUDED = [
   "Single User Access",
 ];
 
-function price(amount: number, currency: string) {
+function price(amount: number, currency: string, digits?: number) {
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: digits ?? (amount % 1 === 0 ? 0 : 2),
     }).format(amount);
   } catch {
     return `${amount} ${currency}`;
   }
 }
 
-function quotaText(quota: number | null) {
-  if (quota === null) return "Unlimited files a month";
-  return `${quota.toLocaleString("en-US")} files a month`;
+function number(value: number) {
+  return value.toLocaleString("en-US");
 }
 
-export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps) {
+function rolloverText(plan: TokenPlanCard) {
+  if (plan.rollover_months <= 0) return "Tokens reset each period";
+  return `Roll over up to ${number(rolloverCap(plan))} tokens`;
+}
+
+/** "Top up from $20: 40–65 tokens per $1, with bonus tokens from $40 up." */
+function topupLine(plans: TokenPlanCard[], topups: TopupTable, currency: string): string {
+  const rates = plans.map((p) => p.topup_rate).filter((r) => r > 0);
+  if (rates.length === 0 || topups.amounts.length === 0) return "";
+  const low = Math.min(...rates);
+  const high = Math.max(...rates);
+  const rate = low === high ? `${low}` : `${low}–${high}`;
+  const smallest = Math.min(...topups.amounts);
+  const bonusFrom = topups.amounts
+    .filter((amount) => plans.some((p) => (topups.bonus[p.id]?.[String(amount)] ?? 0) > 0))
+    .sort((a, b) => a - b)[0];
+  const bonus = bonusFrom ? `, with bonus tokens from ${price(bonusFrom, currency)} up` : "";
+  return `Need more? Top up from ${price(smallest, currency)} at ${rate} tokens per ${price(1, currency)}${bonus}.`;
+}
+
+export function PricingSection({ plans, topups, currency, ctaHref }: PricingSectionProps) {
+  const extra = topupLine(plans, topups, currency);
+
   return (
     <div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
@@ -71,14 +86,15 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
           />
         </div>
         <p className="text-sm leading-relaxed text-white/65">
-          Choose the processing volume that matches your ad spend. No contracts—upgrade, downgrade, or cancel in one click.
+          Pick the volume that matches your ad spend. Every plan is a paid 30-day period of tokens: one output
+          file is one generation. No contracts, nothing renews on its own, and you can switch plans whenever you
+          like.
         </p>
       </div>
 
-      <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {plans.map((plan, index) => {
           const popular = plan.id === POPULAR;
-          const free = plan.price === 0;
 
           return (
             <motion.div
@@ -116,10 +132,30 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
               </p>
               <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-meta-400" aria-hidden />
-                {quotaText(plan.monthly_quota)}
+                {number(plan.tokens)} tokens · {number(plan.generations)} generations
               </p>
 
-              <ul className="mt-6 flex-1 space-y-2.5 border-t border-white/10 pt-6">
+              <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs">
+                <div>
+                  <dt className="text-white/45">Per generation</dt>
+                  <dd className="font-semibold text-white">
+                    {price(plan.price_per_generation, currency, 2)}{" "}
+                    <span className="font-normal text-white/45">· {plan.tokens_per_generation} tokens</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-white/45">Rollover</dt>
+                  <dd className="font-semibold text-white">{rolloverText(plan)}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-white/45">Top-ups</dt>
+                  <dd className="font-semibold text-white">
+                    {plan.topup_rate} tokens per {price(1, currency)}
+                  </dd>
+                </div>
+              </dl>
+
+              <ul className="mt-5 flex-1 space-y-2.5 border-t border-white/10 pt-5">
                 {INCLUDED.map((feature) => (
                   <li key={feature} className="flex items-start gap-2.5 text-sm text-white/75">
                     <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
@@ -137,7 +173,7 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
                   popular ? "bg-white text-black hover:bg-meta-50" : "bg-white/[0.08] text-white hover:bg-white/[0.14]",
                 )}
               >
-                {free ? "Start free" : `Choose ${plan.label}`}
+                Choose {plan.label}
                 <span
                   className={cn(
                     "grid h-8 w-8 place-items-center rounded-full transition-transform group-hover/btn:rotate-[-45deg]",
@@ -152,11 +188,18 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
         })}
       </div>
 
-      <p className="mt-8 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-white/45">
-        <span className="h-1.5 w-1.5 rounded-full bg-meta-500" aria-hidden />
-        Every uploaded file and every extra variant counts as one file. Usage resets on the 1st of
-        each month.
-      </p>
+      <div className="mt-8 space-y-2 font-mono text-[11px] uppercase tracking-wider text-white/45">
+        <p className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-meta-500" aria-hidden />
+          One uploaded file × one variant = one generation. Paid in crypto through BTCPay, per 30-day period.
+        </p>
+        {extra ? (
+          <p className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-meta-500" aria-hidden />
+            {extra}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

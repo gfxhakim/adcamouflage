@@ -4,6 +4,7 @@ import clsx from "clsx";
 import {
   Activity,
   CircleAlert,
+  Coins,
   Gauge,
   User as UserIcon,
   Waves,
@@ -12,7 +13,7 @@ import Link from "next/link";
 
 import BrandLogo from "@/components/BrandLogo";
 import { type UserProfile } from "@/lib/auth";
-import { usageText } from "@/lib/format";
+import { formatTokens, usageText } from "@/lib/format";
 import type { HealthReport } from "@/lib/types";
 
 interface HeaderProps {
@@ -72,7 +73,21 @@ export function Header({ health, healthError, user, onDark = false }: HeaderProp
             </span>
           ) : null}
 
-          {user && (user.monthly_quota !== null || user.plan_expired) ? (
+          {user && user.billing_mode === "tokens" ? (
+            <Link
+              href="/app/plan"
+              className={clsx(
+                "chip hidden whitespace-nowrap transition-colors hover:border-meta-500/50 hover:text-meta-700 dark:hover:text-meta-300 sm:inline-flex",
+                !user.subscription_active || user.tokens_usable <= 0
+                  ? "border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300"
+                  : "",
+              )}
+              title={user.subscription_active ? "Tokens you can spend · Plan & tokens" : "No active subscription · Plan & tokens"}
+            >
+              <Coins className="h-3.5 w-3.5" aria-hidden />
+              {user.subscription_active ? `${formatTokens(user.tokens_usable)} tokens` : "Subscribe"}
+            </Link>
+          ) : user && (user.monthly_quota !== null || user.plan_expired) ? (
             <Link
               href="/app/plan"
               className={clsx(

@@ -236,3 +236,34 @@ start. The API log should show `celery@… ready` shortly after boot, and
 **Everyone signed out after a deploy.** `ADCAM_SECRET_KEY` changed. Pin it.
 
 **Uploads fail at a certain size.** See the section above.
+
+## Billing (BTCPay) variables
+
+Token plans are sold through a self-hosted BTCPay Server (Greenfield API). Set
+these on the `api` service; until the first three are present, checkout
+answers 503 and the plan page says payments are being set up.
+
+```bash
+ADCAM_BTCPAY_URL=https://pay.yourdomain.com      # no trailing slash
+ADCAM_BTCPAY_STORE_ID=<store id from BTCPay>
+ADCAM_BTCPAY_API_KEY=<Greenfield API key with btcpay.store.cancreateinvoice + canviewinvoices>
+ADCAM_BTCPAY_WEBHOOK_SECRET=<secret entered on the BTCPay webhook>
+ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # where BTCPay sends the customer back
+```
+
+In BTCPay, add a webhook on the store pointing at
+`https://<api or web domain>/api/v1/billing/btcpay/webhook` with the same
+secret, sending the invoice events (`InvoiceSettled` is the one that credits
+tokens; expired/invalid close the order). A missed webhook is caught up when
+the customer's plan page polls the order.
+
+Optional email reminders (period ends in 3 days / period just ended) go out
+through Resend once a day from the Celery beat schedule:
+
+```bash
+ADCAM_RESEND_API_KEY=<Resend API key>
+ADCAM_EMAIL_FROM="BluCloacking <billing@blucloack.online>"
+```
+
+Without `ADCAM_RESEND_API_KEY` the reminders are skipped silently; the
+in-app alerts on /app and /app/plan still show.

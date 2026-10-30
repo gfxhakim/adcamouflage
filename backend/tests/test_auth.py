@@ -18,7 +18,7 @@ from app.config import settings
 from app.db import User, get_session_factory, init_db
 from app.main import app
 
-from .conftest import requires_ffmpeg
+from .conftest import grant_max_period, requires_ffmpeg
 
 # Tests must not assume an empty database: SQLite gets a fresh file per run,
 # but a real Postgres keeps its rows between runs. Namespacing the addresses
@@ -61,6 +61,7 @@ def _fresh_client(email: str, password: str = "correct-horse-battery") -> TestCl
     assert response.status_code in (201, 409), response.text
     if response.status_code == 409:
         assert other.post("/api/v1/auth/login", json={"email": email, "password": password}).status_code == 200
+    grant_max_period(email)
     return other
 
 

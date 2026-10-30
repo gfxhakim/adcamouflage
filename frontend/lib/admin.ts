@@ -1,4 +1,5 @@
 import { API_BASE, ApiError } from "./api";
+import type { BillingMode, BillingRules, TokenPlanCard, TopupTable } from "./types";
 
 export interface PlanInfo {
   id: string;
@@ -28,6 +29,11 @@ export interface AdminUser {
   batch_count: number;
   files_total: number;
   admin_notes: string | null;
+  /** Token billing; the quota fields above apply to legacy accounts. */
+  billing_mode: BillingMode;
+  sub_plan: string | null;
+  sub_period_end: string | null;
+  subscription_active: boolean;
 }
 
 export interface UserPage {
@@ -72,6 +78,9 @@ export interface Overview {
   near_limit: number;
   expiring_soon: number;
   hit_limit_this_month: number;
+  /** Paid token orders in the last 30 days and subscriptions still running. */
+  token_revenue_30d: number;
+  active_subscriptions: number;
 }
 
 export interface Point {
@@ -221,3 +230,106 @@ export function updateUser(id: number, changes: UserUpdate) {
 export function resetUsage(id: number) {
   return call<AdminUser>(`/users/${id}/reset-usage`, { method: "POST" });
 }
+
+// --- token billing ---------------------------------------------------------
+
+export interface BillingConfig {
+  currency: string;
+  plans: Record<string, TokenPlanCard>;
+  topups: TopupTable;
+  rules: BillingRules;
+}
+
+/** The editable part of one token plan (id, generations and prices per generation are derived). */
+export interface TokenPlanEdit {
+  label: string;
+  price: number;
+  tokens: number;
+  tokens_per_generation: number;
+  rollover_months: number;
+  topup_rate: number;
+}
+
+/** Only the parts that are sent are changed. */
+export interface BillingConfigUpdate {
+  plans?: Record<string, TokenPlanEdit>;
+  topups?: TopupTable;
+  rules?: BillingRules;
+}
+
+export interface LedgerEntry {
+  id: number;
+  bucket: "subscription" | "topup";
+  kind: "grant" | "rollover" | "expire" | "topup" | "bonus" | "consume" | "refund" | "admin";
+  amount: number;
+  batch_id: string | null;
+  order_id: string | null;
+  note: string;
+  created_at: string;
+}
+
+export interface AdminOrder {
+  id: string;
+  kind: "subscription" | "topup";
+  plan_id: string;
+  amount: number;
+  tokens: number;
+  status: "pending" | "paid" | "expired" | "invalid";
+  created_at: string;
+  paid_at: string | null;
+}
+
+export interface AdminSubscription {
+  plan_id: string;
+  plan_label: string;
+  price: number;
+  tokens_per_generation: number;
+  period_start: string | null;
+  period_end: string | null;
+  active: boolean;
+  days_left: number;
+  cancelled: boolean;
+  grace_until: string | null;
+  in_grace: boolean;
+}
+
+export interface AdminBalance {
+  subscription_tokens: number;
+  topup_tokens: number;
+  usable_tokens: number;
+  generations_left: number;
+  frozen_topup: boolean;
+}
+
+export interface UserBilling {
+  user_id: number;
+  billing_mode: BillingMode;
+  subscription: AdminSubscription | null;
+  balance: AdminBalance;
+  /** The last 20 ledger lines, newest first. */
+  ledger: LedgerEntry[];
+  orders: AdminOrder[];
+}
+
+export const getBillingConfig = () => call<BillingConfig>("/billing/config");
+export const updateBillingConfig = (changes: BillingConfigUpdate) =>
+  call<BillingConfig>("/billing/config", { method: "PUT", body: JSON.stringify(changes) });
+
+export const getUserBilling = (id: number) => call<UserBilling>(`/users/${id}/billing`);
+
+/** Start or extend a paid period without a payment; also moves the user to token billing. */
+export const grantPeriod = (id: number, plan: string, months: number) =>
+  call<UserBilling>(`/users/${id}/billing/grant`, {
+    method: "POST",
+    body: JSON.stringify({ plan_id: plan, months }),
+  });
+
+/** Add (negative: take away) top-up tokens by hand; the note stays on the ledger line. */
+export const adjustTokens = (id: number, amount: number, note: string) =>
+  call<UserBilling>(`/users/${id}/billing/tokens`, {
+    method: "POST",
+    body: JSON.stringify({ amount, note }),
+  });
+
+export const setBillingMode = (id: number, mode: BillingMode) =>
+  call<UserBilling>(`/users/${id}/billing/mode`, { method: "POST", body: JSON.stringify({ mode }) });

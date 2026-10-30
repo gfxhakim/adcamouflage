@@ -31,6 +31,7 @@ from .activity import log_activity
 from .app_settings import announcement, registration_open
 from .db import BatchRecord, User, get_db
 from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
+from .tokens import TOKENS, subscription_active, usable_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,10 @@ class UserProfile(BaseModel):
     plan_expired: bool = False
     # A message the admin wants every signed-in user to see; empty for none.
     announcement: str = ""
+    # Token billing (see app/tokens.py). Legacy accounts keep the fields above.
+    billing_mode: str = "legacy"
+    tokens_usable: int = 0
+    subscription_active: bool = False
 
     @classmethod
     def of(cls, user: User, db: Session) -> "UserProfile":
@@ -133,6 +138,9 @@ class UserProfile(BaseModel):
             plan_expires_at=user.plan_expires_at,
             plan_expired=plan_expired(user),
             announcement=announcement(db),
+            billing_mode=user.billing_mode,
+            tokens_usable=usable_tokens(db, user),
+            subscription_active=subscription_active(user),
         )
 
 
@@ -164,6 +172,8 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         password_hash=hash_password(password),
         display_name=(payload.display_name or "").strip() or None,
         last_login_at=datetime.now(timezone.utc),
+        # New accounts buy a token plan; the legacy quota plan is only a label.
+        billing_mode=TOKENS,
     )
     apply_plan(db, user, default_plan(db).id)
     db.add(user)
@@ -274,7 +284,14 @@ def my_batches(
     ]
 
 
-def record_batch(db: Session, batch_id: str, user_id: int, asset_count: int, options: object) -> None:
+def record_batch(
+    db: Session,
+    batch_id: str,
+    user_id: int,
+    asset_count: int,
+    options: object,
+    token_cost: int = 0,
+) -> None:
     """Persist a batch so it survives the Redis retention window."""
 
     try:
@@ -296,4 +313,5 @@ def record_batch(db: Session, batch_id: str, user_id: int, asset_count: int, opt
         logger.warning("could not record batch %s", batch_id, exc_info=True)
         return
     noun = "file" if asset_count == 1 else "files"
-    log_activity(db, user_id, "batch", f"Started a batch of {asset_count} {noun} ({preset})")
+    cost = f" for {token_cost} tokens" if token_cost else ""
+    log_activity(db, user_id, "batch", f"Started a batch of {asset_count} {noun} ({preset}){cost}")

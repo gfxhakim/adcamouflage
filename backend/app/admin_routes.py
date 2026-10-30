@@ -1,4 +1,4 @@
-"""Admin panel endpoints: users, plans, analytics and app settings."""
+"""Admin panel endpoints: users, plans, token billing, analytics and app settings."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .accounts import hash_password, is_admin, require_admin, validate_email, va
 from .activity import log_activity
 from .app_settings import announcement, currency, get_setting, registration_open, set_setting
 from .config import settings
-from .db import ActivityEvent, BatchRecord, User, get_db
+from .db import ActivityEvent, BatchRecord, Order, TokenLedger, User, get_db
 from .plans import (
     PLAN_IDS,
     Plan,
@@ -31,6 +31,22 @@ from .plans import (
     plan_label,
     save_plan,
     used_this_month,
+)
+from .tokens import (
+    LEGACY,
+    PLAN_IDS as TOKEN_PLAN_IDS,
+    TOKENS,
+    balance_summary,
+    get_billing_rules,
+    get_token_plans,
+    get_topups,
+    new_order,
+    save_billing_rules,
+    save_token_plans,
+    save_topups,
+    settle_order,
+    subscription_active,
+    subscription_summary,
 )
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -82,6 +98,11 @@ class AdminUser(BaseModel):
     batch_count: int
     files_total: int
     admin_notes: str | None
+    # Token billing (app/tokens.py); the quota fields above apply to legacy accounts.
+    billing_mode: str = "legacy"
+    sub_plan: str | None = None
+    sub_period_end: datetime | None = None
+    subscription_active: bool = False
 
 
 class UserPage(BaseModel):
@@ -132,6 +153,82 @@ class Overview(BaseModel):
     near_limit: int
     expiring_soon: int
     hit_limit_this_month: int
+    # Token billing: paid orders in the last 30 days and live subscriptions.
+    token_revenue_30d: float = 0.0
+    active_subscriptions: int = 0
+
+
+class TokenPlanEdit(BaseModel):
+    label: str = Field(min_length=1, max_length=40)
+    price: float = Field(ge=0, le=1_000_000)
+    tokens: int = Field(gt=0, le=10_000_000)
+    tokens_per_generation: int = Field(gt=0, le=1_000_000)
+    rollover_months: int = Field(ge=0, le=12)
+    topup_rate: int = Field(gt=0, le=1_000_000)
+
+
+class TopupsEdit(BaseModel):
+    amounts: list[int] = Field(min_length=1, max_length=12)
+    # plan id -> {amount (as a string or int) -> bonus tokens}
+    bonus: dict[str, dict[str, int]] = Field(default_factory=dict)
+
+
+class BillingRulesEdit(BaseModel):
+    grace_days: int = Field(ge=0, le=90)
+    period_days: int = Field(ge=1, le=366)
+
+
+class BillingConfigUpdate(BaseModel):
+    """Only the parts that are sent are changed."""
+
+    plans: dict[str, TokenPlanEdit] | None = None
+    topups: TopupsEdit | None = None
+    rules: BillingRulesEdit | None = None
+
+
+class LedgerEntry(BaseModel):
+    id: int
+    bucket: str
+    kind: str
+    amount: int
+    batch_id: str | None
+    order_id: str | None
+    note: str
+    created_at: datetime
+
+
+class AdminOrder(BaseModel):
+    id: str
+    kind: str
+    plan_id: str
+    amount: float
+    tokens: int
+    status: str
+    created_at: datetime
+    paid_at: datetime | None
+
+
+class UserBilling(BaseModel):
+    user_id: int
+    billing_mode: str
+    subscription: dict | None
+    balance: dict
+    ledger: list[LedgerEntry]
+    orders: list[AdminOrder]
+
+
+class GrantPeriod(BaseModel):
+    plan_id: str = Field(max_length=32)
+    months: int = Field(default=1, ge=1, le=24)
+
+
+class TokenAdjustment(BaseModel):
+    amount: int = Field(ge=-10_000_000, le=10_000_000)
+    note: str = Field(default="", max_length=500)
+
+
+class BillingModeChange(BaseModel):
+    mode: str = Field(pattern="^(legacy|tokens)$")
 
 
 class UserUpdate(BaseModel):
@@ -297,6 +394,10 @@ def _row(
         batch_count=totals[0],
         files_total=totals[1],
         admin_notes=user.admin_notes,
+        billing_mode=user.billing_mode,
+        sub_plan=user.sub_plan,
+        sub_period_end=user.sub_period_end,
+        subscription_active=subscription_active(user),
     )
 
 
@@ -542,6 +643,197 @@ def update_settings(
 
 
 # --------------------------------------------------------------------------
+# token billing
+# --------------------------------------------------------------------------
+
+
+def _billing_config(db: Session) -> dict:
+    return {
+        "currency": currency(db),
+        "plans": {plan_id: p.as_dict() for plan_id, p in get_token_plans(db).items()},
+        "topups": get_topups(db),
+        "rules": get_billing_rules(db),
+    }
+
+
+@router.get("/billing/config")
+def billing_config(db: Session = Depends(get_db)) -> dict:
+    return _billing_config(db)
+
+
+@router.put("/billing/config")
+def update_billing_config(
+    payload: BillingConfigUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    changes: list[str] = []
+    if payload.plans:
+        unknown = set(payload.plans) - set(TOKEN_PLAN_IDS)
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Unknown plan '{sorted(unknown)[0]}'.")
+        save_token_plans(
+            db,
+            {
+                plan_id: {**edit.model_dump(), "label": edit.label.strip(), "price": round(edit.price, 2)}
+                for plan_id, edit in payload.plans.items()
+            },
+        )
+        changes.append("plans " + ", ".join(sorted(payload.plans)))
+    if payload.topups is not None:
+        amounts = sorted({int(a) for a in payload.topups.amounts})
+        if any(a <= 0 for a in amounts):
+            raise HTTPException(status_code=422, detail="Top-up amounts must be above zero.")
+        bonus: dict[str, dict[str, int]] = {}
+        for plan_id, table in payload.topups.bonus.items():
+            if plan_id not in TOKEN_PLAN_IDS:
+                raise HTTPException(status_code=422, detail=f"Unknown plan '{plan_id}' in the bonus table.")
+            cleaned: dict[str, int] = {}
+            for amount, value in table.items():
+                try:
+                    key = int(float(amount))
+                except ValueError:
+                    raise HTTPException(status_code=422, detail=f"'{amount}' is not a top-up amount.")
+                if value < 0:
+                    raise HTTPException(status_code=422, detail="Bonus tokens cannot be negative.")
+                cleaned[str(key)] = int(value)
+            bonus[plan_id] = cleaned
+        current = get_topups(db)
+        save_topups(db, {"amounts": amounts, "bonus": {**current["bonus"], **bonus}})
+        changes.append("top-ups")
+    if payload.rules is not None:
+        save_billing_rules(db, payload.rules.model_dump())
+        changes.append(f"grace {payload.rules.grace_days} days, period {payload.rules.period_days} days")
+    db.commit()
+    if changes:
+        log_activity(db, admin.id, "admin", f"Token billing updated: {'; '.join(changes)}")
+    return _billing_config(db)
+
+
+def _user_billing(db: Session, user: User) -> UserBilling:
+    ledger = (
+        db.execute(
+            select(TokenLedger)
+            .where(TokenLedger.user_id == user.id)
+            .order_by(TokenLedger.created_at.desc(), TokenLedger.id.desc())
+            .limit(20)
+        )
+        .scalars()
+        .all()
+    )
+    orders = (
+        db.execute(select(Order).where(Order.user_id == user.id).order_by(Order.created_at.desc()).limit(50))
+        .scalars()
+        .all()
+    )
+    return UserBilling(
+        user_id=user.id,
+        billing_mode=user.billing_mode,
+        subscription=subscription_summary(db, user),
+        balance=balance_summary(db, user),
+        ledger=[
+            LedgerEntry(
+                id=row.id,
+                bucket=row.bucket,
+                kind=row.kind,
+                amount=row.amount,
+                batch_id=row.batch_id,
+                order_id=row.order_id,
+                note=row.note,
+                created_at=row.created_at,
+            )
+            for row in ledger
+        ],
+        orders=[
+            AdminOrder(
+                id=o.id,
+                kind=o.kind,
+                plan_id=o.plan_id,
+                amount=o.amount_usd,
+                tokens=o.tokens,
+                status=o.status,
+                created_at=o.created_at,
+                paid_at=o.paid_at,
+            )
+            for o in orders
+        ],
+    )
+
+
+@router.get("/users/{user_id}/billing", response_model=UserBilling)
+def user_billing(user_id: int, db: Session = Depends(get_db)) -> UserBilling:
+    return _user_billing(db, _load(db, user_id))
+
+
+@router.post("/users/{user_id}/billing/grant", response_model=UserBilling)
+def grant_period(
+    user_id: int,
+    payload: GrantPeriod,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    """Start or extend a paid period without a payment, with the same rollover rules as a purchase."""
+
+    user = _load(db, user_id)
+    plan = get_token_plans(db).get(payload.plan_id)
+    if plan is None:
+        raise HTTPException(status_code=422, detail=f"Unknown plan '{payload.plan_id}'.")
+    order = new_order(db, user, "subscription", plan, 0.0, plan.tokens * payload.months)
+    settle_order(db, order, source=f"granted by {admin.email}", note="granted by admin", periods=payload.months)
+    db.refresh(user)
+    noun = "month" if payload.months == 1 else "months"
+    log_activity(db, user.id, "admin", f"Granted {payload.months} {noun} of {plan.label} by {admin.email}")
+    return _user_billing(db, user)
+
+
+@router.post("/users/{user_id}/billing/tokens", response_model=UserBilling)
+def adjust_tokens(
+    user_id: int,
+    payload: TokenAdjustment,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    """Add (or take away) top-up tokens by hand; the note is kept on the ledger line."""
+
+    if payload.amount == 0:
+        raise HTTPException(status_code=422, detail="Enter a number of tokens other than zero.")
+    user = _load(db, user_id)
+    note = " ".join(payload.note.split()) or f"adjusted by {admin.email}"
+    db.add(TokenLedger(user_id=user.id, bucket="topup", kind="admin", amount=payload.amount, note=note))
+    db.commit()
+    log_activity(db, user.id, "admin", f"{payload.amount:+d} tokens by {admin.email}: {note}")
+    return _user_billing(db, user)
+
+
+@router.post("/users/{user_id}/billing/mode", response_model=UserBilling)
+def set_billing_mode(
+    user_id: int,
+    payload: BillingModeChange,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    user = _load(db, user_id)
+    if payload.mode not in (LEGACY, TOKENS):
+        raise HTTPException(status_code=422, detail="Mode must be 'legacy' or 'tokens'.")
+    if user.billing_mode != payload.mode:
+        user.billing_mode = payload.mode
+        db.commit()
+        log_activity(db, user.id, "admin", f"Billing switched to {payload.mode} by {admin.email}")
+    return _user_billing(db, user)
+
+
+def _token_revenue(db: Session, now: datetime) -> tuple[float, int]:
+    since = now - timedelta(days=30)
+    revenue = db.execute(
+        select(func.coalesce(func.sum(Order.amount_usd), 0.0)).where(Order.status == "paid", Order.paid_at >= since)
+    ).scalar_one()
+    active = db.execute(
+        select(func.count(User.id)).where(User.is_active.is_(True), User.sub_period_end > now)
+    ).scalar_one()
+    return round(float(revenue or 0.0), 2), int(active)
+
+
+# --------------------------------------------------------------------------
 # overview & analytics
 # --------------------------------------------------------------------------
 
@@ -580,6 +872,7 @@ def overview(db: Session = Depends(get_db)) -> Overview:
         batches_by_day[day] += 1
 
     mrr, paying, _ = _paying(db, plans_now)
+    token_revenue, active_subscriptions = _token_revenue(db, now)
     days = [(chart_start + timedelta(days=offset)).date() for offset in range(CHART_DAYS)]
     return Overview(
         total_users=int(total),
@@ -596,6 +889,8 @@ def overview(db: Session = Depends(get_db)) -> Overview:
         near_limit=len(_limited_usage(db, plans_now)),
         expiring_soon=len(_expiring(db, plans_now, upcoming=True)),
         hit_limit_this_month=len(_hit_limit(db, plans_now)),
+        token_revenue_30d=token_revenue,
+        active_subscriptions=active_subscriptions,
     )
 
 

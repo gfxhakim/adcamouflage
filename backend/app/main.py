@@ -24,12 +24,13 @@ from .activity import log_activity
 from .admin_routes import router as admin_router
 from .auth_routes import record_batch
 from .auth_routes import router as auth_router
+from .billing_routes import router as billing_router
 from .config import settings
 from .db import User, get_db, get_session_factory, init_db
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .app_settings import currency
-from .plans import check_allowance, get_plans
+from .tokens import InsufficientTokens, check_billing, consume, get_billing_rules, get_token_plans, get_topups
 from .queue import cancel_asset, enqueue_asset, queue_depth, worker_mode
 from .schemas import (
     PRESET_DEFAULTS,
@@ -94,6 +95,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(subscription_router)
+app.include_router(billing_router)
 
 # Credentials must be allowed for the session cookie to reach the API from
 # the browser; with credentials on, the origin list cannot be a wildcard.
@@ -149,14 +151,13 @@ async def health() -> HealthReport:
 
 @app.get("/api/v1/plans", tags=["meta"])
 def public_plans(db: Session = Depends(get_db)) -> dict[str, Any]:
-    """The plans as the admin panel has them, for the public pricing section."""
+    """The token plans as the admin panel has them, for the public pricing section."""
 
     return {
         "currency": currency(db),
-        "plans": [
-            {"id": p.id, "label": p.label, "monthly_quota": p.monthly_quota, "price": p.price}
-            for p in get_plans(db).values()
-        ],
+        "plans": [p.as_dict() for p in get_token_plans(db).values()],
+        "topups": get_topups(db),
+        "rules": get_billing_rules(db),
     }
 
 
@@ -271,9 +272,10 @@ async def create_batch(
 
     resolved = parsed.resolved()
 
-    # Checked before anything is written, so a user over their plan never
-    # leaves files on disk. Every file counts once per variant.
-    refusal = check_allowance(db, user, len(files) * resolved.variants)
+    # Checked before anything is written, so a user over their plan (or
+    # without a subscription) never leaves files on disk. Every file counts
+    # once per variant; token accounts are charged for the accepted ones below.
+    refusal = check_billing(db, user, len(files), resolved.variants)
     if refusal:
         log_activity(db, user.id, "blocked", refusal)
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=refusal)
@@ -314,6 +316,7 @@ async def create_batch(
 
     accepted: list[AssetJob] = []
     rejected: list[UploadRejection] = []
+    stored: list[Path] = []
     store = get_store()
 
     for upload in files:
@@ -341,6 +344,7 @@ async def create_batch(
             destination.unlink(missing_ok=True)
             rejected.append(UploadRejection(filename=original, reason="The file was empty."))
             continue
+        stored.append(destination)
 
         for variant_index in range(resolved.variants):
             job = AssetJob(
@@ -353,7 +357,6 @@ async def create_batch(
                 variant_index=variant_index,
                 variants_total=resolved.variants,
             )
-            store.save_asset(job)
             accepted.append(job)
 
     if not accepted:
@@ -362,10 +365,24 @@ async def create_batch(
             detail={"message": "No usable assets in this batch.", "rejected": [r.model_dump() for r in rejected]},
         )
 
+    # `accepted` already holds one job per variant, so it is the generation
+    # count. The deduction re-reads the balance under a per-user lock, so a
+    # second batch submitted while this one uploaded cannot spend the same
+    # tokens; when it is refused, the uploads go and nothing is queued.
+    try:
+        token_cost = consume(db, user, len(accepted), batch.id)
+    except InsufficientTokens as exc:
+        for path in stored:
+            path.unlink(missing_ok=True)
+        log_activity(db, user.id, "blocked", str(exc))
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
+
+    for job in accepted:
+        store.save_asset(job)
     batch.asset_ids = [job.id for job in accepted]
     store.save_batch(batch)
     store.attach_assets(batch.id, batch.asset_ids)
-    record_batch(db, batch.id, user.id, len(accepted), resolved)
+    record_batch(db, batch.id, user.id, len(accepted), resolved, token_cost=token_cost)
 
     for job in accepted:
         task_id = await asyncio.to_thread(enqueue_asset, job.id)

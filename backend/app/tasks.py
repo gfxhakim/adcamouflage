@@ -11,12 +11,25 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from .celery_app import celery_app
 from .config import settings
+from .db import get_session_factory
+from .mailer import send_billing_reminders as _send_billing_reminders
 from .mutator import MutationError, mutate
 from .schemas import AssetKind, JobStatus
 from .security import sign_download
 from .storage import get_store, resolve_within
+from .tokens import refund_asset
 
 logger = logging.getLogger(__name__)
+
+
+def _fail(asset_id: str, **fields: object) -> None:
+    """Mark an asset FAILED and hand back the tokens it cost. Never raises for the refund."""
+
+    get_store().update_asset(asset_id, status=JobStatus.FAILED, finished_at=datetime.now(timezone.utc), **fields)
+    try:
+        refund_asset(asset_id)
+    except Exception:  # noqa: BLE001 - belt and braces; refund_asset catches its own errors
+        logger.warning("refund hook failed for %s", asset_id, exc_info=True)
 
 
 class _ProgressThrottle:
@@ -83,12 +96,7 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
 
     source = resolve_within(settings.uploads_dir, asset.stored_filename)
     if not source.exists():
-        store.update_asset(
-            asset_id,
-            status=JobStatus.FAILED,
-            error="The uploaded file is no longer available (retention window elapsed).",
-            finished_at=datetime.now(timezone.utc),
-        )
+        _fail(asset_id, error="The uploaded file is no longer available (retention window elapsed).")
         return {"asset_id": asset_id, "status": "failed"}
 
     suffix = Path(asset.original_filename).suffix.lower() or (".mp4" if asset.kind is AssetKind.VIDEO else ".jpg")
@@ -110,33 +118,15 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
             on_progress=_ProgressThrottle(asset_id),
         )
     except SoftTimeLimitExceeded:
-        store.update_asset(
-            asset_id,
-            status=JobStatus.FAILED,
-            stage="timeout",
-            error="Rendering exceeded the configured time limit.",
-            finished_at=datetime.now(timezone.utc),
-        )
+        _fail(asset_id, stage="timeout", error="Rendering exceeded the configured time limit.")
         raise
     except MutationError as exc:
         logger.warning("mutation failed for %s: %s", asset_id, exc)
-        store.update_asset(
-            asset_id,
-            status=JobStatus.FAILED,
-            stage="failed",
-            error=str(exc),
-            finished_at=datetime.now(timezone.utc),
-        )
+        _fail(asset_id, stage="failed", error=str(exc))
         return {"asset_id": asset_id, "status": "failed", "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         logger.exception("unexpected worker error for %s", asset_id)
-        store.update_asset(
-            asset_id,
-            status=JobStatus.FAILED,
-            stage="failed",
-            error=f"Internal worker error: {exc}",
-            finished_at=datetime.now(timezone.utc),
-        )
+        _fail(asset_id, stage="failed", error=f"Internal worker error: {exc}")
         return {"asset_id": asset_id, "status": "failed", "error": str(exc)}
 
     output = report.output_path
@@ -181,3 +171,14 @@ def purge_expired_assets() -> dict[str, int]:
     if removed:
         logger.info("purged %s expired files", removed)
     return {"removed": removed}
+
+
+@celery_app.task(name="app.tasks.send_billing_reminders")
+def send_billing_reminders() -> dict[str, int]:
+    """Daily: email token-mode users whose period ends soon or has just ended."""
+
+    with get_session_factory()() as db:
+        result = _send_billing_reminders(db)
+    if result["sent"] or result["skipped"]:
+        logger.info("billing reminders: %s sent, %s not emailed", result["sent"], result["skipped"])
+    return result

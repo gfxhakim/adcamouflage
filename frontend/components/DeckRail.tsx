@@ -16,7 +16,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { signOut } from "@/lib/auth";
+import { signOut, type UserProfile } from "@/lib/auth";
+import { formatTokens } from "@/lib/format";
 
 interface NavItem {
   href: string;
@@ -50,11 +51,25 @@ function isActive(pathname: string, href: string): boolean {
 interface DeckRailProps {
   /** Light surfaces (the plan page) get the white pill; the deck gets the glass one. */
   onDark?: boolean;
+  /** When given, token accounts get a small token count on the My plan item. */
+  user?: UserProfile | null;
 }
 
-export function DeckRail({ onDark = true }: DeckRailProps) {
+/** "1.2k" for the rail's tiny badge; full numbers stay in the tooltip. */
+function compactTokens(value: number): string {
+  if (value >= 10_000) return `${Math.floor(value / 1000)}k`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(value);
+}
+
+export function DeckRail({ onDark = true, user }: DeckRailProps) {
   const pathname = usePathname() ?? "";
   const [signingOut, setSigningOut] = useState(false);
+
+  // The token chip: only for token accounts; red once there is nothing to spend.
+  const tokens = user && user.billing_mode === "tokens" ? user.tokens_usable : null;
+  const tokensLow = tokens !== null && (!user?.subscription_active || tokens <= 0);
+  const tokenTip = tokens === null ? null : user?.subscription_active ? `${formatTokens(tokens)} tokens` : "No active subscription";
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -136,6 +151,21 @@ export function DeckRail({ onDark = true }: DeckRailProps) {
             >
               <Icon className="h-[1.15rem] w-[1.15rem]" aria-hidden />
               <span className="sr-only">{label}</span>
+              {href === "/app/plan" && tokens !== null ? (
+                <span
+                  className={clsx(
+                    "absolute -right-1 -top-1 rounded-full border px-1 font-mono text-[9px] leading-4 tabular-nums",
+                    tokensLow
+                      ? "border-red-400/50 bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-200"
+                      : onDark
+                        ? "border-meta-500/50 bg-slate-900 text-meta-200"
+                        : "border-meta-500/40 bg-white text-meta-700",
+                  )}
+                  aria-hidden
+                >
+                  {compactTokens(tokens)}
+                </span>
+              ) : null}
               <span
                 className={clsx(
                   "pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-lg transition group-hover:opacity-100",
@@ -143,7 +173,7 @@ export function DeckRail({ onDark = true }: DeckRailProps) {
                 )}
                 role="tooltip"
               >
-                {label}
+                {href === "/app/plan" && tokenTip ? `${label} · ${tokenTip}` : label}
               </span>
             </Link>
           );
@@ -211,7 +241,9 @@ export function DeckRail({ onDark = true }: DeckRailProps) {
               )}
             >
               <Icon className="h-[1.1rem] w-[1.1rem]" aria-hidden />
-              <span className="text-[9px] font-medium leading-none">{label}</span>
+              <span className={clsx("text-[9px] font-medium leading-none", href === "/app/plan" && tokensLow && "text-red-600 dark:text-red-300")}>
+                {href === "/app/plan" && tokens !== null ? `${compactTokens(tokens)} tok` : label}
+              </span>
             </Link>
           );
         })}

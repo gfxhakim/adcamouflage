@@ -354,6 +354,9 @@ def signed_in_client():
     if response.status_code == 409:
         response = client.post("/api/v1/auth/login", json=credentials)
     assert response.status_code in (200, 201), response.text
+    from tests.conftest import grant_max_period
+
+    grant_max_period(credentials["email"])
     return client
 
 

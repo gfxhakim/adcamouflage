@@ -14,7 +14,7 @@ from app.main import app
 from app.schemas import JobStatus
 from app.security import sign_download
 
-from .conftest import requires_ffmpeg
+from .conftest import grant_max_period, requires_ffmpeg
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +27,7 @@ def client():
         if response.status_code == 409:
             response = test_client.post("/api/v1/auth/login", json=credentials)
         assert response.status_code in (200, 201), response.text
+        grant_max_period(credentials["email"])
         yield test_client
 
 

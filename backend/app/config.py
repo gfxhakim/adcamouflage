@@ -94,6 +94,24 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     cookie_domain: str | None = None
 
+    # --- billing (BTCPay Server) ------------------------------------------
+    # Token plans are sold through a self-hosted BTCPay Server (Greenfield
+    # API). Until all three of url, store id and API key are set, checkout
+    # answers 503 and the plan page says payments are being set up.
+    btcpay_url: str = ""  # e.g. https://pay.example.com, no trailing slash
+    btcpay_store_id: str = ""
+    btcpay_api_key: SecretStr | None = None
+    # Secret entered on the BTCPay webhook; every delivery is HMAC-checked.
+    btcpay_webhook_secret: SecretStr | None = None
+    # Site origin BTCPay sends the customer back to after paying. Empty means
+    # use the request's Origin/Referer, or a relative /app/plan link.
+    public_url: str = ""
+
+    # --- email (Resend) ---------------------------------------------------
+    # Optional. Without a key the billing reminders are silently skipped.
+    resend_api_key: SecretStr | None = None
+    email_from: str = "BluCloacking <billing@blucloack.online>"
+
     # --- media engine -----------------------------------------------------
     ffmpeg_binary: str = "ffmpeg"
     ffprobe_binary: str = "ffprobe"
@@ -175,6 +193,17 @@ class Settings(BaseSettings):
             if url.startswith(prefix):
                 return "postgresql+psycopg://" + url[len(prefix) :]
         return url
+
+    @property
+    def billing_configured(self) -> bool:
+        """True once BTCPay can be called: url, store id and API key all set."""
+
+        key = self.btcpay_api_key.get_secret_value() if self.btcpay_api_key else ""
+        return bool(self.btcpay_url.strip() and self.btcpay_store_id.strip() and key.strip())
+
+    @property
+    def btcpay_base_url(self) -> str:
+        return self.btcpay_url.strip().rstrip("/")
 
     @property
     def cookie_samesite_value(self) -> str:

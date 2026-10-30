@@ -1,13 +1,16 @@
 """What a signed-in client sees about their own plan: usage, history and options.
 
-There is no payment provider, so asking for another plan records a request in
-the activity log for the admin to act on; nothing is charged or changed here.
+Token accounts (see app/tokens.py) get their subscription, balance, the plan
+cards and the top-up picker here; purchases go through app/billing_routes.py.
+Legacy accounts keep the monthly-quota fields, and may still ask the admin
+for another legacy plan, which only records a request in the activity log.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -27,6 +30,15 @@ from .plans import (
     plan_label,
     usage_window_start,
     used_this_month,
+)
+from .tokens import (
+    balance_summary,
+    billing_alerts,
+    get_billing_rules,
+    get_token_plans,
+    get_topups,
+    subscription_summary,
+    topup_options,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["subscription"])
@@ -62,6 +74,62 @@ class PlanRequestOut(BaseModel):
     created_at: datetime
 
 
+class TokenSubscription(BaseModel):
+    plan_id: str
+    plan_label: str
+    price: float
+    tokens_per_generation: int
+    period_start: datetime | None
+    period_end: datetime | None
+    active: bool
+    days_left: int
+    cancelled: bool
+    grace_until: datetime | None
+    in_grace: bool
+
+
+class TokenBalance(BaseModel):
+    subscription_tokens: int
+    topup_tokens: int
+    usable_tokens: int
+    generations_left: int
+    # Top-up tokens are kept but unusable while the subscription has lapsed.
+    frozen_topup: bool
+
+
+class TokenPlanCard(BaseModel):
+    id: str
+    label: str
+    price: float
+    tokens: int
+    tokens_per_generation: int
+    generations: int
+    price_per_generation: float
+    rollover_months: int
+    rollover_cap: int
+    topup_rate: int
+
+
+class TopupOption(BaseModel):
+    amount: int
+    tokens: int
+    bonus: int
+    total: int
+    generations: int
+
+
+class Topups(BaseModel):
+    amounts: list[int]
+    # For the user's current plan; empty until they have one.
+    options: list[TopupOption]
+
+
+class Alert(BaseModel):
+    level: str  # info | warning | danger
+    code: str  # no_subscription | ends_soon | ended | low_tokens | cancelled
+    text: str
+
+
 class Subscription(BaseModel):
     plan: PlanOption
     # The limit on this account, which an admin may have set apart from the plan's.
@@ -85,6 +153,15 @@ class Subscription(BaseModel):
     plans: list[PlanOption]
     pending_request: PlanRequestOut | None
     retention_hours: int
+    # --- token billing ------------------------------------------------------
+    billing_mode: str = "legacy"
+    subscription: TokenSubscription | None = None
+    balance: TokenBalance
+    token_plans: list[TokenPlanCard]
+    topups: Topups
+    payments_enabled: bool
+    grace_days: int
+    alerts: list[Alert]
 
 
 class PlanRequestIn(BaseModel):
@@ -202,7 +279,24 @@ def subscription(user: User = Depends(current_user), db: Session = Depends(get_d
         ],
         pending_request=_pending_request(db, user),
         retention_hours=settings.retention_hours,
+        **_token_fields(db, user, now),
     )
+
+
+def _token_fields(db: Session, user: User, now: datetime) -> dict[str, Any]:
+    token_plans = get_token_plans(db)
+    topups = get_topups(db)
+    current = token_plans.get(user.sub_plan or "")
+    return {
+        "billing_mode": user.billing_mode,
+        "subscription": subscription_summary(db, user, now),
+        "balance": balance_summary(db, user, now),
+        "token_plans": [p.as_dict() for p in token_plans.values()],
+        "topups": {"amounts": topups["amounts"], "options": topup_options(current, topups)},
+        "payments_enabled": settings.billing_configured,
+        "grace_days": get_billing_rules(db)["grace_days"],
+        "alerts": billing_alerts(db, user, now),
+    }
 
 
 @router.post("/plan-request", response_model=PlanRequestOut, status_code=status.HTTP_201_CREATED)
