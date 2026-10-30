@@ -103,9 +103,34 @@ class Settings(BaseSettings):
     btcpay_api_key: SecretStr | None = None
     # Secret entered on the BTCPay webhook; every delivery is HMAC-checked.
     btcpay_webhook_secret: SecretStr | None = None
-    # Site origin BTCPay sends the customer back to after paying. Empty means
-    # use the request's Origin/Referer, or a relative /app/plan link.
+    # Site origin the payment provider sends the customer back to after
+    # paying. Empty means use the request's Origin/Referer, or a relative
+    # /app/plan link for BTCPay. Volet needs an absolute, short address, so
+    # its pay page refuses to run without one (see app/volet.py).
     public_url: str = ""
+
+    # --- billing (Volet Hosted Checkout, the "SCI") -----------------------
+    # A second way to take payment, usable alongside BTCPay or on its own:
+    # the customer's browser posts a signed form to Volet's hosted page and
+    # Volet calls back with a signed status notification. Needs the
+    # merchant's Volet account email, the name the gateway was given when it
+    # was created and its password (security word). The plan page offers
+    # whichever providers are set.
+    volet_account_email: str = ""
+    volet_sci_name: str = ""
+    volet_sci_secret: SecretStr | None = None
+    volet_sci_url: str = "https://account.volet.com/sci/"
+    # Addresses (or ranges such as 203.0.113.0/24) a Volet status notification
+    # may come from, comma separated. The default is the three senders Volet's
+    # SCI document lists plus the "notification server" address Volet's
+    # dashboard shows on a Hosted Checkout's Payment methods tab (seen
+    # 2026-10-30), which the document does not mention. The hash on a
+    # notification does not cover its status field, so a buyer who receives a
+    # genuine one could send it again as COMPLETED; checking the sender closes
+    # that. Empty turns the check off.
+    volet_notify_ips: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["50.7.115.5", "51.255.40.139", "13.53.55.89", "13.61.247.159"]
+    )
 
     # --- email (Resend) ---------------------------------------------------
     # Optional. Without a key the billing reminders are silently skipped.
@@ -145,6 +170,15 @@ class Settings(BaseSettings):
             return [email.strip().lower() for email in value.split(",") if email.strip()]
         if isinstance(value, list):
             return [str(email).strip().lower() for email in value if str(email).strip()]
+        return value
+
+    @field_validator("volet_notify_ips", mode="before")
+    @classmethod
+    def _split_notify_ips(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [entry.strip() for entry in value.split(",") if entry.strip()]
+        if isinstance(value, list):
+            return [str(entry).strip() for entry in value if str(entry).strip()]
         return value
 
     @field_validator("storage_root", mode="before")
@@ -195,11 +229,24 @@ class Settings(BaseSettings):
         return url
 
     @property
-    def billing_configured(self) -> bool:
+    def btcpay_configured(self) -> bool:
         """True once BTCPay can be called: url, store id and API key all set."""
 
         key = self.btcpay_api_key.get_secret_value() if self.btcpay_api_key else ""
         return bool(self.btcpay_url.strip() and self.btcpay_store_id.strip() and key.strip())
+
+    @property
+    def volet_configured(self) -> bool:
+        """True once a Volet form can be signed: account email, gateway name and password all set."""
+
+        secret = self.volet_sci_secret.get_secret_value() if self.volet_sci_secret else ""
+        return bool(self.volet_account_email.strip() and self.volet_sci_name.strip() and secret.strip())
+
+    @property
+    def billing_configured(self) -> bool:
+        """True when at least one payment provider is set up, so a checkout can be offered."""
+
+        return self.btcpay_configured or self.volet_configured
 
     @property
     def btcpay_base_url(self) -> str:

@@ -552,8 +552,13 @@ def new_order(
     tokens: int,
     *,
     bonus: int = 0,
+    provider: str = "btcpay",
 ) -> Order:
-    """Record a purchase with the credit it was quoted at, so a later settlement applies exactly that."""
+    """Record a purchase with the credit it was quoted at, so a later settlement applies exactly that.
+
+    ``provider`` names who will take the money ('btcpay' or 'volet'); the
+    route that starts the checkout fills in that provider's own ids after.
+    """
 
     order = Order(
         id=uuid.uuid4().hex,
@@ -565,6 +570,7 @@ def new_order(
         bonus_tokens=int(bonus),
         tokens_per_generation=plan.tokens_per_generation,
         status="pending",
+        provider=provider,
     )
     db.add(order)
     db.commit()

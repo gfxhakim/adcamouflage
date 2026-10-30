@@ -163,14 +163,14 @@ class TokenLedger(Base):
 
 
 class Order(Base):
-    """A purchase: a subscription period or a top-up, paid through BTCPay.
+    """A purchase: a subscription period or a top-up, paid through BTCPay or Volet.
 
     ``status`` moves pending -> paid, or pending -> expired / invalid when
-    the invoice lapses; a payment BTCPay confirms late still moves it to
-    paid. A paid order is applied to the ledger exactly once: settlement
-    claims the row with a conditional UPDATE in the same transaction as the
-    ledger rows, so a webhook delivered twice, or a webhook and a poll that
-    overlap, credit it once.
+    the invoice lapses or the provider reports a cancellation; a payment the
+    provider confirms late still moves it to paid. A paid order is applied
+    to the ledger exactly once: settlement claims the row with a conditional
+    UPDATE in the same transaction as the ledger rows, so a notification
+    delivered twice, or a webhook and a poll that overlap, credit it once.
     """
 
     __tablename__ = "orders"
@@ -190,6 +190,12 @@ class Order(Base):
     tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
     btcpay_invoice_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    # Which provider takes the money: 'btcpay' or 'volet'. Every order from
+    # before Volet was a BTCPay one, hence the default.
+    provider: Mapped[str] = mapped_column(String(16), default="btcpay", server_default="btcpay", nullable=False)
+    # The provider's own id for the payment when it is not a BTCPay invoice
+    # (Volet's transaction id, ``ac_transfer``, from the status notification).
+    provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     checkout_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
@@ -293,6 +299,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "bonus_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("orders", "tokens_per_generation", "INTEGER"),
     ("orders", "checked_at", "TIMESTAMP WITH TIME ZONE"),
+    # Second payment provider (Volet). Every order before it was a BTCPay one.
+    ("orders", "provider", "VARCHAR(16) NOT NULL DEFAULT 'btcpay'"),
+    ("orders", "provider_ref", "VARCHAR(128)"),
 ]
 
 

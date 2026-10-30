@@ -29,7 +29,9 @@ class BTCPayError(Exception):
 
 
 def configured() -> bool:
-    return settings.billing_configured
+    """True when BTCPay itself is set up (Volet being set up does not count here)."""
+
+    return settings.btcpay_configured
 
 
 # Tests put an httpx.MockTransport here so no request leaves the process.

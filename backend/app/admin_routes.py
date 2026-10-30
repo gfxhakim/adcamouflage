@@ -204,6 +204,7 @@ class AdminOrder(BaseModel):
     amount: float
     tokens: int
     status: str
+    provider: str  # btcpay | volet
     created_at: datetime
     paid_at: datetime | None
 
@@ -752,6 +753,7 @@ def _user_billing(db: Session, user: User) -> UserBilling:
                 amount=o.amount_usd,
                 tokens=o.tokens,
                 status=o.status,
+                provider=o.provider,
                 created_at=o.created_at,
                 paid_at=o.paid_at,
             )

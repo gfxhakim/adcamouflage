@@ -46,13 +46,14 @@ import {
   type BatchSummary,
   type Order,
   type OrderKind,
+  type PaymentProviderId,
   type Subscription,
   type UserProfile,
 } from "@/lib/auth";
 import { formatDate, formatTokens, timeAgo } from "@/lib/format";
 import type { TokenPlanCard } from "@/lib/types";
 
-/** After BTCPay sends the browser back, ask about the order this often, for this long. */
+/** After the payment provider sends the browser back, ask about the order this often, for this long. */
 const ORDER_POLL_MS = 3000;
 const ORDER_POLL_LIMIT_MS = 120_000;
 
@@ -75,9 +76,18 @@ export default function PlanPage() {
   /** The plan id or "topup" whose checkout is being created. */
   const [checkoutBusy, setCheckoutBusy] = useState<string | null>(null);
   const [waitingOrder, setWaitingOrder] = useState<string | null>(null);
+  /** The payment method the user picked; the first one the server offers until then. */
+  const [pickedProvider, setPickedProvider] = useState<PaymentProviderId | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Plan labels for the settlement toast, which runs outside the render.
   const labelsRef = useRef<Record<string, string>>({});
+  /**
+   * What the payment provider's return link said, read once. The query is
+   * dropped as soon as it is read, and in development React's StrictMode runs
+   * the effect below twice, so the second run takes it from here instead of
+   * finding an empty query and leaving the "waiting" state without a poll.
+   */
+  const returned = useRef<{ orderId: string | null; backedOut: boolean } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -107,12 +117,23 @@ export default function PlanPage() {
     void load();
   }, [load]);
 
-  // --- back from BTCPay: wait for the order to settle -----------------------
+  // --- back from the payment provider: wait for the order to settle ---------
   useEffect(() => {
-    const orderId = new URLSearchParams(window.location.search).get("order");
-    if (!orderId) return;
-    // Drop the query so a reload does not start another wait.
-    window.history.replaceState(null, "", window.location.pathname);
+    if (returned.current === null) {
+      const params = new URLSearchParams(window.location.search);
+      returned.current = { orderId: params.get("order"), backedOut: params.get("cancelled") === "1" };
+      if (returned.current.orderId || returned.current.backedOut) {
+        // Drop the query so a reload does not start another wait.
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+    const { orderId, backedOut } = returned.current;
+    if (!orderId && !backedOut) return;
+    if (backedOut || !orderId) {
+      // The provider's "fail" link: the customer backed out, so there is nothing to poll.
+      setToast({ tone: "error", text: "Payment cancelled — nothing was charged." });
+      return;
+    }
     setWaitingOrder(orderId);
     setToast({ tone: "info", text: "Waiting for your payment to be confirmed…" });
 
@@ -143,7 +164,7 @@ export default function PlanPage() {
             text:
               order.status === "expired"
                 ? "The invoice expired before it was paid. Nothing was charged; start again when you are ready."
-                : "BTCPay marked this payment as invalid. If you did pay, contact support with the order id.",
+                : "This payment was marked as invalid. If you did pay, contact support with the order id.",
           });
           await load();
           return;
@@ -170,18 +191,25 @@ export default function PlanPage() {
     };
   }, [load]);
 
+  // --- payment method ------------------------------------------------------
+  const providers = sub?.payment_providers ?? [];
+  const provider = providers.find((p) => p.id === pickedProvider)?.id ?? providers[0]?.id;
+
   // --- checkout ------------------------------------------------------------
-  const buy = useCallback(async (kind: OrderKind, choice: { plan_id?: string; amount?: number }, key: string) => {
-    setCheckoutBusy(key);
-    setToast(null);
-    try {
-      const checkout = await startCheckout(kind, choice);
-      window.location.assign(checkout.checkout_url);
-    } catch (err) {
-      setToast({ tone: "error", text: err instanceof Error ? err.message : "Could not start the checkout." });
-      setCheckoutBusy(null);
-    }
-  }, []);
+  const buy = useCallback(
+    async (kind: OrderKind, choice: { plan_id?: string; amount?: number }, key: string) => {
+      setCheckoutBusy(key);
+      setToast(null);
+      try {
+        const checkout = await startCheckout(kind, choice, provider);
+        window.location.assign(checkout.checkout_url);
+      } catch (err) {
+        setToast({ tone: "error", text: err instanceof Error ? err.message : "Could not start the checkout." });
+        setCheckoutBusy(null);
+      }
+    },
+    [provider],
+  );
 
   const buyPlan = useCallback((plan: TokenPlanCard) => void buy("subscription", { plan_id: plan.id }, plan.id), [buy]);
   const buyTopup = useCallback((amount: number) => void buy("topup", { amount }, "topup"), [buy]);
@@ -263,6 +291,32 @@ export default function PlanPage() {
                     <span className="chip ml-auto !text-[10px]">Subscribing moves your account to token billing</span>
                   ) : null}
                 </div>
+                {providers.length > 1 ? (
+                  <div className="mb-4 flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-medium text-ink-muted">Pay with</span>
+                    <div className="flex gap-1 rounded-xl border border-black/10 bg-white p-1" role="group" aria-label="Payment method">
+                      {providers.map((option) => {
+                        const selected = option.id === provider;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            aria-pressed={selected}
+                            disabled={checkoutBusy !== null}
+                            onClick={() => setPickedProvider(option.id)}
+                            className={clsx(
+                              "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/70 disabled:cursor-not-allowed disabled:opacity-50",
+                              selected ? "bg-meta-500 text-white" : "text-ink-muted hover:bg-meta-50 hover:text-meta-700",
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[11px] text-ink-faint">Applies to plans and top-ups.</span>
+                  </div>
+                ) : null}
                 <TokenPlanCards
                   plans={sub.token_plans}
                   current={isTokens ? sub.subscription : null}
