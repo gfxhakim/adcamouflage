@@ -1,7 +1,8 @@
 # Taking payments with Volet.com (Hosted Checkout)
 
-This is a click-by-click guide for connecting this app to a Volet.com
-business account so customers can pay on Volet's hosted payment page. There
+This is a click-by-click guide for connecting this app to a verified
+Volet.com account (see section 2 for which kind) so customers can pay on
+Volet's hosted payment page. There
 is no server to run: Volet hosts the payment page, the customer pays from a
 Volet balance or a crypto wallet, and the money is credited to your Volet
 account, from which you withdraw it. The app's own plans, prices and order
@@ -125,13 +126,23 @@ and <https://volet.com/business/fees>.
 Sources: <https://volet.com/docs/guides/overview/verification> and
 <https://volet.com/docs/guides/accept-payments/accept-payments-overview>.
 
-1. **A business account.** Volet's verification page says: "Business
+1. **Most likely a business account.** Volet's verification page lists the
+   payment gateway only under a fully verified business account: "Business
    accounts require company verification before you can accept payments,
    send payouts, and access banking services." The business account levels
    it lists are "Registration only" (e-mail confirmed, dashboard access only)
    and "Fully verified", which asks for company documents and the identity
    of the responsible persons (directors, beneficiaries) and unlocks the
-   payment gateway, mass payouts, banking transfers and the APIs.
+   payment gateway, mass payouts, banking transfers and the APIs. The
+   accept-payments overview, though, only says "you need a verified
+   Volet.com account" and links to both the personal and the business
+   verification pages, so a verified **personal** account may be allowed as
+   well; Volet does not say either way. If you already have a verified
+   personal account, look before you apply for anything: open **Payment
+   Tools** in the dashboard (older menu: Profile > API, SDK > Manage SCI).
+   If it lets you create a payment gateway, use it; the app works the same
+   with either account type. If the option is missing, or Volet refuses the
+   gateway at the compliance review (point 3), open a business account.
 2. **Full verification.** The overview says: "To use custodial payment
    solutions, you need a verified Volet.com account." On timing, the
    verification page says: "Most verification checks are completed
