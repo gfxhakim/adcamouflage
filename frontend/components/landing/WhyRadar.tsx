@@ -129,7 +129,7 @@ function Pipeline() {
   const outputs = cms.list("why.pipeline.outputs", OUTPUTS, "Output files", OUTPUTS);
 
   return (
-    <div className="relative mx-auto w-full max-w-[480px] overflow-x-hidden">
+    <div className="relative mx-auto w-full max-w-[480px] overflow-x-clip">
       <style>{`
         .pipeline-dash {
           background-image: linear-gradient(to bottom, rgb(var(--meta-500-rgb, 8 102 255)) 50%, transparent 50%);
@@ -200,7 +200,7 @@ export function WhyRadar() {
   const why = cms.list("why.items", WHY, "Points", WHY.map((w) => w.title));
   return (
     <CmsSection k="why" label="How it works" id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-12 sm:py-16 lg:py-20">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 overflow-x-hidden px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8 lg:px-8">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 overflow-x-clip px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8 lg:px-8">
         <div className="min-w-0">
           <SectionTag k="why.tag" index="01">THE SCALING BOTTLENECK</SectionTag>
           <CmsHeadline
