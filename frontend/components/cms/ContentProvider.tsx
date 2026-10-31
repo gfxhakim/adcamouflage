@@ -225,7 +225,10 @@ function ThemeStyle({ namespace, content }: { namespace: Namespace; content: Sit
 
   const scrollbar = theme.scrollbar ?? (namespace === "landing" ? "hidden" : undefined);
   if (scrollbar === "hidden") {
-    rules.push(`html { scrollbar-width: none; } html::-webkit-scrollbar { display: none; width: 0; height: 0; }`);
+    // The page and every box inside it: they all keep scrolling, just without a visible bar.
+    rules.push(
+      `html, body, ${scope} * { scrollbar-width: none; -ms-overflow-style: none; } html::-webkit-scrollbar, body::-webkit-scrollbar, ${scope} *::-webkit-scrollbar { display: none; width: 0; height: 0; }`,
+    );
   } else if (scrollbar === "default") {
     rules.push(`html { scrollbar-width: auto; scrollbar-color: auto; } html::-webkit-scrollbar { width: auto; } html::-webkit-scrollbar-thumb { background: rgb(0 0 0 / 0.3); }`);
   }
