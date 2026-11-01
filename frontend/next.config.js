@@ -18,6 +18,15 @@ const nextConfig = {
     return [{ source: "/api/:path*", destination: `${API_ORIGIN}/api/:path*` }];
   },
 
+  // The old per-platform pages now live as a choice in the workspace's Settings step.
+  async redirects() {
+    return ["meta", "tiktok", "youtube"].map((name) => ({
+      source: `/app/${name}`,
+      destination: "/app",
+      permanent: false,
+    }));
+  },
+
   async headers() {
     return [
       {

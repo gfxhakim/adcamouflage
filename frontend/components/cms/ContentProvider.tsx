@@ -107,9 +107,6 @@ function noop() {}
 
 const PAGE_NAMES: Record<string, string> = {
   "/app": "Workspace texts",
-  "/app/meta": "Meta studio texts",
-  "/app/tiktok": "TikTok studio texts",
-  "/app/youtube": "YouTube studio texts",
   "/app/history": "History texts",
   "/app/plan": "My plan texts",
 };
