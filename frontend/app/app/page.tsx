@@ -27,6 +27,7 @@ import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
 import OptionsPanel from "@/components/OptionsPanel";
+import PlatformPicker from "@/components/PlatformPicker";
 import BillingAlerts from "@/components/plan/BillingAlerts";
 import ProgressBar from "@/components/ProgressBar";
 import UploadZone from "@/components/UploadZone";
@@ -653,12 +654,15 @@ export default function WorkspacePage() {
                 ) : null}
 
                 {step === 1 ? (
-                  <OptionsPanel
-                    options={options}
-                    onChange={setOptions}
-                    catalogue={catalogue}
-                    disabled={uploading}
-                  />
+                  <div className="space-y-6">
+                    <PlatformPicker disabled={uploading} />
+                    <OptionsPanel
+                      options={options}
+                      onChange={setOptions}
+                      catalogue={catalogue}
+                      disabled={uploading}
+                    />
+                  </div>
                 ) : null}
 
                 {step === 2 ? (

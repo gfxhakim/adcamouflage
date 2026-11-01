@@ -29,9 +29,6 @@ const TABS = [
 
 const WORKSPACE_PAGES = [
   { path: "/app", label: "Workspace · step flow" },
-  { path: "/app/meta", label: "Meta studio" },
-  { path: "/app/tiktok", label: "TikTok studio" },
-  { path: "/app/youtube", label: "YouTube studio" },
   { path: "/app/history", label: "History" },
   { path: "/app/plan", label: "My plan" },
 ];

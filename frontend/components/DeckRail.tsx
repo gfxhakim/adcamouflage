@@ -5,11 +5,8 @@ import clsx from "clsx";
 import {
   Clock,
   Crown,
-  Facebook,
   LayoutGrid,
   LogOut,
-  Music2,
-  Youtube,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -28,16 +25,13 @@ interface NavItem {
 }
 
 /**
- * The signed-in navigation for the workspace. Workspace, the three per-platform
- * format studios, History and My plan, then Sign out — a slim vertical icon
+ * The signed-in navigation for the workspace. Workspace, History and My plan,
+ * then Sign out — a slim vertical icon
  * rail on desktop and a floating pill on phones, in our Meta-blue / white /
  * black palette.
  */
 const ITEMS: NavItem[] = [
   { href: "/app", label: "Workspace", icon: LayoutGrid },
-  { href: "/app/meta", label: "Meta", icon: Facebook },
-  { href: "/app/tiktok", label: "TikTok", icon: Music2 },
-  { href: "/app/youtube", label: "YouTube", icon: Youtube },
   { href: "/app/history", label: "History", icon: Clock },
   { href: "/app/plan", label: "My plan", icon: Crown },
 ];
@@ -69,7 +63,7 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
   // Admin > Workspace can rename, re-icon, reorder or hide each item.
   const cms = useCms();
   const brandMark = cms.media("brand.mark", { src: BRAND_MARK, kind: "image", alt: "" }, "Logo shield").src || BRAND_MARK;
-  const items = cms.list("rail.items", ITEMS, "Navigation items", ITEMS.map((i) => i.label)).map(({ item, key }) => {
+  const items = cms.list("rail.nav", ITEMS, "Navigation items", ITEMS.map((i) => i.label)).map(({ item, key }) => {
     const icon = cms.iconName(`${key}.icon`, "");
     return { ...item, icon: (icon && ICONS[icon]) || item.icon };
   });
