@@ -70,7 +70,106 @@ type ToggleKey =
   | "frequency_smoothing"
   | "deep_scramble"
   | "mirror"
-  | "temporal_trim";
+  | "temporal_trim"
+  | "elastic_mesh_warp"
+  | "dct_jnd_perturbation"
+  | "lut_clahe_color"
+  | "optical_flow_timewarp"
+  | "adversarial_cnn_layer"
+  | "audio_allpass_phase"
+  | "formant_pitch_lfo"
+  | "psychoacoustic_rir"
+  | "authentic_atom_spoof"
+  | "macroblock_aq_variance";
+
+const ADVANCED_TOGGLES: {
+  key: ToggleKey;
+  label: string;
+  badge: string;
+  description: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    key: "elastic_mesh_warp",
+    label: "Sub-pixel perspective & mesh warp",
+    badge: "Spatial",
+    description:
+      "Shifts 8×8 and 16×16 DCT block grid alignment via sub-pixel perspective & smooth displacement without clipping subtitles or faces.",
+    icon: Maximize2,
+  },
+  {
+    key: "dct_jnd_perturbation",
+    label: "DCT mid-band & JND masking",
+    badge: "Frequency",
+    description:
+      "Perturbs mid-frequency DCT bands strictly inside high-texture regions so changes survive platform H.264/H.265/AV1 re-encoding.",
+    icon: Waves,
+  },
+  {
+    key: "lut_clahe_color",
+    label: "Skin-protected 3D LUT & CLAHE",
+    badge: "Photometric",
+    description:
+      "Modulates local contrast (LAB CLAHE) and rotates shadow/highlight vectors while locking the human skin-tone corridor.",
+    icon: Palette,
+  },
+  {
+    key: "optical_flow_timewarp",
+    label: "Temporal motion micro-interpolation",
+    badge: "Temporal",
+    description:
+      "Blends sub-frame temporal motion gradients across adjacent frames at a rock-solid constant FPS without dropping hooks or CTAs.",
+    icon: Gauge,
+  },
+  {
+    key: "adversarial_cnn_layer",
+    label: "Adversarial CNN edge perturbation",
+    badge: "Neural",
+    description:
+      "Injects an imperceptible, edge-masked directional grating (±1–2 RGB levels) that shifts ResNet/CLIP/ViT neural embeddings.",
+    icon: Sparkles,
+  },
+  {
+    key: "audio_allpass_phase",
+    label: "All-pass phase dispersion",
+    badge: "Psychoacoustic",
+    description:
+      "Cascades 4-stage biquad all-pass filters to rotate STFT phase and waveform structure while keeping EQ and voice tone 100% identical.",
+    icon: AudioLines,
+  },
+  {
+    key: "formant_pitch_lfo",
+    label: "Formant-locked micro-pitch LFO",
+    badge: "Psychoacoustic",
+    description:
+      "Sub-audible LFO pitch drift (0.35–0.65 Hz) with formant EQ compensation—zero chipmunk effect and zero lip-sync drift.",
+    icon: AudioLines,
+  },
+  {
+    key: "psychoacoustic_rir",
+    label: "Psychoacoustic micro-RIR reflections",
+    badge: "Psychoacoustic",
+    description:
+      "Convolves ultra-short studio early reflections (5–15ms) below the human echo threshold to disrupt spectrogram peak constellations.",
+    icon: Waves,
+  },
+  {
+    key: "authentic_atom_spoof",
+    label: "Authentic NLE / device atom structure",
+    badge: "Forensic",
+    description:
+      "Emulates genuine Rec.709 colr atoms and camera/NLE track timescales so containers pass platform authenticity classifiers.",
+    icon: Tags,
+  },
+  {
+    key: "macroblock_aq_variance",
+    label: "Macroblock AQ & psy-RD variance",
+    badge: "Bitstream",
+    description:
+      "Randomizes internal x264/VP9 adaptive quantization and psychovisual rate-distortion trees for unique macroblock bit allocation.",
+    icon: Layers,
+  },
+];
 
 const TOGGLES: { key: ToggleKey; label: string; description: string; icon: LucideIcon }[] = [
   {
@@ -165,6 +264,39 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
     onChange({ ...options, ...defaults, preset });
   };
 
+  const applySmartGen4 = () => {
+    onChange({
+      ...options,
+      preset: "custom",
+      intensity: 58,
+      // Keep non-destructive classic layers, disable destructive ones (mirror, trim, blur)
+      micro_crop: false,
+      frame_rate_stagger: false,
+      noise_injection: false,
+      color_drift: false,
+      audio_mutation: false,
+      temporal_trim: false,
+      frequency_smoothing: false,
+      deep_scramble: false,
+      mirror: false,
+      strip_metadata: true,
+      keyframe_gop_jitter: true,
+      container_bitrate_shuffle: true,
+      chroma_matrix_shift: true,
+      // Enable all 10 Gen-4 signal, psychoacoustic & forensic layers
+      elastic_mesh_warp: true,
+      dct_jnd_perturbation: true,
+      lut_clahe_color: true,
+      optical_flow_timewarp: true,
+      adversarial_cnn_layer: true,
+      audio_allpass_phase: true,
+      formant_pitch_lfo: true,
+      psychoacoustic_rir: true,
+      authentic_atom_spoof: true,
+      macroblock_aq_variance: true,
+    });
+  };
+
   const presetIds = (catalogue?.presets ?? [])
     .map((entry) => entry.id)
     .filter((id): id is Exclude<PresetId, "custom"> => id !== "custom");
@@ -177,9 +309,20 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
   return (
     <div className="space-y-6">
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="label">Camouflage profile</p>
-          {options.preset === "custom" ? <span className="chip !text-[10px]">custom</span> : null}
+          <div className="flex items-center gap-2">
+            {options.preset === "custom" ? <span className="chip !text-[10px]">custom</span> : null}
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={applySmartGen4}
+              className="inline-flex items-center gap-1.5 rounded-full border border-meta-500/60 bg-meta-50 px-3 py-1 text-[11px] font-semibold text-meta-700 transition hover:bg-meta-100 dark:bg-meta-500/15 dark:text-meta-200 dark:hover:bg-meta-500/25"
+            >
+              <Sparkles className="h-3 w-3" aria-hidden />
+              Smart Anti-Detection (Gen-4 Only)
+            </button>
+          </div>
         </div>
         <div className="grid gap-2.5 sm:grid-cols-2">
           {availablePresets.map((preset) => {
@@ -244,7 +387,71 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
       </section>
 
       <section>
-        <p className="label mb-3">Evasion layers</p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="label flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-meta-500" aria-hidden />
+            Gen-4 signal, psychoacoustic &amp; forensic layers
+          </p>
+          <span className="font-mono text-[10px] text-meta-600 dark:text-meta-300">
+            Zero quality loss · Re-encode resilient
+          </span>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {ADVANCED_TOGGLES.map(({ key, label, badge, description, icon: Icon }) => {
+            const active = Boolean(options[key]);
+            return (
+              <button
+                key={key}
+                type="button"
+                role="switch"
+                aria-checked={active}
+                disabled={disabled}
+                onClick={() => set(key, !active)}
+                className={clsx(
+                  "flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all duration-200",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                  active
+                    ? "border-meta-500/60 bg-meta-50/90 dark:bg-meta-500/15 text-black dark:text-slate-100"
+                    : "border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] text-ink-subtle dark:text-slate-400 hover:border-black/15 dark:hover:border-white/15",
+                )}
+              >
+                <span
+                  className={clsx(
+                    "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
+                    active
+                      ? "border-meta-500/50 bg-meta-100 dark:bg-meta-500/25 text-meta-600 dark:text-meta-300"
+                      : "border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10 text-ink-subtle dark:text-slate-400",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+                    {label}
+                    <span className="rounded bg-meta-500/15 px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wide text-meta-700 dark:text-meta-300">
+                      {badge}
+                    </span>
+                    <span
+                      className={clsx(
+                        "ml-auto h-1.5 w-1.5 rounded-full transition-colors",
+                        active ? "bg-meta-500 shadow-meta-sm" : "bg-black/20 dark:bg-white/20",
+                      )}
+                      aria-hidden
+                    />
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle dark:text-slate-400">
+                    {description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
+        <p className="label mb-3">Classic evasion layers</p>
         <div className="grid gap-2 md:grid-cols-2">
           {TOGGLES.map(({ key, label, description, icon: Icon }) => {
             const active = options[key];

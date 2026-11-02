@@ -257,3 +257,65 @@ def test_ffmpeg_exit_description_names_the_out_of_memory_kill():
     assert describe_ffmpeg_exit(-15, "") == "ffmpeg was killed (SIGTERM)"
     assert describe_ffmpeg_exit(1, "") == "ffmpeg exited with code 1 and no error output"
     assert describe_ffmpeg_exit(1, "warning\nwidth not divisible by 2\n") == "width not divisible by 2"
+
+
+@requires_ffmpeg
+def test_gen4_advanced_layers_video_pipeline(sample_video, tmp_path):
+    options = _options(
+        intensity=60,
+        seed=2026,
+        micro_crop=False,
+        frame_rate_stagger=False,
+        noise_injection=False,
+        color_drift=False,
+        audio_mutation=False,
+        temporal_trim=False,
+        elastic_mesh_warp=True,
+        dct_jnd_perturbation=True,
+        lut_clahe_color=True,
+        optical_flow_timewarp=True,
+        adversarial_cnn_layer=True,
+        audio_allpass_phase=True,
+        formant_pitch_lfo=True,
+        psychoacoustic_rir=True,
+        authentic_atom_spoof=True,
+        macroblock_aq_variance=True,
+    )
+    report = mutate(sample_video, tmp_path / "gen4.mp4", AssetKind.VIDEO, options, seed=2026)
+    output_info = probe(report.output_path)
+
+    assert output_info.has_video
+    assert output_info.has_audio
+    assert report.metrics["source_sha256"] != report.metrics["output_sha256"]
+    assert any("sub-pixel perspective" in item for item in report.applied)
+    assert any("DCT mid-band" in item for item in report.applied)
+    assert any("skin-protected 3D LUT" in item for item in report.applied)
+    assert any("temporal motion micro-interpolation" in item for item in report.applied)
+    assert any("adversarial CNN" in item for item in report.applied)
+    assert any("all-pass audio phase" in item for item in report.applied)
+    assert any("formant-locked micro-pitch LFO" in item for item in report.applied)
+    assert any("psychoacoustic micro-RIR" in item for item in report.applied)
+    assert any("authentic Rec.709" in item for item in report.applied)
+    assert any("macroblock AQ variance" in item for item in report.applied)
+
+
+def test_gen4_advanced_layers_image_pipeline(sample_image, tmp_path):
+    options = _options(
+        intensity=65,
+        seed=1337,
+        micro_crop=False,
+        noise_injection=False,
+        color_drift=False,
+        elastic_mesh_warp=True,
+        dct_jnd_perturbation=True,
+        lut_clahe_color=True,
+        adversarial_cnn_layer=True,
+    )
+    report = mutate(sample_image, tmp_path / "gen4.jpg", AssetKind.IMAGE, options, seed=1337)
+    assert report.output_path.exists()
+    assert report.metrics["source_sha256"] != report.metrics["output_sha256"]
+    assert any("sub-pixel elastic mesh warp" in item for item in report.applied)
+    assert any("skin-protected LAB CLAHE" in item for item in report.applied)
+    assert any("DCT mid-band & JND" in item for item in report.applied)
+    assert any("adversarial CNN Gabor" in item for item in report.applied)
+

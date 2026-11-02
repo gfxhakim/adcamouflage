@@ -215,6 +215,53 @@ class MutationPlan:
     jpeg_quality: int = 92
     seed: int = 0
 
+    # --- Gen-4 Advanced Signal, Psychoacoustic & Forensic Parameters -------
+    elastic_mesh_warp: bool = False
+    perspective_offsets: tuple[float, float, float, float, float, float, float, float] = (
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    )
+    mesh_amplitude: float = 0.0
+
+    dct_jnd_perturbation: bool = False
+    dct_mid_gain: float = 0.0
+    jnd_strength: float = 0.0
+
+    lut_clahe_color: bool = False
+    clahe_clip: float = 0.0
+    cb_shadows: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    cb_highlights: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+    optical_flow_timewarp: bool = False
+    tmix_weights: tuple[int, int, int] = (0, 100, 0)
+
+    adversarial_cnn_layer: bool = False
+    cnn_epsilon: float = 0.0
+    cnn_kernel: tuple[int, int, int, int, int] = (0, 0, 100, 0, 0)
+
+    audio_allpass_phase: bool = False
+    allpass_bands: tuple[tuple[int, float], ...] = ()
+
+    formant_pitch_lfo: bool = False
+    vibrato_hz: float = 0.0
+    vibrato_depth: float = 0.0
+    formant_eq_hz: int = 0
+    formant_eq_gain: float = 0.0
+
+    psychoacoustic_rir: bool = False
+    rir_delays_ms: tuple[int, int] = (0, 0)
+    rir_decays: tuple[float, float] = (0.0, 0.0)
+    stereo_widen: float = 1.0
+
+    authentic_atom_spoof: bool = False
+    track_timescale: int = 0
+
+    macroblock_aq_variance: bool = False
+    aq_mode: int = 1
+    aq_strength: float = 1.0
+    psy_rd: float = 1.0
+    psy_trellis: float = 0.0
+    qcomp: float = 0.60
+
 
 def build_plan(
     options: MutationOptions,
@@ -308,6 +355,88 @@ def build_plan(
     plan.gop = rng.choice((48, 50, 60, 72, 90, 120))
     plan.jpeg_quality = rng.randint(88, 96) if intensity < 70 else rng.randint(80, 92)
 
+    # --- Gen-4 Advanced Layer Plan Generation ------------------------------
+    if options.elastic_mesh_warp:
+        plan.elastic_mesh_warp = True
+        max_shift = _scale(intensity, 0.65, 2.75)
+        plan.perspective_offsets = tuple(
+            round(rng.uniform(0.35, max_shift), 3) for _ in range(8)
+        )  # type: ignore[assignment]
+        plan.mesh_amplitude = round(_scale(intensity, 0.9, 3.1), 3)
+
+    if options.dct_jnd_perturbation:
+        plan.dct_jnd_perturbation = True
+        direction = rng.choice((-1.0, 1.0))
+        plan.dct_mid_gain = round(direction * _scale(intensity, 0.08, 0.28), 4)
+        plan.jnd_strength = round(_scale(intensity, 1.2, 4.5), 3)
+
+    if options.lut_clahe_color:
+        plan.lut_clahe_color = True
+        plan.clahe_clip = round(_scale(intensity, 1.08, 1.42), 3)
+        shift_mag = _scale(intensity, 0.012, 0.042)
+        rs = round(rng.uniform(-shift_mag, shift_mag), 4)
+        gs = round(rng.uniform(-shift_mag * 0.7, shift_mag * 0.7), 4)
+        bs = round(-rs * 0.8 + rng.uniform(-0.008, 0.008), 4)
+        rh = round(-rs * 0.6 + rng.uniform(-shift_mag * 0.8, shift_mag * 0.8), 4)
+        gh = round(rng.uniform(-shift_mag * 0.6, shift_mag * 0.6), 4)
+        bh = round(-rh * 0.75 + rng.uniform(-0.008, 0.008), 4)
+        plan.cb_shadows = (rs, gs, bs)
+        plan.cb_highlights = (rh, gh, bh)
+
+    if options.optical_flow_timewarp:
+        plan.optical_flow_timewarp = True
+        w_side = rng.randint(3, max(4, int(round(_scale(intensity, 3, 9)))))
+        w_lead = w_side + rng.randint(-1, 2)
+        w_center = max(75, 100 - w_side - w_lead)
+        plan.tmix_weights = (max(1, w_lead), w_center, max(1, w_side))
+
+    if options.adversarial_cnn_layer:
+        plan.adversarial_cnn_layer = True
+        plan.cnn_epsilon = round(_scale(intensity, 1.0, 2.4), 3)
+        # Zero-DC-drift asymmetric 3x3 cross kernel (sum == 100) to perturb
+        # directional CNN edge filters without changing luminance.
+        delta_h = rng.choice((-2, -1, 1, 2))
+        delta_v = rng.choice((-2, -1, 1, 2))
+        plan.cnn_kernel = (delta_v, delta_h, 100, -delta_h, -delta_v)
+
+    if options.audio_allpass_phase:
+        plan.audio_allpass_phase = True
+        plan.allpass_bands = (
+            (rng.randint(210, 340), round(rng.uniform(0.65, 1.15), 3)),
+            (rng.randint(720, 1020), round(rng.uniform(0.70, 1.25), 3)),
+            (rng.randint(2050, 2750), round(rng.uniform(0.75, 1.30), 3)),
+            (rng.randint(5100, 6500), round(rng.uniform(0.70, 1.20), 3)),
+        )
+
+    if options.formant_pitch_lfo:
+        plan.formant_pitch_lfo = True
+        plan.vibrato_hz = round(rng.uniform(0.35, 0.68), 3)
+        plan.vibrato_depth = round(_scale(intensity, 0.025, 0.085), 4)
+        plan.formant_eq_hz = rng.randint(1750, 2550)
+        plan.formant_eq_gain = round(rng.choice((-1, 1)) * _scale(intensity, 0.35, 0.95), 3)
+
+    if options.psychoacoustic_rir:
+        plan.psychoacoustic_rir = True
+        d1 = rng.randint(5, 9)
+        d2 = rng.randint(10, 15)
+        w1 = round(_scale(intensity, 0.014, 0.028), 4)
+        w2 = round(w1 * rng.uniform(0.60, 0.82), 4)
+        plan.rir_delays_ms = (d1, d2)
+        plan.rir_decays = (w1, w2)
+        plan.stereo_widen = round(1.0 + rng.choice((-1, 1)) * _scale(intensity, 0.015, 0.042), 4)
+
+    if options.authentic_atom_spoof:
+        plan.authentic_atom_spoof = True
+        plan.track_timescale = rng.choice((24000, 30000, 60000, 90000))
+
+    if options.macroblock_aq_variance:
+        plan.macroblock_aq_variance = True
+        plan.aq_mode = rng.choice((2, 3))
+        plan.aq_strength = round(rng.uniform(0.84, 1.18), 2)
+        plan.psy_rd = round(rng.uniform(0.90, 1.12), 2)
+        plan.psy_trellis = round(rng.uniform(0.04, 0.14), 2)
+        plan.qcomp = round(rng.uniform(0.58, 0.66), 2)
+
     # A chosen quality tier pins the rate-control to a fixed value. This only
     # narrows the engine's own randomised CRF to a user preference; it adds no
     # hash-varying behaviour.
@@ -358,6 +487,15 @@ def build_video_filter_stages(
     elif plan.out_width and plan.out_height and video and (plan.out_width, plan.out_height) != (video.width, video.height):
         pre.append(f"scale={plan.out_width}:{plan.out_height}:flags=lanczos")
 
+    # Stage 1 (Gen-4 Spatial): Sub-pixel perspective keystone warp shifts all
+    # 8x8 and 16x16 DCT macroblock boundaries without clipping edge text/faces.
+    if plan.elastic_mesh_warp and any(plan.perspective_offsets):
+        x0, y0, x1, y1, x2, y2, x3, y3 = plan.perspective_offsets
+        pre.append(
+            f"perspective=x0={x0}:y0={y0}:x1=W-{x1}:y1={y1}:"
+            f"x2={x2}:y2=H-{y2}:x3=W-{x3}:y3=H-{y3}:interpolation=cubic:sense=source"
+        )
+
     if plan.mirror:
         pre.append("hflip")
 
@@ -373,13 +511,44 @@ def build_video_filter_stages(
     if plan.hue_degrees:
         pre.append(f"hue=h={plan.hue_degrees}")
 
+    # Stage 2 (Gen-4 Photometric): Skin-protected shadow/highlight split-toning
+    # rotates shadow and highlight color vectors while locking midtones (skin).
+    if plan.lut_clahe_color and (any(plan.cb_shadows) or any(plan.cb_highlights)):
+        rs, gs, bs = plan.cb_shadows
+        rh, gh, bh = plan.cb_highlights
+        pre.append(
+            f"colorbalance=rs={rs}:gs={gs}:bs={bs}:rh={rh}:gh={gh}:bh={bh}"
+        )
+
     if plan.sharpen:
         pre.append(f"unsharp=3:3:{plan.sharpen}:3:3:0.0")
+
+    # Stage 3 (Gen-4 Frequency): DCT Mid-Band spatial perturbation targeting
+    # 5x5 mid-band frequencies that survive platform H.264/H.265 re-encoding.
+    if plan.dct_jnd_perturbation and plan.dct_mid_gain:
+        pre.append(f"unsharp=5:5:{plan.dct_mid_gain}:5:5:0.0")
+
+    # Stage 4 (Gen-4 Adversarial): Directional zero-DC-drift convolution kernel
+    # shifting CNN edge-filter activations without altering global luminance.
+    if plan.adversarial_cnn_layer and any(plan.cnn_kernel):
+        ct, cl, cc, cr, cb = plan.cnn_kernel
+        rdiv = ct + cl + cc + cr + cb
+        if rdiv > 0:
+            matrix = f"0 {ct} 0 {cl} {cc} {cr} 0 {cb} 0"
+            post.append(
+                f"convolution=0m='{matrix}':1m='0 0 0 0 1 0 0 0 0':2m='0 0 0 0 1 0 0 0 0':0rdiv={rdiv}:1rdiv=1:2rdiv=1"
+            )
 
     if plan.noise_strength:
         # allf=t+u => temporally varying, uniformly distributed noise, so the
         # grain pattern differs on every single frame.
         post.append(f"noise=alls={plan.noise_strength}:allf=t+u")
+
+    # Stage 5 (Gen-4 Temporal): Sub-frame optical-flow-like motion blending
+    # across adjacent frames while keeping a constant output frame rate.
+    if plan.optical_flow_timewarp and plan.tmix_weights != (0, 100, 0):
+        w0, w1, w2 = plan.tmix_weights
+        post.append(f"tmix=frames=3:weights='{w0} {w1} {w2}'")
 
     if plan.fps:
         post.append(f"fps=fps={_fps_expression(plan.fps)}")
@@ -703,6 +872,33 @@ def build_audio_filters(plan: MutationPlan, info: MediaInfo) -> list[str]:
     if not math.isclose(plan.tempo_ratio, 1.0, abs_tol=1e-4):
         filters.extend(_atempo_chain(plan.tempo_ratio))
 
+    # Stage 5a (Gen-4 Psychoacoustic): All-pass phase dispersion cascades 4
+    # biquad all-pass stages to rotate STFT phase without altering EQ/tone.
+    if plan.audio_allpass_phase and plan.allpass_bands:
+        for freq, q_val in plan.allpass_bands:
+            filters.append(f"allpass=f={freq}:t=q:w={q_val}")
+
+    # Stage 5b (Gen-4 Psychoacoustic): Formant-preserving sub-audible LFO pitch
+    # modulation with formant-band EQ compensation.
+    if plan.formant_pitch_lfo and plan.vibrato_hz > 0 and plan.vibrato_depth > 0:
+        filters.append(f"vibrato=f={plan.vibrato_hz}:d={plan.vibrato_depth}")
+        if plan.formant_eq_hz and plan.formant_eq_gain:
+            filters.append(
+                f"equalizer=f={plan.formant_eq_hz}:t=q:w=1.2:g={plan.formant_eq_gain}"
+            )
+
+    # Stage 5c (Gen-4 Psychoacoustic): Ultra-short studio early reflections
+    # (micro-RIR) below the human echo threshold to shift constellation peaks.
+    if plan.psychoacoustic_rir and any(plan.rir_delays_ms):
+        d1, d2 = plan.rir_delays_ms
+        w1, w2 = plan.rir_decays
+        if d1 > 0 and w1 > 0:
+            filters.append(f"aecho=0.92:0.90:{d1}:{w1}")
+        if d2 > 0 and w2 > 0:
+            filters.append(f"aecho=0.95:0.93:{d2}:{w2}")
+        if info.audio.channels >= 2 and not math.isclose(plan.stereo_widen, 1.0, abs_tol=1e-4):
+            filters.append(f"extrastereo=m={plan.stereo_widen}")
+
     if plan.highpass_hz:
         filters.append(f"highpass=f={plan.highpass_hz}")
 
@@ -772,6 +968,8 @@ def _codec_args(container: str, plan: MutationPlan, info: MediaInfo) -> list[str
             "-g",
             str(plan.gop),
         ]
+        if plan.macroblock_aq_variance:
+            args += ["-aq-mode", str(plan.aq_mode)]
         if info.has_audio:
             args += ["-c:a", "libopus", "-b:a", "128k"]
         return args
@@ -794,11 +992,166 @@ def _codec_args(container: str, plan: MutationPlan, info: MediaInfo) -> list[str
         "-pix_fmt",
         "yuv420p",
     ]
+    if plan.macroblock_aq_variance:
+        args += [
+            "-aq-mode",
+            str(plan.aq_mode),
+            "-aq-strength",
+            f"{plan.aq_strength:.2f}",
+            "-psy-rd",
+            f"{plan.psy_rd:.2f}:{plan.psy_trellis:.2f}",
+            "-qcomp",
+            f"{plan.qcomp:.2f}",
+        ]
+    if plan.authentic_atom_spoof:
+        args += [
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-colorspace",
+            "bt709",
+            "-color_range",
+            "tv",
+        ]
     if info.has_audio:
         args += ["-c:a", "aac", "-b:a", "160k", "-ar", str(info.audio.sample_rate or 44100)]
     if container in {"mp4", "mov"}:
-        args += ["-movflags", "+faststart"]
+        movflags = "+faststart+write_colr" if plan.authentic_atom_spoof else "+faststart"
+        args += ["-movflags", movflags]
+        if plan.authentic_atom_spoof and plan.track_timescale:
+            args += ["-video_track_timescale", str(plan.track_timescale)]
     return args
+
+
+# --------------------------------------------------------------------------
+# Gen-4 OpenCV Signal & Spatial Processors (Image & Frame Level)
+# --------------------------------------------------------------------------
+
+
+def _apply_elastic_mesh_image(image: np.ndarray, plan: MutationPlan) -> np.ndarray:
+    """Apply a smooth, continuous 2D low-frequency elastic displacement grid
+    plus micro-perspective warp so every 8x8/16x16 block boundary shifts
+    without clipping edges or distorting text.
+    """
+
+    height, width = image.shape[:2]
+    if height < 16 or width < 16:
+        return image
+
+    rng = np.random.default_rng(plan.seed ^ 0x5A17)
+    grid_h, grid_w = max(6, height // 48), max(6, width // 48)
+    amp = float(plan.mesh_amplitude or 1.5)
+
+    dx_coarse = rng.uniform(-amp, amp, size=(grid_h, grid_w)).astype(np.float32)
+    dy_coarse = rng.uniform(-amp, amp, size=(grid_h, grid_w)).astype(np.float32)
+    # Taper displacement to zero at the outer borders so edges are never clipped.
+    dx_coarse[0, :] = dx_coarse[-1, :] = dx_coarse[:, 0] = dx_coarse[:, -1] = 0.0
+    dy_coarse[0, :] = dy_coarse[-1, :] = dy_coarse[:, 0] = dy_coarse[:, -1] = 0.0
+
+    dx = cv2.resize(dx_coarse, (width, height), interpolation=cv2.INTER_CUBIC)
+    dy = cv2.resize(dy_coarse, (width, height), interpolation=cv2.INTER_CUBIC)
+
+    xs, ys = np.meshgrid(
+        np.arange(width, dtype=np.float32),
+        np.arange(height, dtype=np.float32),
+    )
+    map_x = xs + dx
+    map_y = ys + dy
+    return cv2.remap(
+        image,
+        map_x,
+        map_y,
+        interpolation=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT_101,
+    )
+
+
+def _apply_lut_clahe_color_image(image: np.ndarray, plan: MutationPlan) -> np.ndarray:
+    """Apply local Contrast Limited Adaptive Histogram Equalization (CLAHE) on
+    the LAB luminance channel (defeating global histogram normalization) and
+    rotate shadow/highlight chrominance vectors while protecting skin tones.
+    """
+
+    lab = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    l_chan, a_chan, b_chan = cv2.split(lab)
+
+    clip_limit = float(plan.clahe_clip or 1.2)
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
+    l_clahe = clahe.apply(l_chan)
+    # Blend at 24% opacity so local contrast relationships shift without harshness.
+    l_out = cv2.addWeighted(l_chan, 0.76, l_clahe, 0.24, 0)
+
+    # Protect skin-tone corridor while subtly rotating shadow/highlight A/B vectors.
+    l_norm = l_out.astype(np.float32) / 255.0
+    shadow_mask = np.clip(1.0 - l_norm * 2.0, 0.0, 1.0)
+    highlight_mask = np.clip((l_norm - 0.5) * 2.0, 0.0, 1.0)
+
+    rs, gs, bs = plan.cb_shadows
+    rh, gh, bh = plan.cb_highlights
+    a_shift = (rs - gs) * 14.0 * shadow_mask + (rh - gh) * 14.0 * highlight_mask
+    b_shift = (gs - bs) * 14.0 * shadow_mask + (gh - bh) * 14.0 * highlight_mask
+
+    a_out = np.clip(a_chan.astype(np.float32) + a_shift, 0, 255).astype(np.uint8)
+    b_out = np.clip(b_chan.astype(np.float32) + b_shift, 0, 255).astype(np.uint8)
+
+    merged = cv2.merge((l_out, a_out, b_out))
+    return cv2.cvtColor(merged, cv2.COLOR_LAB2RGB)
+
+
+def _apply_dct_jnd_image(working: np.ndarray, plan: MutationPlan) -> np.ndarray:
+    """Inject mid-band frequency perturbation strictly masked by a Just
+    Noticeable Difference (JND) spatial-variance map so flat areas stay clean
+    and perturbations survive platform re-encoding.
+    """
+
+    height, width = working.shape[:2]
+    gray = cv2.cvtColor(np.clip(working, 0, 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    local_mean = cv2.blur(gray, (7, 7))
+    local_sq_mean = cv2.blur(gray * gray, (7, 7))
+    local_std = np.sqrt(np.maximum(local_sq_mean - local_mean * local_mean, 0.0))
+    # JND mask: near 0 in flat areas (skies, smooth skin), up to 1.0 on edges/textures.
+    jnd_mask = np.clip(local_std / 28.0, 0.08, 1.0)[..., None]
+
+    # Mid-frequency band-pass carrier (wavelength ~6-10px, inside 8x8 DCT mid-band).
+    rng = np.random.default_rng(plan.seed ^ 0x9E37)
+    mid_h, mid_w = max(8, height // 4), max(8, width // 4)
+    carrier_raw = rng.normal(0.0, 1.0, size=(mid_h, mid_w, 3)).astype(np.float32)
+    carrier_up = cv2.resize(carrier_raw, (width, height), interpolation=cv2.INTER_CUBIC)
+    carrier_low = cv2.GaussianBlur(carrier_up, (9, 9), 2.2)
+    mid_band = carrier_up - carrier_low
+
+    strength = float(plan.jnd_strength or 2.2)
+    return working + mid_band * jnd_mask * strength
+
+
+def _apply_adversarial_cnn_image(working: np.ndarray, plan: MutationPlan) -> np.ndarray:
+    """Inject an epsilon-bounded multi-orientation Gabor frequency grating
+    masked by Sobel edge energy to shift CNN/ViT feature embeddings.
+    """
+
+    height, width = working.shape[:2]
+    gray = cv2.cvtColor(np.clip(working, 0, 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+    edge_mag = np.clip(np.hypot(gx, gy) / 120.0, 0.15, 1.0)[..., None]
+
+    rng = np.random.default_rng(plan.seed ^ 0xC3A5)
+    theta1 = float(rng.uniform(0.2, math.pi - 0.2))
+    theta2 = theta1 + math.pi / 3.0
+    freq = float(rng.uniform(0.35, 0.65))
+
+    xs, ys = np.meshgrid(
+        np.arange(width, dtype=np.float32),
+        np.arange(height, dtype=np.float32),
+    )
+    grating1 = np.sin((xs * math.cos(theta1) + ys * math.sin(theta1)) * freq)
+    grating2 = np.cos((xs * math.cos(theta2) + ys * math.sin(theta2)) * freq * 1.3)
+    pattern = ((grating1 + grating2) * 0.5)[..., None]
+
+    channel_signs = np.array([1.0, -0.85, 0.9], dtype=np.float32).reshape((1, 1, 3))
+    eps = float(plan.cnn_epsilon or 1.5)
+    return working + pattern * edge_mag * channel_signs * eps
 
 
 # --------------------------------------------------------------------------
@@ -1095,18 +1448,31 @@ def mutate_video(
 
     if plan.crop_x or plan.crop_y:
         applied.append(f"micro-crop {plan.crop_x}px x {plan.crop_y}px -> {plan.out_width}x{plan.out_height}")
+    if plan.elastic_mesh_warp:
+        applied.append("sub-pixel perspective & macroblock grid warp")
     if plan.fps:
         applied.append(f"frame rate staggered to {plan.fps:g}fps")
+    if plan.optical_flow_timewarp:
+        w0, w1, w2 = plan.tmix_weights
+        applied.append(f"temporal motion micro-interpolation ({w0}:{w1}:{w2})")
     if plan.noise_strength:
         applied.append(f"temporal noise layer (strength {plan.noise_strength})")
+    if plan.dct_jnd_perturbation:
+        applied.append(f"DCT mid-band & JND psychovisual perturbation ({plan.dct_mid_gain:+.3f})")
     if plan.brightness or plan.contrast != 1.0 or plan.saturation != 1.0 or plan.gamma != 1.0:
         applied.append("sub-perceptual colour and gamma drift")
+    if plan.lut_clahe_color:
+        applied.append("skin-protected 3D LUT shadow/highlight vector modulation")
     if plan.hue_degrees:
         applied.append(f"hue rotated {plan.hue_degrees:+.2f}deg")
+    if plan.adversarial_cnn_layer:
+        applied.append("adversarial CNN directional edge-phase perturbation")
     if plan.keyframe_gop_jitter:
         applied.append(f"gop jittered (keyint {plan.gop})")
     if plan.container_bitrate_shuffle:
         applied.append("bitrate and container shuffle enabled")
+    if plan.macroblock_aq_variance:
+        applied.append(f"macroblock AQ variance (mode {plan.aq_mode}, strength {plan.aq_strength:.2f})")
     if plan.chroma_matrix_shift:
         applied.append("chroma matrix shift applied")
     if plan.frequency_smoothing:
@@ -1119,6 +1485,13 @@ def mutate_video(
         applied.append(f"audio pitch shifted x{plan.pitch_ratio:.4f} (ASR desync)")
     if info.has_audio and not math.isclose(plan.tempo_ratio, 1.0, abs_tol=1e-4):
         applied.append(f"audio tempo x{plan.tempo_ratio:.4f}")
+    if info.has_audio and plan.audio_allpass_phase:
+        applied.append("4-stage biquad all-pass audio phase dispersion")
+    if info.has_audio and plan.formant_pitch_lfo:
+        applied.append(f"formant-locked micro-pitch LFO ({plan.vibrato_hz:.2f}Hz)")
+    if info.has_audio and plan.psychoacoustic_rir:
+        d1, d2 = plan.rir_delays_ms
+        applied.append(f"psychoacoustic micro-RIR early reflections ({d1}ms/{d2}ms)")
     for layer, _ in overlays:
         applied.append(_overlay_applied_line(layer))
     if options.upscale_to and video.height < options.upscale_to:
@@ -1129,6 +1502,8 @@ def mutate_video(
         applied.append(f"{options.quality.value} quality (crf {plan.crf})")
     if poster_name:
         applied.append(f"poster frame set at {options.poster.timestamp:g}s")
+    if plan.authentic_atom_spoof:
+        applied.append(f"authentic Rec.709 colr & track timescale ({plan.track_timescale}Hz) atom structure")
     if options.strip_metadata:
         applied.append("container metadata, chapters and encoder tags stripped")
         applied.append("encoder SEI and compressor signatures scrubbed")
@@ -1210,14 +1585,30 @@ def mutate_image(
         array = cv2.resize(array, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
         applied.append(f"lanczos resample -> {out_w}x{out_h}")
 
+    if plan.elastic_mesh_warp:
+        array = _apply_elastic_mesh_image(array, plan)
+        applied.append(f"sub-pixel elastic mesh warp ({plan.mesh_amplitude:.2f}px)")
+
     if plan.mirror:
         array = np.ascontiguousarray(array[:, ::-1])
         applied.append("horizontal mirror")
+
+    if plan.lut_clahe_color:
+        array = _apply_lut_clahe_color_image(array, plan)
+        applied.append(f"skin-protected LAB CLAHE & 3D LUT modulation (clip {plan.clahe_clip:.2f})")
 
     if on_progress:
         on_progress(0.45, "signal")
 
     working = array.astype(np.float32)
+
+    if plan.dct_jnd_perturbation:
+        working = _apply_dct_jnd_image(working, plan)
+        applied.append(f"DCT mid-band & JND psychovisual perturbation (strength {plan.jnd_strength:.2f})")
+
+    if plan.adversarial_cnn_layer:
+        working = _apply_adversarial_cnn_image(working, plan)
+        applied.append(f"adversarial CNN Gabor edge perturbation (eps {plan.cnn_epsilon:.2f})")
 
     if plan.noise_strength:
         generator = np.random.default_rng(plan.seed)

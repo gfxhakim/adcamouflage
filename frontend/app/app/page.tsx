@@ -59,7 +59,7 @@ function isVideoFile(file: File): boolean {
 
 const DEFAULT_OPTIONS: MutationOptions = {
   preset: "balanced",
-  intensity: 48,
+  intensity: 65,
   micro_crop: true,
   frame_rate_stagger: true,
   noise_injection: true,
@@ -73,6 +73,16 @@ const DEFAULT_OPTIONS: MutationOptions = {
   deep_scramble: false,
   mirror: false,
   temporal_trim: true,
+  elastic_mesh_warp: true,
+  dct_jnd_perturbation: true,
+  lut_clahe_color: true,
+  optical_flow_timewarp: false,
+  adversarial_cnn_layer: false,
+  audio_allpass_phase: true,
+  formant_pitch_lfo: true,
+  psychoacoustic_rir: false,
+  authentic_atom_spoof: true,
+  macroblock_aq_variance: true,
   target_fps: null,
   audio_pitch_ratio: null,
   output_format: null,
@@ -377,9 +387,23 @@ export default function WorkspacePage() {
         options.color_drift,
         options.audio_mutation,
         options.strip_metadata,
+        options.keyframe_gop_jitter,
+        options.container_bitrate_shuffle,
+        options.chroma_matrix_shift,
+        options.frequency_smoothing,
         options.deep_scramble,
         options.mirror,
         options.temporal_trim,
+        options.elastic_mesh_warp,
+        options.dct_jnd_perturbation,
+        options.lut_clahe_color,
+        options.optical_flow_timewarp,
+        options.adversarial_cnn_layer,
+        options.audio_allpass_phase,
+        options.formant_pitch_lfo,
+        options.psychoacoustic_rir,
+        options.authentic_atom_spoof,
+        options.macroblock_aq_variance,
       ].filter(Boolean).length,
     [options],
   );
@@ -593,7 +617,7 @@ export default function WorkspacePage() {
               {files.length ? ` · ${formatBytes(queuedBytes)}` : ` · max ${maxFiles}`}
             </span>
             <span className="chip !font-mono">
-              Layers {activeLayers}/9 · {options.preset} {options.intensity}
+              Layers {activeLayers}/23 · {options.preset} {options.intensity}
             </span>
             <span
               className={clsx(

@@ -69,6 +69,16 @@ export interface MutationOptions {
   deep_scramble: boolean;
   mirror: boolean;
   temporal_trim: boolean;
+  elastic_mesh_warp: boolean;
+  dct_jnd_perturbation: boolean;
+  lut_clahe_color: boolean;
+  optical_flow_timewarp: boolean;
+  adversarial_cnn_layer: boolean;
+  audio_allpass_phase: boolean;
+  formant_pitch_lfo: boolean;
+  psychoacoustic_rir: boolean;
+  authentic_atom_spoof: boolean;
+  macroblock_aq_variance: boolean;
   target_fps?: number | null;
   audio_pitch_ratio?: number | null;
   output_format?: string | null;

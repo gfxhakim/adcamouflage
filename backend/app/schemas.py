@@ -181,6 +181,18 @@ class MutationOptions(BaseModel):
     mirror: bool = False
     temporal_trim: bool = True
 
+    # --- Gen-4 Advanced Signal, Psychoacoustic & Forensic Layers -----------
+    elastic_mesh_warp: bool = False
+    dct_jnd_perturbation: bool = False
+    lut_clahe_color: bool = False
+    optical_flow_timewarp: bool = False
+    adversarial_cnn_layer: bool = False
+    audio_allpass_phase: bool = False
+    formant_pitch_lfo: bool = False
+    psychoacoustic_rir: bool = False
+    authentic_atom_spoof: bool = False
+    macroblock_aq_variance: bool = False
+
     target_fps: float | None = Field(default=None, gt=1, le=240)
     audio_pitch_ratio: float | None = Field(default=None, ge=0.8, le=1.25)
     output_format: str | None = Field(default=None)
@@ -282,6 +294,16 @@ PRESET_DEFAULTS: dict[Preset, dict[str, Any]] = {
         "deep_scramble": False,
         "mirror": False,
         "temporal_trim": True,
+        "elastic_mesh_warp": True,
+        "dct_jnd_perturbation": False,
+        "lut_clahe_color": False,
+        "optical_flow_timewarp": False,
+        "adversarial_cnn_layer": False,
+        "audio_allpass_phase": True,
+        "formant_pitch_lfo": False,
+        "psychoacoustic_rir": False,
+        "authentic_atom_spoof": True,
+        "macroblock_aq_variance": True,
     },
     Preset.BALANCED: {
         "intensity": 65,
@@ -298,6 +320,16 @@ PRESET_DEFAULTS: dict[Preset, dict[str, Any]] = {
         "deep_scramble": False,
         "mirror": False,
         "temporal_trim": True,
+        "elastic_mesh_warp": True,
+        "dct_jnd_perturbation": True,
+        "lut_clahe_color": True,
+        "optical_flow_timewarp": False,
+        "adversarial_cnn_layer": False,
+        "audio_allpass_phase": True,
+        "formant_pitch_lfo": True,
+        "psychoacoustic_rir": False,
+        "authentic_atom_spoof": True,
+        "macroblock_aq_variance": True,
     },
     Preset.AGGRESSIVE: {
         "intensity": 85,
@@ -314,6 +346,16 @@ PRESET_DEFAULTS: dict[Preset, dict[str, Any]] = {
         "deep_scramble": True,
         "mirror": False,
         "temporal_trim": True,
+        "elastic_mesh_warp": True,
+        "dct_jnd_perturbation": True,
+        "lut_clahe_color": True,
+        "optical_flow_timewarp": True,
+        "adversarial_cnn_layer": True,
+        "audio_allpass_phase": True,
+        "formant_pitch_lfo": True,
+        "psychoacoustic_rir": True,
+        "authentic_atom_spoof": True,
+        "macroblock_aq_variance": True,
     },
     Preset.NUCLEAR: {
         "intensity": 100,
@@ -330,6 +372,16 @@ PRESET_DEFAULTS: dict[Preset, dict[str, Any]] = {
         "deep_scramble": True,
         "mirror": True,
         "temporal_trim": True,
+        "elastic_mesh_warp": True,
+        "dct_jnd_perturbation": True,
+        "lut_clahe_color": True,
+        "optical_flow_timewarp": True,
+        "adversarial_cnn_layer": True,
+        "audio_allpass_phase": True,
+        "formant_pitch_lfo": True,
+        "psychoacoustic_rir": True,
+        "authentic_atom_spoof": True,
+        "macroblock_aq_variance": True,
     },
 }
 
