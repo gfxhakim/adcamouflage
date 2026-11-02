@@ -8,6 +8,7 @@ import {
   Check,
   Coins,
   Crown,
+  Eye,
   Film,
   Lock,
   Megaphone,
@@ -23,6 +24,7 @@ import { CmsSection } from "@/components/cms/Cms";
 import DeckRail from "@/components/DeckRail";
 import ThemeDock from "@/components/ThemeDock";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
+import OverlayPreview from "@/components/OverlayPreview";
 import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
@@ -98,6 +100,9 @@ const DEFAULT_OPTIONS: MutationOptions = {
     opacity: 1,
     intro_seconds: 3,
     ranges: [],
+    flash_on_frames: 5,
+    flash_off_frames: 5,
+    flash_start_frame: 0,
   },
   overlays: [],
   poster: { enabled: false, timestamp: 0 },
@@ -702,7 +707,20 @@ export default function WorkspacePage() {
                         disabled={uploading}
                       />
                     </CmsSection>
-                    <CmsSection k="workspace.posterTool" label="Poster frame tool" as="div" className="min-w-0 border-t border-black/[0.07] pt-6 dark:border-white/10 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                    <div className="min-w-0 space-y-8 border-t border-black/[0.07] pt-6 dark:border-white/10 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                    <CmsSection k="workspace.overlayPreview" label="Overlay preview" as="div" className="min-w-0">
+                      <p className="label mb-3 flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5" aria-hidden />
+                        Preview · placement &amp; timing
+                      </p>
+                      <OverlayPreview
+                        layers={overlayLayers}
+                        onChange={setOverlayLayers}
+                        video={firstVideo}
+                        disabled={uploading}
+                      />
+                    </CmsSection>
+                    <CmsSection k="workspace.posterTool" label="Poster frame tool" as="div" className="min-w-0 border-t border-black/[0.07] pt-6 dark:border-white/10">
                       <p className="label mb-3 flex items-center gap-1.5">
                         <Film className="h-3.5 w-3.5" aria-hidden />
                         Poster frame · optional
@@ -714,6 +732,7 @@ export default function WorkspacePage() {
                         disabled={uploading}
                       />
                     </CmsSection>
+                    </div>
                   </div>
                 ) : null}
 

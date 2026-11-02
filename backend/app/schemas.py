@@ -83,6 +83,18 @@ class OverlayMode(str, Enum):
     ALWAYS = "always"      # on every frame of the video
     INTRO = "intro"        # only at the start, for `intro_seconds`
     RANGES = "ranges"      # only on the frame ranges the user picked
+    # Flashing: visible for N source frames, hidden for M, repeating. A fixed,
+    # deterministic on/off rhythm (a blinking logo), never randomised.
+    FLASH_5 = "flash_5"    # 5 frames on, 5 frames off
+    FLASH_3 = "flash_3"    # 3 frames on, 3 frames off
+    FLASH_CUSTOM = "flash_custom"  # flash_on_frames on, flash_off_frames off
+
+
+# Fixed (on, off) frame counts for the preset flash modes.
+FLASH_PRESETS: dict[OverlayMode, tuple[int, int]] = {
+    OverlayMode.FLASH_5: (5, 5),
+    OverlayMode.FLASH_3: (3, 3),
+}
 
 
 class OverlayPosition(str, Enum):
@@ -135,6 +147,13 @@ class OverlaySettings(BaseModel):
     # output frame rate is deliberately changed.
     ranges: list[FrameRange] = Field(default_factory=list, max_length=50)
 
+    # Used when mode is FLASH_CUSTOM: how many source frames the overlay is
+    # shown for, then hidden for, repeating from ``flash_start_frame``. The
+    # preset flash modes ignore on/off but still honour the start frame.
+    flash_on_frames: int = Field(default=5, ge=1, le=600)
+    flash_off_frames: int = Field(default=5, ge=1, le=600)
+    flash_start_frame: int = Field(default=0, ge=0, le=10_000_000)
+
     # Set by the API once the overlay image has been stored.
     image_filename: str | None = None
 
@@ -143,6 +162,16 @@ class OverlaySettings(BaseModel):
         if self.enabled and self.mode is OverlayMode.RANGES and not self.ranges:
             raise ValueError("pick at least one frame range, or choose another overlay mode")
         return self
+
+    def flash_pattern(self) -> tuple[int, int, int] | None:
+        """(on_frames, off_frames, start_frame) for a flash mode, else None."""
+
+        if self.mode is OverlayMode.FLASH_CUSTOM:
+            return self.flash_on_frames, self.flash_off_frames, self.flash_start_frame
+        preset = FLASH_PRESETS.get(self.mode)
+        if preset is None:
+            return None
+        return preset[0], preset[1], self.flash_start_frame
 
 
 class PosterSettings(BaseModel):

@@ -4,7 +4,7 @@ export type JobStatus = "queued" | "processing" | "completed" | "failed" | "canc
 
 export type PresetId = "stealth" | "balanced" | "aggressive" | "nuclear" | "custom";
 
-export type OverlayMode = "always" | "intro" | "ranges";
+export type OverlayMode = "always" | "intro" | "ranges" | "flash_5" | "flash_3" | "flash_custom";
 
 export type OverlayPosition =
   | "top_left"
@@ -33,6 +33,10 @@ export interface OverlaySettings {
   opacity: number;
   intro_seconds: number;
   ranges: FrameRange[];
+  /** Flash modes: frames shown, frames hidden, and the source frame the rhythm starts on. */
+  flash_on_frames: number;
+  flash_off_frames: number;
+  flash_start_frame: number;
   image_filename?: string | null;
 }
 

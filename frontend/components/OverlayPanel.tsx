@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { Clapperboard, Layers3, Plus, Repeat, Timer, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, Clapperboard, Layers3, Plus, Repeat, SlidersHorizontal, Timer, Trash2, Upload, X, Zap } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/format";
+import { FLASH_LIMIT, isFlashMode } from "@/lib/overlayTiming";
 import type {
   FrameRange,
   OverlayLayer,
@@ -17,7 +18,13 @@ const MODES: { id: OverlayMode; label: string; blurb: string; icon: typeof Repea
   { id: "always", label: "Every frame", blurb: "A persistent watermark for the whole clip.", icon: Repeat },
   { id: "intro", label: "Intro only", blurb: "Show it at the start, then let the creative breathe.", icon: Timer },
   { id: "ranges", label: "Custom frames", blurb: "Pick exact frame ranges to show it on.", icon: Clapperboard },
+  { id: "flash_5", label: "Flash 5", blurb: "On for 5 frames, off for 5, repeating.", icon: Zap },
+  { id: "flash_3", label: "Flash 3", blurb: "On for 3 frames, off for 3, repeating.", icon: Zap },
+  { id: "flash_custom", label: "Custom flash", blurb: "Set your own on and off frame counts.", icon: SlidersHorizontal },
 ];
+
+const clampFrames = (value: number, min: number, max: number) =>
+  Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
 
 const POSITIONS: { id: OverlayPosition; label: string }[] = [
   { id: "top_left", label: "Top left" },
@@ -44,6 +51,9 @@ export function defaultOverlaySettings(): OverlaySettings {
     opacity: 1,
     intro_seconds: 3,
     ranges: [],
+    flash_on_frames: 5,
+    flash_off_frames: 5,
+    flash_start_frame: 0,
   };
 }
 
@@ -346,6 +356,73 @@ function LayerEditor({ layer, index, total, disabled, onChange, onRemove }: Laye
                 className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500"
               />
             </div>
+          ) : null}
+
+          {isFlashMode(settings.mode) ? (
+            <section className="space-y-3">
+              <div className={clsx("grid gap-2", settings.mode === "flash_custom" ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3")}>
+                {settings.mode === "flash_custom" ? (
+                  <>
+                    <div>
+                      <label htmlFor={`${inputId}-on`} className="label mb-1 block">
+                        On frames
+                      </label>
+                      <input
+                        id={`${inputId}-on`}
+                        type="number"
+                        min={1}
+                        max={FLASH_LIMIT}
+                        className="field !py-1.5 !text-xs"
+                        value={settings.flash_on_frames}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          setSetting("flash_on_frames", clampFrames(Number(event.target.value), 1, FLASH_LIMIT))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`${inputId}-off`} className="label mb-1 block">
+                        Off frames
+                      </label>
+                      <input
+                        id={`${inputId}-off`}
+                        type="number"
+                        min={1}
+                        max={FLASH_LIMIT}
+                        className="field !py-1.5 !text-xs"
+                        value={settings.flash_off_frames}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          setSetting("flash_off_frames", clampFrames(Number(event.target.value), 1, FLASH_LIMIT))
+                        }
+                      />
+                    </div>
+                  </>
+                ) : null}
+                <div>
+                  <label htmlFor={`${inputId}-flash-start`} className="label mb-1 block">
+                    Start at frame
+                  </label>
+                  <input
+                    id={`${inputId}-flash-start`}
+                    type="number"
+                    min={0}
+                    className="field !py-1.5 !text-xs"
+                    value={settings.flash_start_frame}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      setSetting("flash_start_frame", clampFrames(Number(event.target.value), 0, 10_000_000))
+                    }
+                  />
+                </div>
+              </div>
+              <p className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                Fast flashing can trigger seizures in people with photosensitive epilepsy. At 30fps,
+                Flash 3 blinks 5 times a second. Keep flashing logos small and low-contrast, and
+                avoid large bright flashes.
+              </p>
+            </section>
           ) : null}
 
           {settings.mode === "ranges" ? (

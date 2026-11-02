@@ -616,6 +616,18 @@ def overlay_enable_expression(
         return f"between(t,0,{end:.3f})"
 
     fps = source_fps if source_fps and source_fps > 0 else 30.0
+
+    flash = overlay.flash_pattern()
+    if flash is not None:
+        on, off, start = flash
+        # Source frame index of the output frame at time t. Like the frame
+        # ranges this is measured on the *source* clock (shifted by the trim),
+        # so the rhythm stays on the user's frames even if the output fps
+        # differs. The tiny epsilon stops float error dropping a frame on the
+        # exact boundary.
+        frame = f"floor((t+{trim_head:.6f})*{fps:.6f}+0.001)"
+        return f"gte({frame},{start})*lt(mod({frame}-{start},{on + off}),{on})"
+
     windows: list[str] = []
     for frame_range in overlay.ranges:
         start = frame_range.start_frame / fps - trim_head
@@ -1538,6 +1550,11 @@ def _overlay_applied_line(overlay: OverlaySettings) -> str:
         when = "every frame"
     elif overlay.mode is OverlayMode.INTRO:
         when = f"first {overlay.intro_seconds:g}s"
+    elif overlay.flash_pattern() is not None:
+        on, off, start = overlay.flash_pattern()  # type: ignore[misc]
+        when = f"flash {on} frames on / {off} off"
+        if start:
+            when += f" from frame {start}"
     else:
         when = f"{len(overlay.ranges)} frame range(s)"
     return (
