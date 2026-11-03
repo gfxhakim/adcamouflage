@@ -98,6 +98,11 @@ module.exports = {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-100%)" },
         },
+        // The reviews marquee: one full copy plus the gap between copies, so the loop is seamless.
+        "marquee-x": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(calc(-100% - var(--gap)))" },
+        },
         "fade-up": {
           from: { opacity: "0", transform: "translate3d(0, 12px, 0)" },
           to: { opacity: "1", transform: "translate3d(0, 0, 0)" },
@@ -115,6 +120,7 @@ module.exports = {
         "render-scan": "render-scan 1.6s ease-in-out infinite",
         "render-pulse": "render-pulse 1.8s ease-in-out infinite",
         marquee: "marquee 28s linear infinite",
+        "marquee-x": "marquee-x var(--duration, 40s) linear infinite",
         "fade-up": "fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
     },

@@ -27,6 +27,7 @@ from .auth_routes import router as auth_router
 from .billing_routes import router as billing_router
 from .config import settings
 from .db import User, get_db, get_session_factory, init_db
+from .live_activity import router as live_activity_router
 from .site_content import admin_router as site_content_admin_router
 from .site_content import public_router as site_content_router
 from .ffmpeg import ffmpeg_available, ffmpeg_version
@@ -100,6 +101,7 @@ app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(site_content_router)
 app.include_router(site_content_admin_router)
+app.include_router(live_activity_router)
 
 # Credentials must be allowed for the session cookie to reach the API from
 # the browser; with credentials on, the origin list cannot be a wildcard.

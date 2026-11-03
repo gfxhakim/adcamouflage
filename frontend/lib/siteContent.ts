@@ -84,6 +84,17 @@ export interface ThemeValue {
   css?: string;
 }
 
+/** One customer review on the landing page (Admin > Landing > Reviews). */
+export interface ReviewItem {
+  id: string;
+  name: string;
+  handle?: string;
+  body: string;
+  /** Uploaded (/api/v1/site-media/…) or https picture; initials are shown without one. */
+  avatar?: string;
+  hidden?: boolean;
+}
+
 export interface SiteContent {
   text?: Record<string, string>;
   style?: Record<string, TextStyle>;
@@ -95,6 +106,7 @@ export interface SiteContent {
   section?: Record<string, SectionStyle>;
   theme?: ThemeValue;
   meta?: { title?: string; description?: string; favicon?: string };
+  reviews?: ReviewItem[];
 }
 
 export interface ContentRecord {
