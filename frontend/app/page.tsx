@@ -9,7 +9,7 @@ import CursorRing from "@/components/landing/CursorRing";
 import Faq from "@/components/landing/Faq";
 import FeaturePanels from "@/components/landing/FeaturePanels";
 import Hero from "@/components/landing/Hero";
-import ReportBand from "@/components/landing/ReportBand";
+import ReviewsSection from "@/components/landing/ReviewsSection";
 import SiteFooter from "@/components/landing/SiteFooter";
 import WhyRadar from "@/components/landing/WhyRadar";
 import LandingNav from "@/components/LandingNav";
@@ -134,7 +134,7 @@ export default async function LandingPage() {
             { id: "how-it-works", label: "How it works", node: <WhyRadar /> },
             { id: "features", label: "Features", node: <FeaturePanels /> },
             { id: "proof", label: "Before / after", node: <BeforeAfter /> },
-            { id: "report", label: "Report band", node: <ReportBand /> },
+            { id: "reviews", label: "Reviews", node: <ReviewsSection /> },
             {
               id: "pricing",
               label: "Pricing",

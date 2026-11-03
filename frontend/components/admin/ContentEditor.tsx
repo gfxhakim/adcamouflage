@@ -14,7 +14,9 @@ import {
   Loader2,
   MousePointerClick,
   Monitor,
+  MessageSquareQuote,
   Palette,
+  Plus,
   RefreshCw,
   RotateCcw,
   Rocket,
@@ -42,6 +44,7 @@ import {
   type MediaValue,
   type Namespace,
   type PreviewMessage,
+  type ReviewItem,
   type SectionStyle,
   type SiteContent,
   type TextStyle,
@@ -109,7 +112,10 @@ function prune(content: SiteContent): SiteContent {
   const out: Record<string, unknown> = {};
   for (const [bucket, value] of Object.entries(content)) {
     if (!value || typeof value !== "object") continue;
-    if (Array.isArray(value)) continue;
+    if (Array.isArray(value)) {
+      if (value.length) out[bucket] = value;
+      continue;
+    }
     const entries = Object.entries(value).filter(([, v]) => {
       if (v === undefined || v === null || v === "") return false;
       if (typeof v === "object" && !Array.isArray(v)) return Object.values(v).some((x) => x !== undefined && x !== null && x !== "");
@@ -818,11 +824,146 @@ function PagePanel({ meta, onChange }: { meta: NonNullable<SiteContent["meta"]>;
   );
 }
 
+
+function ReviewsPanel({
+  reviews,
+  tickerHidden,
+  onChange,
+  onTickerHidden,
+}: {
+  reviews: ReviewItem[];
+  tickerHidden: boolean;
+  onChange: (r: ReviewItem[]) => void;
+  onTickerHidden: (hidden: boolean) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const set = (i: number, patch: Partial<ReviewItem>) => onChange(reviews.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const move = (i: number, by: number) => {
+    const next = [...reviews];
+    const [item] = next.splice(i, 1);
+    next.splice(Math.max(0, Math.min(next.length, i + by)), 0, item);
+    onChange(next);
+  };
+  const add = () => {
+    const id = Math.random().toString(36).slice(2, 10);
+    onChange([...reviews, { id, name: "", handle: "", body: "" }]);
+    setOpenId(id);
+  };
+  // Pictures already used on other reviews, to pick again with one click.
+  const used = Array.from(new Set(reviews.map((r) => r.avatar).filter((a): a is string => !!a)));
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        Cards scroll in two rows (one row with fewer than 4 reviews). The section stays hidden on the live site until at least one
+        visible review has a name and a quote. Only post real reviews from real customers who agreed to be quoted.
+      </p>
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        The headline and text above the cards, and the ticker wording, are under <b className="text-slate-300">Content &gt; Reviews</b>.
+      </p>
+      <Toggle checked={!tickerHidden} onChange={(on) => onTickerHidden(!on)} label="Show the live activity line under the cards" />
+
+      {reviews.map((review, i) => {
+        const open = openId === review.id;
+        return (
+          <div key={review.id} className={clsx("rounded-xl border", open ? "border-meta-500/60" : "border-white/10")}>
+            <div className="flex items-center gap-2 px-2.5 py-2">
+              <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setOpenId(open ? null : review.id)}>
+                {review.avatar ? (
+                  <img src={review.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-meta-500/30 text-[11px] font-semibold text-meta-200">
+                    {(review.name || "?").slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className={clsx("block truncate text-sm font-semibold", review.hidden ? "text-slate-500 line-through" : "text-slate-100")}>
+                    {review.name || "New review"}
+                  </span>
+                  <span className="block truncate text-[11px] text-slate-500">{review.body || "No quote yet"}</span>
+                </span>
+              </button>
+              <button type="button" className="rounded p-1 text-slate-400 hover:bg-white/10 disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)} title="Move up">
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button type="button" className="rounded p-1 text-slate-400 hover:bg-white/10 disabled:opacity-30" disabled={i === reviews.length - 1} onClick={() => move(i, 1)} title="Move down">
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button type="button" className="rounded p-1 text-slate-400 hover:bg-white/10" onClick={() => set(i, { hidden: !review.hidden || undefined })} title={review.hidden ? "Show" : "Hide"}>
+                {review.hidden ? <EyeOff className="h-3.5 w-3.5" aria-hidden /> : <Eye className="h-3.5 w-3.5" aria-hidden />}
+              </button>
+              <button
+                type="button"
+                className="rounded p-1 text-slate-400 hover:bg-red-500/20 hover:text-red-300"
+                onClick={() => {
+                  if (window.confirm(`Delete the review from ${review.name || "this person"}?`)) onChange(reviews.filter((_, j) => j !== i));
+                }}
+                title="Delete"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </div>
+            {open ? (
+              <div className="space-y-3 border-t border-white/10 p-3">
+                <Row label="Name">
+                  <input className="field" value={review.name} placeholder="Customer's name" onChange={(e) => set(i, { name: e.target.value })} />
+                </Row>
+                <Row label="Handle" hint="Optional, e.g. @theirname or their company.">
+                  <input className="field" value={review.handle ?? ""} placeholder="@handle" onChange={(e) => set(i, { handle: e.target.value || undefined })} />
+                </Row>
+                <Row label="Quote" hint="About 3 lines fit on a card.">
+                  <textarea className="field min-h-[90px] resize-y" value={review.body} placeholder="What they said" onChange={(e) => set(i, { body: e.target.value })} />
+                </Row>
+                <div>
+                  <span className="label">Picture</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    {review.avatar ? <img src={review.avatar} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" /> : null}
+                    <UploadButton accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onUploaded={(avatar) => set(i, { avatar })} />
+                    {review.avatar ? (
+                      <button type="button" className="btn-ghost !px-3 !py-1.5 text-xs" onClick={() => set(i, { avatar: undefined })}>
+                        <X className="h-3.5 w-3.5" aria-hidden /> Remove
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    className="field mt-2 font-mono text-xs"
+                    value={review.avatar ?? ""}
+                    placeholder="…or paste an https:// picture link (initials show without one)"
+                    onChange={(e) => set(i, { avatar: e.target.value || undefined })}
+                  />
+                  {used.filter((a) => a !== review.avatar).length ? (
+                    <div className="mt-2">
+                      <span className="text-[11px] text-slate-500">Pick a picture already uploaded:</span>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {used
+                          .filter((a) => a !== review.avatar)
+                          .map((a) => (
+                            <button key={a} type="button" onClick={() => set(i, { avatar: a })} className="rounded-full ring-meta-500 hover:ring-2" title="Use this picture">
+                              <img src={a} alt="" className="h-9 w-9 rounded-full object-cover" />
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+
+      <button type="button" className="btn-ghost w-full justify-center !py-2 text-xs" onClick={add}>
+        <Plus className="h-3.5 w-3.5" aria-hidden /> Add a review
+      </button>
+    </div>
+  );
+}
+
 // --------------------------------------------------------------------------
 // the editor
 // --------------------------------------------------------------------------
 
-type Panel = "content" | "theme" | "page";
+type Panel = "content" | "reviews" | "theme" | "page";
 
 export function ContentEditor({ namespace, pages }: { namespace: Namespace; pages: { path: string; label: string }[] }) {
   const [record, setRecord] = useState<ContentRecord | null>(null);
@@ -1076,9 +1217,10 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
             {(
               [
                 { id: "content", label: "Content", icon: Type },
+                ...(namespace === "landing" ? [{ id: "reviews", label: "Reviews", icon: MessageSquareQuote }] : []),
                 { id: "theme", label: "Colours & fonts", icon: Palette },
                 { id: "page", label: "Tab & SEO", icon: Monitor },
-              ] as const
+              ] as { id: Panel; label: string; icon: typeof Type }[]
             ).map((t) => (
               <button
                 key={t.id}
@@ -1155,6 +1297,19 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
                   );
                 })}
               </div>
+            ) : panel === "reviews" ? (
+              <ReviewsPanel
+                reviews={draft.reviews ?? []}
+                tickerHidden={!!draft.hide?.["reviews.ticker"]}
+                onChange={(reviews) => update((d) => { d.reviews = reviews.length ? reviews : undefined; })}
+                onTickerHidden={(hidden) =>
+                  update((d) => {
+                    d.hide = { ...(d.hide ?? {}) };
+                    if (hidden) d.hide["reviews.ticker"] = true;
+                    else delete d.hide["reviews.ticker"];
+                  })
+                }
+              />
             ) : panel === "theme" ? (
               <ThemePanel namespace={namespace} theme={draft.theme ?? {}} onChange={(theme) => update((d) => { d.theme = theme; })} />
             ) : (
