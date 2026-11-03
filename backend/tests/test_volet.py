@@ -732,3 +732,23 @@ def test_orders_list_carries_the_provider_and_reuses_the_open_order(volet_env, a
     user_id = client.get("/api/v1/auth/me").json()["id"]
     billing = admin.get(f"/api/v1/admin/users/{user_id}/billing").json()
     assert [o["provider"] for o in billing["orders"]] == ["volet", "volet"]
+
+
+def test_pay_page_returns_the_buyer_to_the_host_they_signed_in_on(volet_env, monkeypatch):
+    """The session cookie is per host: a www buyer sent back to the bare domain lands signed out."""
+
+    monkeypatch.setattr(settings, "public_url", "https://example.test")
+    client = _signed_in(address("www-host"))
+    body = _checkout(client, "starter")
+    order_id = body["order_id"]
+
+    page = client.get(body["checkout_url"], headers={"referer": "https://www.example.test/app/plan"})
+    fields = _form_fields(page.text)
+    assert fields["ac_success_url"] == f"https://www.example.test/app/plan?order={order_id}"
+    assert fields["ac_fail_url"] == f"https://www.example.test/app/plan?order={order_id}&cancelled=1"
+    # Volet's server-to-server notification keeps the configured address.
+    assert fields["ac_status_url"] == "https://example.test/api/v1/billing/volet/status"
+
+    # A browser on some other site never chooses where the buyer goes.
+    page = client.get(body["checkout_url"], headers={"referer": "https://evil.test/x"})
+    assert _form_fields(page.text)["ac_success_url"] == f"https://example.test/app/plan?order={order_id}"
