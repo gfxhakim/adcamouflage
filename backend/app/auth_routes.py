@@ -125,6 +125,9 @@ class UserProfile(BaseModel):
 
     @classmethod
     def of(cls, user: User, db: Session) -> "UserProfile":
+        from .teams import billing_account
+
+        payer = billing_account(db, user)
         return cls(
             id=user.id,
             email=user.email,
@@ -139,8 +142,8 @@ class UserProfile(BaseModel):
             plan_expired=plan_expired(user),
             announcement=announcement(db),
             billing_mode=user.billing_mode,
-            tokens_usable=usable_tokens(db, user),
-            subscription_active=subscription_active(user),
+            tokens_usable=usable_tokens(db, payer),
+            subscription_active=subscription_active(payer),
         )
 
 

@@ -205,6 +205,51 @@ export interface Subscription {
   payments_enabled: boolean;
   grace_days: number;
   alerts: BillingAlert[];
+  /** Seats and members; for a member, subscription/balance/alerts above are the owner's. */
+  team?: Team | null;
+}
+
+// ---------------------------------------------------------------------------
+// team seats
+// ---------------------------------------------------------------------------
+
+export interface TeamMember {
+  email: string;
+  /** False until someone signs up with this email. */
+  joined: boolean;
+  display_name: string | null;
+  last_seen_at: string | null;
+  added_at: string;
+  /** False when the plan has fewer seats than members. */
+  sharing: boolean;
+}
+
+export interface Team {
+  role: "owner" | "member" | "none";
+  /** Seats on the plan, owner included. */
+  seats: number;
+  seats_used: number;
+  owner_email: string | null;
+  sharing: boolean;
+  members: TeamMember[];
+}
+
+export const addTeamMember = (email: string) => post<Team>("/api/v1/team/members", { email });
+export const leaveTeam = () => post<Team>("/api/v1/team/leave");
+
+export async function removeTeamMember(email: string): Promise<Team> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/v1/team/members/${encodeURIComponent(email)}`, {
+      method: "DELETE",
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError("Cannot reach the server. Check your connection.", 0);
+  }
+  if (!response.ok) throw new ApiError(await readDetail(response), response.status);
+  return (await response.json()) as Team;
 }
 
 /** The signed-in user's plan, usage and history, or null when signed out. */
