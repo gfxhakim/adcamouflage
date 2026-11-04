@@ -10,6 +10,7 @@ import {
   Crown,
   Eye,
   Film,
+  Lightbulb,
   Lock,
   Megaphone,
   ImagePlus,
@@ -20,9 +21,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Header from "@/components/Header";
-import { CmsSection } from "@/components/cms/Cms";
+import { CmsSection, T } from "@/components/cms/Cms";
 import DeckRail from "@/components/DeckRail";
 import ThemeDock from "@/components/ThemeDock";
+import WelcomeTour from "@/components/help/WelcomeTour";
+import HelpDrawer from "@/components/help/HelpDrawer";
+import CoachMark from "@/components/help/CoachMark";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
 import OverlayPreview from "@/components/OverlayPreview";
 import PosterPicker from "@/components/PosterPicker";
@@ -33,6 +37,7 @@ import PlatformPicker from "@/components/PlatformPicker";
 import BillingAlerts from "@/components/plan/BillingAlerts";
 import ProgressBar from "@/components/ProgressBar";
 import UploadZone from "@/components/UploadZone";
+import { HELP_STORAGE, HELP_STRIPS, type HelpStepId } from "@/lib/helpContent";
 import {
   ApiError,
   cancelAsset,
@@ -158,6 +163,107 @@ export default function WorkspacePage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+
+  // --- Workspace Help System (Welcome Tour, Help Drawer, Step Coach-Marks) ---
+  const [tourOpen, setTourOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpUnread, setHelpUnread] = useState(false);
+  const [coachActive, setCoachActive] = useState(false);
+  const [tourMode, setTourMode] = useState(false);
+
+  const currentStepId = STEPS[step].id as HelpStepId;
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const seenTour = window.localStorage.getItem(HELP_STORAGE.tourDone) === "1";
+      const seenDrawer = window.localStorage.getItem(HELP_STORAGE.drawerSeen) === "1";
+      setHelpUnread(!seenDrawer);
+      if (params.get("help") === "1") {
+        setHelpOpen(true);
+        setHelpUnread(false);
+        window.localStorage.setItem(HELP_STORAGE.drawerSeen, "1");
+      } else if (params.get("tour") === "1" || !seenTour) {
+        setTourOpen(true);
+      }
+    } catch {
+      /* Storage or window access blocked — skip auto-popups gracefully. */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!tourMode) return;
+    try {
+      const seenStep = window.localStorage.getItem(HELP_STORAGE.tipsSeen(currentStepId)) === "1";
+      if (!seenStep) {
+        setCoachActive(true);
+      }
+    } catch {
+      setCoachActive(true);
+    }
+  }, [currentStepId, tourMode]);
+
+  const openHelpDrawer = useCallback(() => {
+    setCoachActive(false);
+    setHelpOpen(true);
+    setHelpUnread(false);
+    try {
+      window.localStorage.setItem(HELP_STORAGE.drawerSeen, "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleStartTour = useCallback(() => {
+    setTourOpen(false);
+    setHelpOpen(false);
+    setTourMode(true);
+    setCoachActive(true);
+    try {
+      window.localStorage.setItem(HELP_STORAGE.tourDone, "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleSkipTour = useCallback(() => {
+    setTourOpen(false);
+    try {
+      window.localStorage.setItem(HELP_STORAGE.tourDone, "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleCloseCoach = useCallback(() => {
+    setCoachActive(false);
+    try {
+      window.localStorage.setItem(HELP_STORAGE.tipsSeen(currentStepId), "1");
+    } catch {
+      /* ignore */
+    }
+  }, [currentStepId]);
+
+  const handleReplayTour = useCallback(() => {
+    setHelpOpen(false);
+    setCoachActive(false);
+    try {
+      for (const s of STEPS) {
+        window.localStorage.removeItem(HELP_STORAGE.tipsSeen(s.id as HelpStepId));
+      }
+    } catch {
+      /* ignore */
+    }
+    setStep(0);
+    setTourOpen(true);
+  }, []);
+
+  const handleJumpStep = useCallback((targetStepId: HelpStepId) => {
+    const idx = STEPS.findIndex((s) => s.id === targetStepId);
+    if (idx >= 0) {
+      setStep(idx);
+    }
+  }, []);
 
   const batchIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
@@ -466,7 +572,12 @@ export default function WorkspacePage() {
 
       <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 sm:px-6 sm:pt-8 md:pb-28 lg:px-8">
         {/* Left rail — signed-in navigation -------------------------- */}
-        <DeckRail onDark={onDark} user={user} />
+        <DeckRail
+          onDark={onDark}
+          user={user}
+          onOpenHelp={openHelpDrawer}
+          helpUnread={helpUnread}
+        />
 
         {/* Step Flow: one step at a time in a single framed console ---- */}
         <main className="relative flex min-w-0 flex-1 flex-col gap-4">
@@ -533,7 +644,7 @@ export default function WorkspacePage() {
             aria-label="Workspace steps"
             className="rounded-2xl border border-black/[0.08] bg-white/80 px-3 py-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-slate-900/60 sm:px-4"
           >
-            <ol className="flex items-center gap-2 sm:gap-3">
+            <ol data-tour="stepper" className="flex items-center gap-2 sm:gap-3">
               {STEPS.map(({ label }, index) => {
                 const done = index < step;
                 const current = index === step;
@@ -655,7 +766,7 @@ export default function WorkspacePage() {
           {/* The one step card ------------------------------------------ */}
           <NeonCard glow padding="lg" radius="xl" id={STEPS[step].id}>
             <div className="flex min-h-[52vh] flex-col">
-              <div className="mb-6 flex items-start justify-between gap-4">
+              <div className="mb-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h1 className="font-display text-3xl font-normal leading-none text-black dark:text-slate-50 sm:text-4xl">
                     {STEPS[step].title}
@@ -671,20 +782,66 @@ export default function WorkspacePage() {
                 </span>
               </div>
 
+              {/* Inline "How this step works" strip ---------------------- */}
+              <CmsSection
+                k={`help.strip.${currentStepId}`}
+                label={`Step ${step + 1} help strip`}
+                as="div"
+                className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-meta-500/25 bg-meta-500/[0.06] px-3.5 py-2.5 text-xs dark:border-meta-400/25 dark:bg-meta-500/10"
+              >
+                <div className="flex min-w-0 flex-1 items-start gap-2.5 text-slate-700 dark:text-slate-200">
+                  <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-600 dark:text-meta-300" aria-hidden />
+                  <p className="min-w-0 leading-relaxed">
+                    <strong className="font-semibold text-black dark:text-white">
+                      <T k="help.strip.prefix" label="Help strip prefix">
+                        How this step works:
+                      </T>
+                    </strong>{" "}
+                    <T k={`help.strip.${currentStepId}.text`} label="Step help text" multiline>
+                      {HELP_STRIPS[currentStepId]}
+                    </T>
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 font-mono text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCoachActive(true)}
+                    className="rounded-lg border border-meta-500/30 bg-white/80 px-2.5 py-1 text-meta-700 transition hover:border-meta-500 hover:bg-white dark:bg-slate-900/70 dark:text-meta-200 dark:hover:bg-slate-900"
+                  >
+                    <T k="help.strip.tipsBtn" label="Show tips button">
+                      Show tips
+                    </T>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openHelpDrawer}
+                    className="rounded-lg px-2 py-1 font-medium text-meta-700 transition hover:bg-meta-500/10 dark:text-meta-300"
+                  >
+                    <T k="help.strip.guideBtn" label="Open guide button">
+                      Open guide →
+                    </T>
+                  </button>
+                </div>
+              </CmsSection>
+
               <div className="min-w-0 flex-1">
                 {step === 0 ? (
-                  <UploadZone
-                    files={files}
-                    onFilesChange={setFiles}
-                    maxFiles={maxFiles}
-                    maxSizeMb={maxSizeMb}
-                    disabled={uploading}
-                  />
+                  <div data-tour="load.drop">
+                    <UploadZone
+                      files={files}
+                      onFilesChange={setFiles}
+                      maxFiles={maxFiles}
+                      maxSizeMb={maxSizeMb}
+                      disabled={uploading}
+                    />
+                  </div>
                 ) : null}
 
                 {step === 1 ? (
                   <div className="space-y-6">
-                    <PlatformPicker disabled={uploading} />
+                    <div data-tour="settings.platform">
+                      <PlatformPicker disabled={uploading} />
+                    </div>
                     <OptionsPanel
                       options={options}
                       onChange={setOptions}
@@ -696,17 +853,19 @@ export default function WorkspacePage() {
 
                 {step === 2 ? (
                   <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-                    <CmsSection k="workspace.overlayTool" label="Brand overlay tool" as="div" className="min-w-0">
-                      <p className="label mb-3 flex items-center gap-1.5">
-                        <ImagePlus className="h-3.5 w-3.5" aria-hidden />
-                        Brand overlay · optional
-                      </p>
-                      <OverlayPanel
-                        layers={overlayLayers}
-                        onChange={setOverlayLayers}
-                        disabled={uploading}
-                      />
-                    </CmsSection>
+                    <div data-tour="overlay.logo" className="min-w-0">
+                      <CmsSection k="workspace.overlayTool" label="Brand overlay tool" as="div" className="min-w-0">
+                        <p className="label mb-3 flex items-center gap-1.5">
+                          <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+                          Brand overlay · optional
+                        </p>
+                        <OverlayPanel
+                          layers={overlayLayers}
+                          onChange={setOverlayLayers}
+                          disabled={uploading}
+                        />
+                      </CmsSection>
+                    </div>
                     <div className="min-w-0 space-y-8 border-t border-black/[0.07] pt-6 dark:border-white/10 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
                     <CmsSection k="workspace.overlayPreview" label="Overlay preview" as="div" className="min-w-0">
                       <p className="label mb-3 flex items-center gap-1.5">
@@ -720,25 +879,27 @@ export default function WorkspacePage() {
                         disabled={uploading}
                       />
                     </CmsSection>
-                    <CmsSection k="workspace.posterTool" label="Poster frame tool" as="div" className="min-w-0 border-t border-black/[0.07] pt-6 dark:border-white/10">
-                      <p className="label mb-3 flex items-center gap-1.5">
-                        <Film className="h-3.5 w-3.5" aria-hidden />
-                        Poster frame · optional
-                      </p>
-                      <PosterPicker
-                        poster={options.poster}
-                        onChange={(poster: PosterSettings) => setOptions({ ...options, poster })}
-                        video={firstVideo}
-                        disabled={uploading}
-                      />
-                    </CmsSection>
+                    <div data-tour="overlay.poster" className="min-w-0">
+                      <CmsSection k="workspace.posterTool" label="Poster frame tool" as="div" className="min-w-0 border-t border-black/[0.07] pt-6 dark:border-white/10">
+                        <p className="label mb-3 flex items-center gap-1.5">
+                          <Film className="h-3.5 w-3.5" aria-hidden />
+                          Poster frame · optional
+                        </p>
+                        <PosterPicker
+                          poster={options.poster}
+                          onChange={(poster: PosterSettings) => setOptions({ ...options, poster })}
+                          video={firstVideo}
+                          disabled={uploading}
+                        />
+                      </CmsSection>
+                    </div>
                     </div>
                   </div>
                 ) : null}
 
                 {step === 3 ? (
                   <div className="grid gap-8 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-                    <div className="min-w-0 space-y-4">
+                    <div data-tour="render.run" className="min-w-0 space-y-4">
                       <button
                         type="button"
                         onClick={handleSubmit}
@@ -846,7 +1007,7 @@ export default function WorkspacePage() {
                         {limits?.retention_hours ?? 24} hours.
                       </p>
                     </div>
-                    <div id="queue" className="min-w-0">
+                    <div id="queue" data-tour="render.queue" className="min-w-0">
                       <p className="label mb-3 flex items-center gap-1.5">
                         <Radar className="h-3.5 w-3.5" aria-hidden />
                         Mutation queue
@@ -903,6 +1064,26 @@ export default function WorkspacePage() {
           </CmsSection>
         </main>
       </div>
+      <WelcomeTour
+        open={tourOpen}
+        onStart={handleStartTour}
+        onSkip={handleSkipTour}
+      />
+      <HelpDrawer
+        open={helpOpen}
+        activeStep={currentStepId}
+        onClose={() => setHelpOpen(false)}
+        onJumpStep={handleJumpStep}
+        onReplayTour={handleReplayTour}
+      />
+      <CoachMark
+        active={coachActive}
+        stepId={currentStepId}
+        stepIndex={step}
+        totalSteps={STEPS.length}
+        onClose={handleCloseCoach}
+        onFinish={handleCloseCoach}
+      />
       <ThemeDock />
     </div>
   );

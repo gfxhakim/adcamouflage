@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
   Clock,
   Crown,
+  HelpCircle,
   LayoutGrid,
   LogOut,
   type LucideIcon,
@@ -26,7 +27,7 @@ interface NavItem {
 
 /**
  * The signed-in navigation for the workspace. Workspace, History and My plan,
- * then Sign out — a slim vertical icon
+ * then Help and Sign out — a slim vertical icon
  * rail on desktop and a floating pill on phones, in our Meta-blue / white /
  * black palette.
  */
@@ -49,6 +50,10 @@ interface DeckRailProps {
   onDark?: boolean;
   /** When given, token accounts get a small token count on the My plan item. */
   user?: UserProfile | null;
+  /** Opens the workspace "How to use" help drawer. */
+  onOpenHelp?: () => void;
+  /** Shows a small green dot on the help button until first opened. */
+  helpUnread?: boolean;
 }
 
 /** "1.2k" for the rail's tiny badge; full numbers stay in the tooltip. */
@@ -58,7 +63,7 @@ function compactTokens(value: number): string {
   return String(value);
 }
 
-export function DeckRail({ onDark = true, user }: DeckRailProps) {
+export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }: DeckRailProps) {
   const pathname = usePathname() ?? "";
   // Admin > Workspace can rename, re-icon, reorder or hide each item.
   const cms = useCms();
@@ -67,6 +72,8 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
     const icon = cms.iconName(`${key}.icon`, "");
     return { ...item, icon: (icon && ICONS[icon]) || item.icon };
   });
+  const showHelp = !cms.hidden("rail.help");
+  cms.register({ key: "rail.help", type: "toggle", label: "Help center (?) button" });
   const showSignOut = !cms.hidden("rail.signOut");
   cms.register({ key: "rail.signOut", type: "toggle", label: "Sign out button" });
   const [signingOut, setSigningOut] = useState(false);
@@ -85,6 +92,14 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
       // A full navigation lets the middleware see the cleared cookie.
       window.location.assign("/");
     }
+  };
+
+  const handleHelp = () => {
+    if (onOpenHelp) {
+      onOpenHelp();
+      return;
+    }
+    window.location.assign("/app?help=1");
   };
 
   // Shared visual tokens for the two surfaces.
@@ -186,29 +201,59 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
 
         <span className={clsx("my-1 h-px", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />
 
-        {showSignOut ? (
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          title="Sign out"
-          className={clsx(
-            "group relative grid h-11 w-11 place-items-center rounded-xl border border-transparent transition disabled:opacity-60",
-            signOutIdle,
-          )}
-        >
-          <LogOut className="h-[1.15rem] w-[1.15rem]" aria-hidden />
-          <span className="sr-only">Sign out</span>
-          <span
-            className={clsx(
-              "pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-lg transition group-hover:opacity-100",
-              tipTone,
-            )}
-            role="tooltip"
+        {showHelp ? (
+          <button
+            type="button"
+            onClick={handleHelp}
+            data-tour="help"
+            title="How to use · Help center"
+            className="group relative grid h-11 w-11 place-items-center rounded-xl bg-meta-500 text-white shadow-[0_0_0_4px_rgba(8,102,255,0.18)] transition hover:bg-meta-600"
           >
-            {signingOut ? "Signing out…" : "Sign out"}
-          </span>
-        </button>
+            <HelpCircle className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+            <span className="sr-only">How to use</span>
+            {helpUnread ? (
+              <span
+                className="
+                  absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-slate-900 bg-emerald-500
+                "
+                aria-hidden
+              />
+            ) : null}
+            <span
+              className={clsx(
+                "pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-lg transition group-hover:opacity-100",
+                tipTone,
+              )}
+              role="tooltip"
+            >
+              How to use · Guide &amp; tips
+            </span>
+          </button>
+        ) : null}
+
+        {showSignOut ? (
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            title="Sign out"
+            className={clsx(
+              "group relative grid h-11 w-11 place-items-center rounded-xl border border-transparent transition disabled:opacity-60",
+              signOutIdle,
+            )}
+          >
+            <LogOut className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+            <span className="sr-only">Sign out</span>
+            <span
+              className={clsx(
+                "pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium opacity-0 shadow-lg transition group-hover:opacity-100",
+                tipTone,
+              )}
+              role="tooltip"
+            >
+              {signingOut ? "Signing out…" : "Sign out"}
+            </span>
+          </button>
         ) : null}
       </nav>
 
@@ -254,19 +299,32 @@ export function DeckRail({ onDark = true, user }: DeckRailProps) {
             </Link>
           );
         })}
+        {showHelp ? (
+          <button
+            type="button"
+            onClick={handleHelp}
+            className="relative flex h-11 min-w-[2.4rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl bg-meta-500/20 px-1 text-meta-300 transition hover:bg-meta-500/30"
+          >
+            <HelpCircle className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+            <span className="text-[8.5px] font-medium leading-none whitespace-nowrap">Guide</span>
+            {helpUnread ? (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+            ) : null}
+          </button>
+        ) : null}
         {showSignOut ? (
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className={clsx(
-            "flex h-11 min-w-[2.4rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-1 transition disabled:opacity-60",
-            signOutIdle,
-          )}
-        >
-          <LogOut className="h-[1.1rem] w-[1.1rem]" aria-hidden />
-          <span className="text-[8.5px] font-medium leading-none whitespace-nowrap">Sign out</span>
-        </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className={clsx(
+              "flex h-11 min-w-[2.4rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-1 transition disabled:opacity-60",
+              signOutIdle,
+            )}
+          >
+            <LogOut className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+            <span className="text-[8.5px] font-medium leading-none whitespace-nowrap">Sign out</span>
+          </button>
         ) : null}
       </nav>
     </>

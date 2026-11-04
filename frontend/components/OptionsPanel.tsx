@@ -324,7 +324,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
             </button>
           </div>
         </div>
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div data-tour="settings.profile" className="grid gap-2.5 sm:grid-cols-2">
           {availablePresets.map((preset) => {
             const active = options.preset === preset;
             const copy = PRESET_COPY[preset];
