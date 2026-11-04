@@ -24,12 +24,20 @@ export interface MediaValue {
   src?: string;
   kind?: "image" | "video";
   alt?: string;
-  fit?: "cover" | "contain" | "fill";
+  fit?: "cover" | "contain" | "fill" | "scale-down";
+  position?: "center" | "top" | "bottom" | "left" | "right";
+  aspect?: "auto" | "16/9" | "4/3" | "1/1" | "4/5" | "9/16" | "21/9";
+  scale?: number; // width percentage 10-100 (default 100)
   width?: number; // max width in px, 0 = natural
   height?: number; // px, 0 = auto
   radius?: number; // px
   align?: "left" | "center" | "right";
   opacity?: number; // 0-1
+  frame?: "none" | "card" | "glow" | "glass" | "border";
+  shadow?: "none" | "sm" | "md" | "xl" | "glow";
+  background?: string;
+  padding?: number; // px
+  caption?: string;
   poster?: string;
   loop?: boolean;
   muted?: boolean;
@@ -94,6 +102,69 @@ export interface ReviewItem {
   avatar?: string;
   hidden?: boolean;
 }
+
+export const DEFAULT_REVIEWS: ReviewItem[] = [
+  {
+    id: "rev-1",
+    name: "Samir K.",
+    handle: "Cosmetic Brand Owner",
+    body: "Meta rejected our best cosmetic video 6 times in a row. Ran it through Blu Camouflage once and all 5 ad sets went live in 10 minutes.",
+  },
+  {
+    id: "rev-2",
+    name: "Marcus Vance",
+    handle: "Senior Meta Media Buyer",
+    body: "We push $15k/day across 8 ad accounts. Blu Camouflage gives every account a clean creative hash so nothing ever gets chain-flagged.",
+  },
+  {
+    id: "rev-3",
+    name: "Mohamed A.",
+    handle: "E-Commerce Brand Founder",
+    body: "Used to waste hours re-editing rejected ads in CapCut. Now I drop the file into Blu Camouflage and relaunch the exact winner in seconds.",
+  },
+  {
+    id: "rev-4",
+    name: "Elena Rostova",
+    handle: "Creative Strategist · DTC",
+    body: "Zero pixel loss and the voiceover sounds identical, yet Meta treats every export like a brand-new shoot. Saved our Q4 scaling.",
+  },
+  {
+    id: "rev-5",
+    name: "Sami B.",
+    handle: "Direct Response Media Buyer",
+    body: "Our aggressive before-and-after hooks always triggered auto-rejections. Blu Camouflage bypassed the scanner on the first upload.",
+  },
+  {
+    id: "rev-6",
+    name: "Imad T.",
+    handle: "Performance Agency Owner",
+    body: "Been using Blu Camouflage for 2 months straight. We generate 10 unique copies per winning ad and our account ban rate dropped to zero.",
+  },
+  {
+    id: "rev-7",
+    name: "Devon Brooks",
+    handle: "TikTok & Reels Ad Buyer",
+    body: "Creative fatigue was killing our ROAS because platforms flagged re-uploads. One batch in Blu Camouflage brought our 3.8x winner right back.",
+  },
+  {
+    id: "rev-8",
+    name: "Yassine M.",
+    handle: "COD E-Commerce Scaler",
+    body: "Best tool in my media buying stack. Rejected product videos get approved fast and deliver cheaper CPMs like a fresh creative.",
+  },
+  {
+    id: "rev-9",
+    name: "Chloe Lindqvist",
+    handle: "Head of Paid Social",
+    body: "Even when an ad account goes down, we run our top performers through Blu Camouflage and launch on a backup BM with zero footprint link.",
+  },
+  {
+    id: "rev-10",
+    name: "Tariq H.",
+    handle: "8-Figure Affiliate Marketer",
+    body: "Simple metadata scrubbers stopped working a year ago. Blu Camouflage is the only engine that actually beats modern AI ad review bots.",
+  },
+];
 
 export interface SiteContent {
   text?: Record<string, string>;

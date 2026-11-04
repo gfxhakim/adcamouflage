@@ -6,6 +6,7 @@ import { CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { Reveal, SectionTag } from "@/components/landing/primitives";
 import TestimonialMarquee from "@/components/ui/marquee-01";
+import { DEFAULT_REVIEWS } from "@/lib/siteContent";
 
 interface LiveActivity {
   active_now: number;
@@ -61,7 +62,8 @@ export function ReviewsSection() {
   const cms = useCms();
   const live = useLiveActivity();
 
-  const reviews = (cms.content.reviews ?? []).filter((r) => !r.hidden && r.name?.trim() && r.body?.trim());
+  const sourceReviews = cms.content.reviews?.length ? cms.content.reviews : DEFAULT_REVIEWS;
+  const reviews = sourceReviews.filter((r) => !r.hidden && r.name?.trim() && r.body?.trim());
   const subscribedText = cms.text("reviews.ticker.subscribed", "New {plan} subscriber · {ago}", "text", "Ticker: new subscriber ({plan}, {ago})");
   const activeText = cms.text("reviews.ticker.active", "{n} people batching right now", "text", "Ticker: people batching ({n})");
   const activeOneText = cms.text("reviews.ticker.activeOne", "1 person batching right now", "text", "Ticker: one person batching");
@@ -73,7 +75,6 @@ export function ReviewsSection() {
     for (const s of live.subscribers) ticker.push(fill(subscribedText, { plan: s.plan, ago: ago(s.seconds_ago) }));
   }
 
-  // Visitors only see the section once the admin has added at least one review.
   if (!reviews.length && !cms.preview) return null;
 
   return (

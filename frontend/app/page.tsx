@@ -133,7 +133,7 @@ export default async function LandingPage() {
             { id: "hero", label: "Hero", node: <Hero startHref={startHref} /> },
             { id: "how-it-works", label: "How it works", node: <WhyRadar /> },
             { id: "features", label: "Features", node: <FeaturePanels /> },
-            { id: "proof", label: "Before / after", node: <BeforeAfter /> },
+            { id: "proof", label: "Deep evasion & media showcase", node: <BeforeAfter /> },
             { id: "reviews", label: "Reviews", node: <ReviewsSection /> },
             {
               id: "pricing",

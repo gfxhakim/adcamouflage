@@ -80,15 +80,60 @@ export function CmsIcon({
 function mediaStyle(value: MediaValue, style?: CSSProperties): CSSProperties {
   const css: CSSProperties = { ...style };
   if (value.fit) css.objectFit = value.fit;
+  if (value.position) css.objectPosition = value.position;
+  if (value.aspect && value.aspect !== "auto") {
+    css.aspectRatio = value.aspect.replace("/", " / ");
+  }
+  if (value.scale && value.scale > 0 && value.scale <= 100) {
+    css.width = `${value.scale}%`;
+  } else if (value.width) {
+    css.width = "100%";
+  }
   if (value.width) css.maxWidth = `${value.width}px`;
-  if (value.width) css.width = "100%";
   if (value.height) css.height = `${value.height}px`;
-  if (value.radius !== undefined && value.radius !== null && value.radius !== 0) css.borderRadius = `${value.radius}px`;
-  if (value.opacity !== undefined && value.opacity !== null && value.opacity !== 1) css.opacity = value.opacity;
+  if (value.radius !== undefined && value.radius !== null) {
+    css.borderRadius = `${value.radius}px`;
+  }
+  if (value.opacity !== undefined && value.opacity !== null && value.opacity !== 1) {
+    css.opacity = value.opacity;
+  }
+  if (value.background) css.backgroundColor = value.background;
+  if (value.padding !== undefined && value.padding !== null && value.padding > 0) {
+    css.padding = `${value.padding}px`;
+  }
+  if (value.frame === "card") {
+    css.backgroundColor = value.background || "#0b0f17";
+    css.border = "1px solid rgba(255,255,255,0.12)";
+    if (!value.padding) css.padding = "12px";
+  } else if (value.frame === "glass") {
+    css.backgroundColor = value.background || "rgba(255,255,255,0.04)";
+    css.border = "1px solid rgba(255,255,255,0.16)";
+    if (!value.padding) css.padding = "8px";
+  } else if (value.frame === "border") {
+    css.border = "1px solid rgba(255,255,255,0.18)";
+  } else if (value.frame === "glow") {
+    css.border = "1px solid rgba(8,102,255,0.5)";
+    css.boxShadow = "0 0 0 1px rgba(8,102,255,0.35), 0 24px 68px -18px rgba(8,102,255,0.55)";
+  }
+  if (value.shadow && value.shadow !== "none") {
+    const shadows: Record<string, string> = {
+      sm: "0 8px 20px rgba(0,0,0,0.25)",
+      md: "0 18px 42px rgba(0,0,0,0.45)",
+      xl: "0 28px 72px rgba(0,0,0,0.7)",
+      glow: "0 0 0 1px rgba(8,102,255,0.35), 0 24px 68px -16px rgba(8,102,255,0.6)",
+    };
+    if (shadows[value.shadow]) css.boxShadow = shadows[value.shadow];
+  }
   if (value.align === "center") {
     css.marginLeft = "auto";
     css.marginRight = "auto";
-  } else if (value.align === "right") css.marginLeft = "auto";
+  } else if (value.align === "right") {
+    css.marginLeft = "auto";
+    css.marginRight = "0";
+  } else if (value.align === "left") {
+    css.marginLeft = "0";
+    css.marginRight = "auto";
+  }
   return css;
 }
 
@@ -112,7 +157,7 @@ export function MediaView({
   if (!value.src) return null;
   const video = value.kind ? value.kind === "video" : isVideoUrl(value.src);
   const css = mediaStyle(value, style);
-  const element = video ? (
+  const mediaEl = video ? (
     <video
       ref={videoRef}
       src={value.src}
@@ -141,10 +186,25 @@ export function MediaView({
       {...rest}
     />
   );
-  if (!value.link) return element;
+  const withCaption = value.caption ? (
+    <figure className="w-full">
+      {mediaEl}
+      <figcaption
+        className={cn(
+          "mt-2.5 font-mono text-xs text-white/60",
+          value.align === "left" ? "text-left" : value.align === "right" ? "text-right" : "text-center",
+        )}
+      >
+        {value.caption}
+      </figcaption>
+    </figure>
+  ) : (
+    mediaEl
+  );
+  if (!value.link) return withCaption;
   return (
     <a href={value.link} target={/^https?:/.test(value.link) ? "_blank" : undefined} rel="noreferrer">
-      {element}
+      {withCaption}
     </a>
   );
 }

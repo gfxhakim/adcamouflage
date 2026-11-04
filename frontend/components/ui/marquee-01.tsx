@@ -24,7 +24,7 @@ function safeSrc(src?: string): string | undefined {
 export function ReviewCard({ name, handle, body, avatar }: Review) {
   const src = safeSrc(avatar);
   return (
-    <Card className="relative h-full w-72 overflow-hidden rounded-2xl border-black/5 bg-white p-4 text-black shadow-none">
+    <Card className="relative h-full w-80 overflow-hidden rounded-2xl border-black/5 bg-white p-4 text-black shadow-none">
       <CardContent className="flex flex-col gap-2.5 p-0">
         <div className="flex flex-row items-center gap-2.5">
           {src ? (
@@ -39,7 +39,7 @@ export function ReviewCard({ name, handle, body, avatar }: Review) {
             {handle ? <p className="truncate text-xs font-medium text-black/50">{handle}</p> : null}
           </div>
         </div>
-        <p className="line-clamp-3 text-sm leading-relaxed text-black/80">{body}</p>
+        <p className="line-clamp-4 text-[13px] leading-snug text-black/80">{body}</p>
       </CardContent>
     </Card>
   );

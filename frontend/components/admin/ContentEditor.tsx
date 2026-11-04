@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { ICONS, ICON_NAMES } from "@/components/cms/icons";
 import {
+  DEFAULT_REVIEWS,
   FONT_CHOICES,
   PREVIEW_PARAM,
   contentAdmin,
@@ -72,6 +73,7 @@ const WORDS: Record<string, string> = {
   kicker: "Small label",
   faq: "FAQ",
   why: "How it works",
+  proof: "Deep evasion & media showcase",
   nav: "Menu",
   ui: "Labels",
 };
@@ -321,13 +323,19 @@ function MediaEditor({ value, fallback, onChange }: { value?: MediaValue; fallba
   const set = (patch: Partial<MediaValue>) => onChange(cleanObject({ ...v, ...patch }));
   const src = v.src ?? fallback?.src;
   const kind = v.kind ?? fallback?.kind ?? (isVideoUrl(src) ? "video" : "image");
+  const scale = v.scale ?? fallback?.scale ?? 100;
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <MediaThumb src={src} kind={kind} />
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
-          <Row label="File or URL">
-            <input className="field font-mono text-xs" value={v.src ?? ""} placeholder={fallback?.src || "https://…"} onChange={(e) => set({ src: e.target.value || undefined })} />
+          <Row label="Image or Video File / URL">
+            <input
+              className="field font-mono text-xs"
+              value={v.src ?? ""}
+              placeholder={fallback?.src || "https://… or click Upload"}
+              onChange={(e) => set({ src: e.target.value || undefined })}
+            />
           </Row>
         </div>
         <UploadButton
@@ -335,40 +343,167 @@ function MediaEditor({ value, fallback, onChange }: { value?: MediaValue; fallba
           onUploaded={(url, type) => set({ src: url, kind: type.startsWith("video") ? "video" : "image" })}
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Row label="Type">
-          <Select value={v.kind} onChange={(k) => set({ kind: k })} options={[{ value: "image", label: "Image" }, { value: "video", label: "Video" }]} />
+
+      {/* Size & Dimensions */}
+      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300">Size &amp; Dimensions</span>
+          <div className="flex gap-1">
+            {[50, 75, 90, 100].map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => set({ scale: pct === 100 ? undefined : pct })}
+                className={clsx(
+                  "rounded px-1.5 py-0.5 font-mono text-[10px] transition",
+                  scale === pct ? "bg-meta-500 text-white" : "bg-white/5 text-slate-400 hover:bg-white/10",
+                )}
+              >
+                {pct}%
+              </button>
+            ))}
+          </div>
+        </div>
+        <Row label={`Width scale (${scale}%)`} hint="Scale the media up or down relative to its section.">
+          <input
+            type="range"
+            min={20}
+            max={100}
+            step={5}
+            value={scale}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              set({ scale: next === 100 ? undefined : next });
+            }}
+            className="w-full accent-meta-500"
+          />
         </Row>
-        <Row label="Alt text">
-          <input className="field" value={v.alt ?? ""} placeholder={fallback?.alt || "Describe the picture"} onChange={(e) => set({ alt: e.target.value || undefined })} />
-        </Row>
-        <Row label="Fit">
-          <Select value={v.fit} onChange={(fit) => set({ fit })} options={[{ value: "cover", label: "Fill & crop" }, { value: "contain", label: "Fit inside" }, { value: "fill", label: "Stretch" }]} />
-        </Row>
-        <Row label="Align">
-          <Select value={v.align} onChange={(align) => set({ align })} options={[{ value: "left", label: "Left" }, { value: "center", label: "Centre" }, { value: "right", label: "Right" }]} />
-        </Row>
-        <Row label="Max width (px)">
-          <NumberInput value={v.width} min={0} max={4000} onChange={(width) => set({ width })} />
-        </Row>
-        <Row label="Height (px)">
-          <NumberInput value={v.height} min={0} max={4000} onChange={(height) => set({ height })} />
-        </Row>
-        <Row label="Corner radius (px)">
-          <NumberInput value={v.radius} min={0} max={400} onChange={(radius) => set({ radius })} />
-        </Row>
-        <Row label="Opacity (0–1)">
-          <NumberInput value={v.opacity} min={0} max={1} step={0.05} onChange={(opacity) => set({ opacity })} />
-        </Row>
-        <Row label="Click opens link">
-          <input className="field font-mono text-xs" value={v.link ?? ""} placeholder="None" onChange={(e) => set({ link: e.target.value || undefined })} />
-        </Row>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Row label="Aspect ratio">
+            <Select
+              value={v.aspect}
+              onChange={(aspect) => set({ aspect })}
+              options={[
+                { value: "auto", label: "Auto (original)" },
+                { value: "16/9", label: "16:9 Widescreen" },
+                { value: "4/3", label: "4:3 Standard" },
+                { value: "1/1", label: "1:1 Square" },
+                { value: "4/5", label: "4:5 Portrait" },
+                { value: "9/16", label: "9:16 Vertical" },
+                { value: "21/9", label: "21:9 Ultrawide" },
+              ]}
+            />
+          </Row>
+          <Row label="Max width (px)">
+            <NumberInput value={v.width} min={0} max={4000} onChange={(width) => set({ width })} />
+          </Row>
+          <Row label="Height (px)">
+            <NumberInput value={v.height} min={0} max={4000} onChange={(height) => set({ height })} />
+          </Row>
+        </div>
       </div>
+
+      {/* How It Shows Up (Display & Frame) */}
+      <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <span className="block text-[11px] font-semibold uppercase tracking-wider text-slate-300">How It Shows Up</span>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Row label="Media type">
+            <Select value={v.kind} onChange={(k) => set({ kind: k })} options={[{ value: "image", label: "Image" }, { value: "video", label: "Video" }]} />
+          </Row>
+          <Row label="How it fits">
+            <Select
+              value={v.fit}
+              onChange={(fit) => set({ fit })}
+              options={[
+                { value: "contain", label: "Fit inside (full media)" },
+                { value: "cover", label: "Fill & crop" },
+                { value: "fill", label: "Stretch to box" },
+                { value: "scale-down", label: "Original size (no upscale)" },
+              ]}
+            />
+          </Row>
+          <Row label="Alignment on page">
+            <Select
+              value={v.align}
+              onChange={(align) => set({ align })}
+              options={[
+                { value: "left", label: "Left" },
+                { value: "center", label: "Centre" },
+                { value: "right", label: "Right" },
+              ]}
+            />
+          </Row>
+          <Row label="Crop focus">
+            <Select
+              value={v.position}
+              onChange={(position) => set({ position })}
+              options={[
+                { value: "center", label: "Centre" },
+                { value: "top", label: "Top" },
+                { value: "bottom", label: "Bottom" },
+                { value: "left", label: "Left" },
+                { value: "right", label: "Right" },
+              ]}
+            />
+          </Row>
+          <Row label="Frame style">
+            <Select
+              value={v.frame}
+              onChange={(frame) => set({ frame })}
+              options={[
+                { value: "none", label: "None (clean edge)" },
+                { value: "glow", label: "Blue neon glow" },
+                { value: "card", label: "Dark card frame" },
+                { value: "glass", label: "Frosted glass frame" },
+                { value: "border", label: "Subtle border" },
+              ]}
+            />
+          </Row>
+          <Row label="Shadow">
+            <Select
+              value={v.shadow}
+              onChange={(shadow) => set({ shadow })}
+              options={[
+                { value: "none", label: "No shadow" },
+                { value: "sm", label: "Soft shadow" },
+                { value: "md", label: "Medium shadow" },
+                { value: "xl", label: "Deep XL shadow" },
+                { value: "glow", label: "Blue glow shadow" },
+              ]}
+            />
+          </Row>
+          <Row label="Corner radius (px)">
+            <NumberInput value={v.radius} min={0} max={400} onChange={(radius) => set({ radius })} />
+          </Row>
+          <Row label="Frame padding (px)">
+            <NumberInput value={v.padding} min={0} max={120} onChange={(padding) => set({ padding })} />
+          </Row>
+          <Row label="Backdrop colour">
+            <ColorInput value={v.background} onChange={(background) => set({ background })} placeholder="Transparent" />
+          </Row>
+          <Row label="Opacity (0–1)">
+            <NumberInput value={v.opacity} min={0} max={1} step={0.05} onChange={(opacity) => set({ opacity })} />
+          </Row>
+          <Row label="Caption under media">
+            <input className="field text-xs" value={v.caption ?? ""} placeholder="Optional caption" onChange={(e) => set({ caption: e.target.value || undefined })} />
+          </Row>
+          <Row label="Alt text / description">
+            <input className="field text-xs" value={v.alt ?? ""} placeholder={fallback?.alt || "Describe the media"} onChange={(e) => set({ alt: e.target.value || undefined })} />
+          </Row>
+          <div className="sm:col-span-2">
+            <Row label="Click opens link">
+              <input className="field font-mono text-xs" value={v.link ?? ""} placeholder="None (or https://… / /login)" onChange={(e) => set({ link: e.target.value || undefined })} />
+            </Row>
+          </div>
+        </div>
+      </div>
+
       {kind === "video" ? (
-        <div className="space-y-3 rounded-lg border border-white/10 p-3">
+        <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+          <span className="block text-[11px] font-semibold uppercase tracking-wider text-slate-300">Video Playback</span>
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
-              <Row label="Poster image">
+              <Row label="Poster thumbnail image">
                 <input className="field font-mono text-xs" value={v.poster ?? ""} placeholder="None" onChange={(e) => set({ poster: e.target.value || undefined })} />
               </Row>
             </div>
@@ -378,7 +513,7 @@ function MediaEditor({ value, fallback, onChange }: { value?: MediaValue; fallba
             <Toggle checked={v.autoplay ?? true} onChange={(autoplay) => set({ autoplay })} label="Autoplay" />
             <Toggle checked={v.loop ?? true} onChange={(loop) => set({ loop })} label="Loop" />
             <Toggle checked={v.muted ?? true} onChange={(muted) => set({ muted })} label="Muted" />
-            <Toggle checked={v.controls ?? false} onChange={(controls) => set({ controls })} label="Show controls" />
+            <Toggle checked={v.controls ?? false} onChange={(controls) => set({ controls })} label="Show player controls" />
           </div>
         </div>
       ) : null}
@@ -849,19 +984,30 @@ function ReviewsPanel({
     onChange([...reviews, { id, name: "", handle: "", body: "" }]);
     setOpenId(id);
   };
+  const loadPresets = () => {
+    if (reviews.length > 0 && !window.confirm("Replace current reviews list with the 10 realistic Blu Camouflage reviews?")) return;
+    onChange(DEFAULT_REVIEWS.map((r) => ({ ...r })));
+  };
   // Pictures already used on other reviews, to pick again with one click.
   const used = Array.from(new Set(reviews.map((r) => r.avatar).filter((a): a is string => !!a)));
 
   return (
     <div className="space-y-3">
       <p className="text-[11px] leading-relaxed text-slate-500">
-        Cards scroll in two rows (one row with fewer than 4 reviews). The section stays hidden on the live site until at least one
-        visible review has a name and a quote. Only post real reviews from real customers who agreed to be quoted.
+        Cards scroll in two rows (one row with fewer than 4 reviews). Keep quotes under ~155 characters so they fit cleanly inside the card without cutting off.
       </p>
       <p className="text-[11px] leading-relaxed text-slate-500">
         The headline and text above the cards, and the ticker wording, are under <b className="text-slate-300">Content &gt; Reviews</b>.
       </p>
       <Toggle checked={!tickerHidden} onChange={(on) => onTickerHidden(!on)} label="Show the live activity line under the cards" />
+
+      <button
+        type="button"
+        className="btn-ghost w-full justify-center !border-meta-500/40 !bg-meta-500/10 !py-2 text-xs !text-meta-200 hover:!bg-meta-500/20"
+        onClick={loadPresets}
+      >
+        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Load 10 realistic Blu Camouflage reviews
+      </button>
 
       {reviews.map((review, i) => {
         const open = openId === review.id;
@@ -908,10 +1054,13 @@ function ReviewsPanel({
                 <Row label="Name">
                   <input className="field" value={review.name} placeholder="Customer's name" onChange={(e) => set(i, { name: e.target.value })} />
                 </Row>
-                <Row label="Handle" hint="Optional, e.g. @theirname or their company.">
-                  <input className="field" value={review.handle ?? ""} placeholder="@handle" onChange={(e) => set(i, { handle: e.target.value || undefined })} />
+                <Row label="Job title / Role" hint="Shown right below their name on the review card.">
+                  <input className="field" value={review.handle ?? ""} placeholder="e.g. Senior Media Buyer" onChange={(e) => set(i, { handle: e.target.value || undefined })} />
                 </Row>
-                <Row label="Quote" hint="About 3 lines fit on a card.">
+                <Row
+                  label={`Quote (${review.body.length} / 155 chars)`}
+                  hint={review.body.length > 160 ? "Slightly long — keep under ~155 chars so it never cuts off." : "Fits cleanly inside the card without cutting off."}
+                >
                   <textarea className="field min-h-[90px] resize-y" value={review.body} placeholder="What they said" onChange={(e) => set(i, { body: e.target.value })} />
                 </Row>
                 <div>
@@ -1002,7 +1151,15 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
       .then((r) => {
         if (cancelled) return;
         setRecord(r);
-        setDraft(r.draft ?? {});
+        const loaded = clone(r.draft ?? {});
+        const legacyAfter = loaded.media?.["proof.after.image"];
+        const legacyBefore = loaded.media?.["proof.before.image"];
+        const legacyMedia = legacyAfter?.src ? legacyAfter : legacyBefore?.src ? legacyBefore : undefined;
+        if (legacyMedia?.src && !loaded.media?.["proof.media"]?.src) {
+          loaded.media = loaded.media ?? {};
+          loaded.media["proof.media"] = { fit: "contain", align: "center", radius: 24, ...legacyMedia };
+        }
+        setDraft(loaded);
       })
       .catch((err) => setLoadError(err instanceof Error ? err.message : "Could not load the content."));
     return () => {
