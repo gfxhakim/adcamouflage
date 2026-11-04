@@ -258,10 +258,9 @@ export default function WorkspacePage() {
     setTourOpen(true);
   }, []);
 
-  const handleJumpStep = useCallback((targetStepId: HelpStepId) => {
-    const idx = STEPS.findIndex((s) => s.id === targetStepId);
-    if (idx >= 0) {
-      setStep(idx);
+  const handleJumpStep = useCallback((stepIndex: number) => {
+    if (stepIndex >= 0 && stepIndex < STEPS.length) {
+      setStep(stepIndex);
     }
   }, []);
 
@@ -1066,12 +1065,14 @@ export default function WorkspacePage() {
       </div>
       <WelcomeTour
         open={tourOpen}
-        onStart={handleStartTour}
+        activeStep={step}
+        onStartTour={handleStartTour}
         onSkip={handleSkipTour}
+        onJumpStep={handleJumpStep}
       />
       <HelpDrawer
         open={helpOpen}
-        activeStep={currentStepId}
+        currentStep={step}
         onClose={() => setHelpOpen(false)}
         onJumpStep={handleJumpStep}
         onReplayTour={handleReplayTour}
@@ -1079,9 +1080,8 @@ export default function WorkspacePage() {
       <CoachMark
         active={coachActive}
         stepId={currentStepId}
-        stepIndex={step}
+        stepNumber={step + 1}
         totalSteps={STEPS.length}
-        onClose={handleCloseCoach}
         onFinish={handleCloseCoach}
       />
       <ThemeDock />
