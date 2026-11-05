@@ -139,3 +139,24 @@ def test_unanswered_ticket_goes_overdue_until_agent_replies(admin):
     r = admin.post(f"/api/v1/admin/support/threads/{tid}/message", json={"body": "Hi, I'm here"})
     assert r.status_code == 200, r.text
     assert _admin_ticket(admin, tid)["overdue"] is False
+
+
+def test_ticket_from_legacy_account_shows_in_admin(admin):
+    """Accounts from before token billing are 'legacy'; their tickets must still list."""
+
+    from .conftest import make_legacy
+
+    email = address("legacy")
+    user = _signed_in(email)
+    make_legacy(email)
+    r = user.post("/api/v1/support/thread/message", json={"body": "Talk to a real agent"})
+    assert r.status_code == 200, r.text
+    tid = r.json()["id"]
+
+    ticket = _admin_ticket(admin, tid)
+    assert ticket is not None and ticket["status"] == "escalated"
+    assert ticket["customer"]["billing_mode"] == "legacy"
+    assert ticket["customer"]["plan_label"]
+    assert admin.get("/api/v1/admin/support/notifications").status_code == 200
+    detail = admin.get(f"/api/v1/admin/support/threads/{tid}")
+    assert detail.status_code == 200, detail.text
