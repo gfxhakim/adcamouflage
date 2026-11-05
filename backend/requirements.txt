@@ -4,6 +4,8 @@ python-multipart==0.0.20
 pydantic==2.10.4
 pydantic-settings==2.7.1
 celery[redis]==5.4.0
+# Pinned: kombu 5.7+ refuses redis-py < 6.1 and broke every enqueue ("render queue unreachable").
+kombu==5.4.2
 redis==5.2.1
 opencv-python-headless==4.10.0.84
 numpy==2.1.3

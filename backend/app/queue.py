@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import atexit
 import logging
+import threading
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from .config import settings
@@ -45,6 +47,42 @@ def queue_depth() -> int:
         return 0
 
 
+_broker_lock = threading.Lock()
+_broker_cache: tuple[float, bool, str | None] | None = None
+_BROKER_CACHE_SECONDS = 20.0
+
+
+def broker_status(force: bool = False) -> tuple[bool, str | None]:
+    """Can the API actually hand a job to Celery right now?
+
+    Redis answering PING is not enough: the Celery transport can still refuse
+    to publish (a library version clash did exactly that once). So this opens a
+    real broker channel, the same path ``apply_async`` takes. Cached briefly so
+    the health endpoint stays cheap.
+    """
+
+    global _broker_cache
+    if settings.inline_worker:
+        return True, None
+    now = time.monotonic()
+    with _broker_lock:
+        if not force and _broker_cache and now - _broker_cache[0] < _BROKER_CACHE_SECONDS:
+            return _broker_cache[1], _broker_cache[2]
+    ok, reason = True, None
+    try:
+        from .celery_app import celery_app
+
+        with celery_app.connection_for_write() as conn:
+            conn.ensure_connection(max_retries=1, timeout=3)
+            conn.default_channel  # noqa: B018 - opening the channel is the check
+    except Exception as exc:  # noqa: BLE001
+        ok, reason = False, f"{type(exc).__name__}: {exc}"[:300]
+        logger.error("render queue check failed: %s", reason)
+    with _broker_lock:
+        _broker_cache = (time.monotonic(), ok, reason)
+    return ok, reason
+
+
 def worker_mode() -> str:
     return "inline" if settings.inline_worker else "celery"
 
@@ -57,18 +95,29 @@ def enqueue_asset(asset_id: str) -> str | None:
         _pending[asset_id] = future
         return f"inline:{asset_id}"
 
-    try:
-        result = process_asset.apply_async(args=[asset_id], queue="mutations")
-        return result.id
-    except Exception as exc:  # noqa: BLE001 - broker down
-        logger.error("could not enqueue %s: %s", asset_id, exc)
-        get_store().update_asset(
-            asset_id,
-            status=JobStatus.FAILED,
-            stage="failed",
-            error="The render queue is unreachable. Check that Redis and the Celery worker are running.",
-        )
-        return None
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            result = process_asset.apply_async(args=[asset_id], queue="mutations")
+            return result.id
+        except Exception as exc:  # noqa: BLE001 - broker down or transport error
+            last_exc = exc
+            logger.error(
+                "could not enqueue %s (attempt %s/3): %s: %s",
+                asset_id, attempt + 1, type(exc).__name__, exc,
+            )
+            if attempt < 2:
+                time.sleep(0.5 * (2**attempt))
+    global _broker_cache
+    with _broker_lock:
+        _broker_cache = (time.monotonic(), False, f"{type(last_exc).__name__}: {last_exc}"[:300])
+    get_store().update_asset(
+        asset_id,
+        status=JobStatus.FAILED,
+        stage="failed",
+        error="The render queue is unreachable right now. Press retry in a minute; if it keeps failing, Admin > Overview shows the reason.",
+    )
+    return None
 
 
 def _run_guarded(asset_id: str) -> None:

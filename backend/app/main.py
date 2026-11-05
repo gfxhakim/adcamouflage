@@ -37,7 +37,7 @@ from .app_settings import currency
 from .teams import billing_account
 from .teams import router as team_router
 from .tokens import InsufficientTokens, check_billing, consume, get_billing_rules, get_token_plans, get_topups
-from .queue import cancel_asset, enqueue_asset, queue_depth, worker_mode
+from .queue import broker_status, cancel_asset, enqueue_asset, queue_depth, worker_mode
 from .schemas import (
     PRESET_DEFAULTS,
     AssetJob,
@@ -150,7 +150,8 @@ async def health() -> HealthReport:
     ffmpeg_ok = await asyncio.to_thread(ffmpeg_available)
     version = await asyncio.to_thread(ffmpeg_version) if ffmpeg_ok else None
     active = await asyncio.to_thread(store.count_active)
-    healthy = ffmpeg_ok and (redis_ok or settings.inline_worker)
+    queue_ok, _reason = await asyncio.to_thread(broker_status)
+    healthy = ffmpeg_ok and ((redis_ok and queue_ok) or settings.inline_worker)
     return HealthReport(
         status="ok" if healthy else "degraded",
         version=__version__,
@@ -158,6 +159,7 @@ async def health() -> HealthReport:
         ffmpeg=ffmpeg_ok,
         ffmpeg_version=version,
         redis=redis_ok,
+        queue=queue_ok,
         worker_mode=worker_mode(),
         active_jobs=active,
         queue_depth=queue_depth(),

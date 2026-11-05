@@ -491,6 +491,8 @@ class HealthReport(BaseModel):
     ffmpeg: bool
     ffmpeg_version: str | None = None
     redis: bool
+    # True when the API can actually publish a render job to Celery.
+    queue: bool = True
     worker_mode: str
     active_jobs: int
     queue_depth: int

@@ -178,6 +178,8 @@ export interface HealthReport {
   ffmpeg: boolean;
   ffmpeg_version: string | null;
   redis: boolean;
+  /** True when the API can actually hand a render to the worker queue. */
+  queue?: boolean;
   worker_mode: string;
   active_jobs: number;
   queue_depth: number;

@@ -197,7 +197,18 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
                 ["Jobs running", health ? String(health.active_jobs) : "—"],
                 ["Waiting in queue", health ? String(health.queue_depth) : "—"],
                 ["Video engine", health ? (health.ffmpeg ? "Ready" : "Missing") : "—"],
-                ["Job queue", health ? (health.redis ? "Connected" : health.worker_mode) : "—"],
+                [
+                  "Job queue",
+                  health
+                    ? health.worker_mode === "inline"
+                      ? "inline"
+                      : !health.redis
+                        ? "Redis unreachable"
+                        : health.queue === false
+                          ? "Broken"
+                          : "Connected"
+                    : "—",
+                ],
               ].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-ink-faint dark:text-slate-500">{label}</dt>
@@ -205,6 +216,12 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
                 </div>
               ))}
             </dl>
+            {health && health.worker_mode !== "inline" && (!health.redis || health.queue === false) ? (
+              <p className="mt-3 text-xs text-red-700 dark:text-red-300">
+                Renders can&apos;t start. Check that the Redis service is running on Railway and that the api service
+                has ADCAM_REDIS_URL set to the Redis reference variable. The api deploy logs show the exact reason.
+              </p>
+            ) : null}
           </NeonCard>
         </div>
 
