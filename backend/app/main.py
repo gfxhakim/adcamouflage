@@ -51,6 +51,9 @@ from .schemas import (
     UploadRejection,
     new_id,
 )
+from .hardening import SecurityMiddleware
+from .payment_proofs import admin_router as payment_proofs_admin_router
+from .payment_proofs import user_router as payment_proofs_router
 from .security import require_api_key, sign_download, verify_download
 from .storage import StorageError, classify, get_store, resolve_within, sanitize_filename
 from .subscription_routes import router as subscription_router
@@ -95,8 +98,9 @@ app = FastAPI(
         "stagger frame rates, shift audio pitch and strip every provenance tag from the container."
     ),
     lifespan=lifespan,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.enable_docs else None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if settings.enable_docs else None,
 )
 
 app.include_router(auth_router)
@@ -109,6 +113,8 @@ app.include_router(site_content_admin_router)
 app.include_router(live_activity_router)
 app.include_router(support_user_router)
 app.include_router(support_admin_router)
+app.include_router(payment_proofs_router)
+app.include_router(payment_proofs_admin_router)
 
 # Credentials must be allowed for the session cookie to reach the API from
 # the browser; with credentials on, the origin list cannot be a wildcard.
@@ -117,9 +123,11 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Requested-With"],
     expose_headers=["Content-Disposition"],
 )
+# Added last so it wraps everything, CORS included.
+app.add_middleware(SecurityMiddleware)
 
 
 @app.exception_handler(StorageError)

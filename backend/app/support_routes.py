@@ -35,13 +35,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .accounts import current_user, is_admin, require_admin
 from .activity import log_activity
 from .config import settings
+from .hardening import rate_limit, sniff_media
 from .db import BatchRecord, SupportMessage, SupportThread, User, get_db, utcnow
 from .mailer import send_email
 from .plans import get_plans, plan_expired, plan_label, used_this_month
@@ -66,6 +67,21 @@ SUPPORT_MEDIA_TYPES: dict[str, str] = {
 }
 
 _MEDIA_NAME_RE = re.compile(r"^sup_[a-f0-9]{24}\.[a-z0-9]{2,5}$")
+# The only attachment links a message may carry: files uploaded through
+# /upload. Anything else (an outside address, a javascript: link) is refused,
+# so a chat message cannot make the admin's browser load or open it.
+_MEDIA_URL_RE = re.compile(r"^/api/v1/support/media/(sup_[a-f0-9]{24}\.[a-z0-9]{2,5})$")
+
+
+def _media_owner_path(name: str) -> Path:
+    return support_media_dir() / f"{name}.owner"
+
+
+def _media_owner(name: str) -> int | None:
+    try:
+        return int(_media_owner_path(name).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
 
 user_router = APIRouter(prefix="/api/v1/support", tags=["support"])
 admin_router = APIRouter(
@@ -577,6 +593,45 @@ class SendSupportMessageIn(BaseModel):
     attachment_type: str | None = Field(default=None, max_length=64)
     attachment_size: int | None = Field(default=None, ge=0)
 
+    @field_validator("attachment_url")
+    @classmethod
+    def _own_media_only(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        if not _MEDIA_URL_RE.match(value):
+            raise ValueError("Attachments must be uploaded through the chat.")
+        return value
+
+    @field_validator("attachment_type")
+    @classmethod
+    def _known_kind(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        if value not in {"image", "video"}:
+            raise ValueError("Unknown attachment type.")
+        return value
+
+    @field_validator("attachment_name")
+    @classmethod
+    def _plain_name(cls, value: str | None) -> str | None:
+        return None if value is None else _clean_file_name(value)
+
+
+def _clean_file_name(value: str) -> str:
+    cleaned = re.sub(r"[\x00-\x1f<>\\/]", "", value).strip()
+    return cleaned[:255] or "attachment"
+
+
+def _require_own_attachment(payload: SendSupportMessageIn, user: User) -> None:
+    """A customer may only attach files they uploaded themselves."""
+
+    if not payload.attachment_url:
+        return
+    match = _MEDIA_URL_RE.match(payload.attachment_url)
+    name = match.group(1) if match else ""
+    if not name or _media_owner(name) != user.id or not (support_media_dir() / name).is_file():
+        raise HTTPException(status_code=422, detail="That attachment was not found. Upload it again.")
+
 
 class EscalateThreadIn(BaseModel):
     note: str = Field(default="", max_length=2000)
@@ -825,7 +880,11 @@ def get_my_support_thread(
     return _serialize_thread(thread, messages)
 
 
-@user_router.post("/thread/new", response_model=SupportThreadOut)
+@user_router.post(
+    "/thread/new",
+    response_model=SupportThreadOut,
+    dependencies=[Depends(rate_limit("support-new", limit=10, window_seconds=3600))],
+)
 def start_new_support_thread(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
@@ -853,7 +912,11 @@ def start_new_support_thread(
     return _serialize_thread(thread, [welcome])
 
 
-@user_router.post("/thread/message", response_model=SupportThreadOut)
+@user_router.post(
+    "/thread/message",
+    response_model=SupportThreadOut,
+    dependencies=[Depends(rate_limit("support-message", limit=40, window_seconds=300))],
+)
 def post_user_support_message(
     payload: SendSupportMessageIn,
     user: User = Depends(current_user),
@@ -862,6 +925,7 @@ def post_user_support_message(
     body = (payload.body or "").strip()
     if not body and not payload.attachment_url:
         raise HTTPException(status_code=422, detail="Enter a message or attach a screenshot/video.")
+    _require_own_attachment(payload, user)
 
     thread, messages = _get_or_create_thread(db, user)
     if thread.status == "resolved":
@@ -884,12 +948,18 @@ def post_user_support_message(
     thread.issue_summary = _build_issue_summary(messages)
 
     if thread.status == "bot":
-        thread.bot_attempts += 1
-        bot_reply, suggestions = generate_bot_response(
-            user_text=body,
-            has_attachment=bool(payload.attachment_url),
-            attempt_number=thread.bot_attempts,
-        )
+        from .payment_proofs import bot_payment_reply
+
+        payment_reply = bot_payment_reply(db, user, body)
+        if payment_reply is not None:
+            bot_reply, suggestions = payment_reply
+        else:
+            thread.bot_attempts += 1
+            bot_reply, suggestions = generate_bot_response(
+                user_text=body,
+                has_attachment=bool(payload.attachment_url),
+                attempt_number=thread.bot_attempts,
+            )
         bot_msg = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
@@ -956,7 +1026,11 @@ def mark_bot_attempt_unsolved(
     return _serialize_thread(thread, messages)
 
 
-@user_router.post("/thread/escalate", response_model=SupportThreadOut)
+@user_router.post(
+    "/thread/escalate",
+    response_model=SupportThreadOut,
+    dependencies=[Depends(rate_limit("support-escalate", limit=6, window_seconds=3600))],
+)
 def escalate_to_live_agent(
     payload: EscalateThreadIn,
     user: User = Depends(current_user),
@@ -1025,7 +1099,11 @@ def escalate_to_live_agent(
 # ---------------------------------------------------------------------------
 
 
-@user_router.post("/upload", status_code=status.HTTP_201_CREATED)
+@user_router.post(
+    "/upload",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("support-upload", limit=20, window_seconds=600))],
+)
 async def upload_support_attachment(
     file: UploadFile = File(...),
     _user: User = Depends(current_user),
@@ -1071,9 +1149,17 @@ async def upload_support_attachment(
 
     mime = SUPPORT_MEDIA_TYPES[suffix]
     kind = "video" if mime.startswith("video/") else "image"
+    # The extension says what the file claims to be; its first bytes say what it is.
+    if sniff_media(target) != kind:
+        target.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="That file is not a valid image or video.",
+        )
+    _media_owner_path(stored_name).write_text(str(_user.id), encoding="utf-8")
     return {
         "url": f"/api/v1/support/media/{stored_name}",
-        "name": raw_name,
+        "name": _clean_file_name(raw_name),
         "type": kind,
         "mime": mime,
         "size": size,
@@ -1084,14 +1170,29 @@ async def upload_support_attachment(
 def read_support_attachment(
     name: str,
     _user: User = Depends(current_user),
+    db: Session = Depends(get_db),
 ) -> FileResponse:
-    """Serve an uploaded chat screenshot or video recording to any signed-in user/admin."""
+    """Serve a chat screenshot or recording to the customer it belongs to, or an admin."""
 
     if not _MEDIA_NAME_RE.match(name):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     path = support_media_dir() / name
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    if not is_admin(_user) and _media_owner(name) != _user.id:
+        # Files from before owners were recorded: allowed when a message in
+        # one of the customer's own threads carries them (an admin's reply).
+        shared = db.execute(
+            select(SupportMessage.id)
+            .join(SupportThread, SupportThread.id == SupportMessage.thread_id)
+            .where(
+                SupportThread.user_id == _user.id,
+                SupportMessage.attachment_url == f"/api/v1/support/media/{name}",
+            )
+            .limit(1)
+        ).first()
+        if shared is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     headers = {
         "Cache-Control": "private, max-age=86400",
         "X-Content-Type-Options": "nosniff",

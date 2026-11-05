@@ -121,9 +121,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Only files uploaded through the chat are shown; any other link is dropped. */
 export function resolveSupportMediaUrl(url: string | null): string {
-  if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (!url || !/^\/api\/v1\/support\/media\/sup_[a-f0-9]{24}\.[a-z0-9]{2,5}$/.test(url)) return "";
   return `${API_BASE}${url}`;
 }
 
