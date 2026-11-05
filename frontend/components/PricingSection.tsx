@@ -5,7 +5,7 @@ import { ArrowRight, Check, Sparkles, Users } from "lucide-react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
-import { CmsHeadline, SectionTag } from "@/components/landing/primitives";
+import { CmsHeadline } from "@/components/landing/primitives";
 import { rolloverCap, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -75,14 +75,11 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
     <div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
         <div>
-          <SectionTag k="pricing.tag" index="05" dark>
-            TRANSPARENT PRICING
-          </SectionTag>
           <CmsHeadline
             k="pricing.headline"
             dark
             text="One Saved Campaign Pays for Your Entire Year."
-            className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
+            className="text-4xl sm:text-5xl lg:text-6xl"
           />
         </div>
         <T k="pricing.lede" long as="p" className="text-sm leading-relaxed text-white/65">

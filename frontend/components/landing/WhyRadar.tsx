@@ -6,7 +6,7 @@ import { Check, Gauge, Layers, Sparkles, Upload } from "lucide-react";
 
 import { CmsIcon, CmsSection, CmsSlot, MediaView, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
-import { CmsHeadline, Reveal, SectionTag } from "@/components/landing/primitives";
+import { CmsHeadline, Reveal } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 const WHY = [
@@ -202,11 +202,10 @@ export function WhyRadar() {
     <CmsSection k="why" label="How it works" id="how-it-works" className="scroll-mt-24 bg-[#F4F5F7] py-12 sm:py-16 lg:py-20">
       <div className="mx-auto grid max-w-7xl items-center gap-10 overflow-x-clip px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-8 lg:px-8">
         <div className="min-w-0">
-          <SectionTag k="why.tag" index="01">THE SCALING BOTTLENECK</SectionTag>
           <CmsHeadline
             k="why.headline"
             text="Your Winner Got Flagged. | [Relaunch It in Seconds.]"
-            className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
+            className="text-4xl sm:text-5xl lg:text-6xl"
           />
           <T k="why.lede" long as="p" className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted">
             Platforms don&apos;t ban your idea. They ban your file. AdCamouflage rewrites the
