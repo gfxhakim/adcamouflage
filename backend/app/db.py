@@ -222,6 +222,54 @@ class ActivityEvent(Base):
     )
 
 
+class SupportThread(Base):
+    """A conversation between a signed-in user, the BluCloaking AI bot, and a live admin agent."""
+
+    __tablename__ = "support_threads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # 'bot' | 'escalated' | 'agent_active' | 'resolved'
+    status: Mapped[str] = mapped_column(String(24), default="bot", nullable=False, index=True)
+    bot_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    issue_summary: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    unread_admin: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unread_user: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False, index=True
+    )
+
+
+class SupportMessage(Base):
+    """One message (text and/or screenshot/video recording) inside a support thread."""
+
+    __tablename__ = "support_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    thread_id: Mapped[int] = mapped_column(
+        ForeignKey("support_threads.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # 'user' | 'bot' | 'agent' | 'system'
+    sender_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    sender_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    body: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    attachment_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attachment_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attachment_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    suggestions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+
+
+
 _engine: Engine | None = None
 _SessionFactory: sessionmaker[Session] | None = None
 

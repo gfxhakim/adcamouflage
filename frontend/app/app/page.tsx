@@ -27,6 +27,7 @@ import ThemeDock from "@/components/ThemeDock";
 import WelcomeTour from "@/components/help/WelcomeTour";
 import HelpDrawer from "@/components/help/HelpDrawer";
 import CoachMark from "@/components/help/CoachMark";
+import SupportBotWidget from "@/components/help/SupportBotWidget";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
 import OverlayPreview from "@/components/OverlayPreview";
 import PosterPicker from "@/components/PosterPicker";
@@ -1084,6 +1085,7 @@ export default function WorkspacePage() {
         onClose={handleCloseCoach}
         onFinish={handleCloseCoach}
       />
+      <SupportBotWidget onOpenGuide={openHelpDrawer} />
       <ThemeDock />
     </div>
   );

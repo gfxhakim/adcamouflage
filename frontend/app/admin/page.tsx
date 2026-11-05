@@ -1,7 +1,20 @@
 "use client";
 
 import clsx from "clsx";
-import { AppWindow, ArrowLeft, BarChart3, LayoutDashboard, Loader2, LogOut, PanelsTopLeft, RefreshCw, Settings2, Users } from "lucide-react";
+import {
+  AppWindow,
+  ArrowLeft,
+  BarChart3,
+  Bell,
+  Headset,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  PanelsTopLeft,
+  RefreshCw,
+  Settings2,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -9,17 +22,21 @@ import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import ContentEditor from "@/components/admin/ContentEditor";
 import OverviewTab from "@/components/admin/OverviewTab";
 import SettingsTab from "@/components/admin/SettingsTab";
+import SupportTab from "@/components/admin/SupportTab";
 import UserPanel from "@/components/admin/UserPanel";
 import UsersTab from "@/components/admin/UsersTab";
 import BrandLogo from "@/components/BrandLogo";
 import NotFound from "@/app/not-found";
 import { getOverview, getPlans, type Overview, type PlanInfo } from "@/lib/admin";
 import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
+import { getAdminSupportNotifications, type AdminSupportNotifications } from "@/lib/support";
 
 const REFRESH_MS = 30000;
+const SUPPORT_POLL_MS = 8000;
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "support", label: "Support · Live Chat", icon: Headset },
   { id: "users", label: "Users", icon: Users },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings2 },
@@ -48,6 +65,8 @@ export default function AdminPage() {
   const [tab, setTab] = useState<TabId>("overview");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [supportNotifs, setSupportNotifs] = useState<AdminSupportNotifications | null>(null);
+  const [activeSupportThreadId, setActiveSupportThreadId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   // Bumped whenever data changes, so each tab re-reads what it shows.
@@ -89,16 +108,26 @@ export default function AdminPage() {
   }, []);
 
   // --- shared data ---------------------------------------------------------
+  const loadSupportNotifs = useCallback(async () => {
+    try {
+      const notifs = await getAdminSupportNotifications();
+      setSupportNotifs(notifs);
+    } catch {
+      /* ignore transient notification poll errors */
+    }
+  }, []);
+
   const loadShared = useCallback(async () => {
     try {
       const [ov, planList] = await Promise.all([getOverview(), getPlans()]);
       setOverview(ov);
       setPlans(planList);
       setError(null);
+      void loadSupportNotifs();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the admin data.");
     }
-  }, []);
+  }, [loadSupportNotifs]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -107,8 +136,14 @@ export default function AdminPage() {
       void loadShared();
       setRefreshKey((k) => k + 1);
     }, REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [allowed, loadShared]);
+    const supportTimer = setInterval(() => {
+      void loadSupportNotifs();
+    }, SUPPORT_POLL_MS);
+    return () => {
+      clearInterval(timer);
+      clearInterval(supportTimer);
+    };
+  }, [allowed, loadShared, loadSupportNotifs]);
 
   const refreshAll = useCallback(() => {
     void loadShared();
@@ -119,6 +154,14 @@ export default function AdminPage() {
     setTab(id);
     window.history.replaceState(null, "", `#${id}`);
   }, []);
+
+  const openSupportThread = useCallback(
+    (threadId: number) => {
+      setActiveSupportThreadId(threadId);
+      openTab("support");
+    },
+    [openTab],
+  );
 
   const closePanel = useCallback(() => setSelected(null), []);
 
@@ -146,6 +189,8 @@ export default function AdminPage() {
   const currency = overview?.currency ?? "USD";
   const activeTab = TABS.find((t) => t.id === tab);
   const editing = tab === "landing" || tab === "workspace";
+  const unreadSupport = supportNotifs?.unread_total ?? 0;
+  const escalatedCount = supportNotifs?.escalated_count ?? 0;
 
   return (
     <div className="deck deck-fixed min-h-screen">
@@ -155,6 +200,24 @@ export default function AdminPage() {
             <BrandLogo caption="Admin · Command deck" captionClassName="hidden sm:block" onDark />
           </Link>
           <nav className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openTab("support")}
+              className={clsx(
+                "btn-ghost relative !px-2.5 !py-2",
+                (unreadSupport > 0 || escalatedCount > 0) &&
+                  "!border-amber-400/50 !bg-amber-500/15 !text-amber-200",
+              )}
+              aria-label="Live support notifications"
+            >
+              <Headset className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">Live Support</span>
+              {unreadSupport > 0 || escalatedCount > 0 ? (
+                <span className="ml-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-amber-400 px-1.5 font-mono text-[10px] font-bold text-slate-950">
+                  {unreadSupport || escalatedCount}
+                </span>
+              ) : null}
+            </button>
             <button type="button" className="btn-ghost !px-2.5 !py-2" onClick={refreshAll} aria-label="Refresh">
               <RefreshCw className="h-4 w-4" aria-hidden />
               <span className="hidden sm:inline">Refresh</span>
@@ -189,6 +252,11 @@ export default function AdminPage() {
               >
                 <item.icon className="h-4 w-4" aria-hidden />
                 {item.label}
+                {item.id === "support" && (unreadSupport > 0 || escalatedCount > 0) ? (
+                  <span className="ml-1 rounded-full bg-amber-400 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-950">
+                    {unreadSupport || escalatedCount}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -206,16 +274,93 @@ export default function AdminPage() {
               aria-selected={tab === item.id}
               data-active={tab === item.id}
               onClick={() => openTab(item.id)}
-              className="deck-rail-btn"
+              className="deck-rail-btn relative"
               title={item.label}
               aria-label={item.label}
             >
               <item.icon className="h-4 w-4" aria-hidden />
+              {item.id === "support" && (unreadSupport > 0 || escalatedCount > 0) ? (
+                <span className="absolute -right-1 -top-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-amber-400 px-1 font-mono text-[9px] font-bold text-slate-950">
+                  {unreadSupport || escalatedCount}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>
 
         <main className="min-w-0 flex-1">
+          {/* Live Support Escalation Notification Banner when admin opens panel */}
+          {tab !== "support" &&
+          supportNotifs &&
+          supportNotifs.recent_escalations.length > 0 &&
+          (supportNotifs.unread_total > 0 || supportNotifs.escalated_count > 0) ? (
+            <div className="mb-6 rounded-2xl border border-amber-400/50 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-slate-900/80 p-4 shadow-lg">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400 text-slate-950">
+                    <Bell className="h-5 w-5" aria-hidden />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-200">
+                      {supportNotifs.escalated_count > 0
+                        ? `${supportNotifs.escalated_count} customer(s) requested a Live Agent from the BluCloaking Bot (≤30min response window)`
+                        : `${supportNotifs.unread_total} unread customer support message(s)`}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-300">
+                      Click a ticket below to view all customer account details, what they told the bot, and reply with text, screenshots, or video recordings.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openTab("support")}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3.5 py-2 text-xs font-semibold text-slate-950 transition hover:bg-amber-300"
+                >
+                  <Headset className="h-4 w-4" aria-hidden />
+                  Open Support Console
+                </button>
+              </div>
+
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {supportNotifs.recent_escalations.slice(0, 4).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-950/65 p-3 text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-white">
+                          #{item.id} · {item.customer.display_name || item.customer.email}
+                        </span>
+                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] text-amber-300">
+                          {item.customer.plan_label} · {item.customer.usable_tokens} tok
+                        </span>
+                      </div>
+                      <p className="mt-1 font-mono text-[10px] text-slate-400">
+                        {item.customer.email} · {item.customer.batch_count} batches ({item.customer.files_total} files)
+                      </p>
+                      <p className="mt-1.5 line-clamp-2 whitespace-pre-line rounded-lg bg-white/[0.04] p-2 font-mono text-[11px] text-amber-100/90">
+                        {item.issue_summary || item.last_message_preview}
+                      </p>
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between gap-2">
+                      <span className="font-mono text-[10px] text-slate-400">
+                        {item.bot_attempts} bot attempts
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openSupportThread(item.id)}
+                        className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500"
+                      >
+                        Reply to Customer →
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mb-5 flex items-center gap-2">
             {activeTab ? <activeTab.icon className="h-4 w-4 text-meta-300" aria-hidden /> : null}
             <h1 className="font-display text-2xl font-normal leading-tight text-slate-50 sm:text-3xl">
@@ -233,6 +378,13 @@ export default function AdminPage() {
               refreshKey={refreshKey}
               onSelectUser={setSelected}
               onOpenAnalytics={() => openTab("analytics")}
+            />
+          ) : tab === "support" ? (
+            <SupportTab
+              refreshKey={refreshKey}
+              initialThreadId={activeSupportThreadId}
+              onSelectUser={setSelected}
+              onNotificationsChanged={() => void loadSupportNotifs()}
             />
           ) : tab === "users" ? (
             <UsersTab
