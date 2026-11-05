@@ -36,7 +36,15 @@ from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .app_settings import currency
 from .teams import billing_account
 from .teams import router as team_router
-from .tokens import InsufficientTokens, check_billing, consume, get_billing_rules, get_token_plans, get_topups
+from .tokens import (
+    InsufficientTokens,
+    check_billing,
+    consume,
+    get_billing_rules,
+    get_token_plans,
+    get_topups,
+    promo_public,
+)
 from .queue import broker_status, cancel_asset, enqueue_asset, queue_depth, worker_mode
 from .schemas import (
     PRESET_DEFAULTS,
@@ -175,6 +183,8 @@ def public_plans(db: Session = Depends(get_db)) -> dict[str, Any]:
         "plans": [p.as_dict() for p in get_token_plans(db).values()],
         "topups": get_topups(db),
         "rules": get_billing_rules(db),
+        # The limited-time launch offer, for the countdown above the cards.
+        "promo": promo_public(db),
     }
 
 

@@ -92,7 +92,13 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                 ) : null}
               </div>
 
-              <p className="mt-3 text-2xl font-bold tracking-tight text-black">
+              {plan.regular_price && plan.regular_price > plan.price ? (
+                <p className="mt-3 text-xs font-medium text-ink-subtle">
+                  <span className="line-through">{formatMoney(plan.regular_price, currency)}</span>{" "}
+                  <span className="font-semibold text-amber-700">Launch price</span>
+                </p>
+              ) : null}
+              <p className={clsx(plan.regular_price && plan.regular_price > plan.price ? "mt-0.5" : "mt-3", "text-2xl font-bold tracking-tight text-black")}>
                 {formatMoney(plan.price, currency)}
                 <span className="text-xs font-medium text-ink-subtle"> / 30 days</span>
               </p>
