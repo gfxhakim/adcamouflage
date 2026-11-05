@@ -6,7 +6,7 @@ import { useRef, useState, type ReactNode } from "react";
 
 import { CmsLink, CmsSection, CmsSlot, T } from "@/components/cms/Cms";
 import { useCms, type CmsApi } from "@/components/cms/ContentProvider";
-import { CmsHeadline, EASE, PillArrow, SectionTag } from "@/components/landing/primitives";
+import { CmsHeadline, EASE, PillArrow } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 type Look = "gray" | "black" | "white" | "blue";
@@ -246,8 +246,7 @@ export function FeaturePanels() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <SectionTag k="features.tag" index="02">THE SANITIZATION PIPELINE</SectionTag>
-            <CmsHeadline k="features.headline" text="Flagged In. | [Unstoppable Out.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+            <CmsHeadline k="features.headline" text="Flagged In. | [Unstoppable Out.]" className="text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <T k="features.lede" long as="p" className="text-sm leading-relaxed text-ink-muted">
             Three layers. One click. Your winning ad comes back with a fingerprint the platforms have never seen.

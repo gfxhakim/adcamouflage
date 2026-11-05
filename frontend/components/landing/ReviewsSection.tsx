@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
-import { Reveal, SectionTag } from "@/components/landing/primitives";
+import { Reveal } from "@/components/landing/primitives";
 import TestimonialMarquee from "@/components/ui/marquee-01";
 import { DEFAULT_REVIEWS } from "@/lib/siteContent";
 
@@ -82,10 +82,7 @@ export function ReviewsSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <SectionTag k="reviews.tag" index="04" className="!bg-black/20 !text-white">
-              CUSTOMER REVIEWS
-            </SectionTag>
-            <T k="reviews.headline" as="h2" className="mt-5 text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
+            <T k="reviews.headline" as="h2" className="text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
               Built for media buyers who ship new creatives every week.
             </T>
           </div>

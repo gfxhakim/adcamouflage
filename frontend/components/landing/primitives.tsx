@@ -9,42 +9,6 @@ import { cn } from "@/lib/utils";
 
 export const EASE = [0.16, 1, 0.3, 1] as const;
 
-/** The "(01) Why" pill that opens every landing section. */
-export function SectionTag({
-  k,
-  index,
-  children,
-  dark = false,
-  className,
-}: {
-  /** Content key: makes the number and the label editable in Admin > Landing. */
-  k?: string;
-  index: string;
-  children: ReactNode;
-  dark?: boolean;
-  className?: string;
-}) {
-  const cms = useCms();
-  if (k) {
-    index = cms.text(`${k}.index`, index, "text", "Tag number");
-    if (typeof children === "string") children = cms.text(k, children, "text", "Tag");
-    if (cms.hidden(k)) return null;
-  }
-  return (
-    <span
-      {...(k ? cms.mark(k) : {})}
-      style={k ? cms.textStyle(k) : undefined}
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[11px] tracking-wide",
-        dark ? "bg-white/[0.08] text-white/70" : "bg-black/[0.05] text-ink-muted",
-        className,
-      )}
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-meta-500" aria-hidden />({index}) {children}
-    </span>
-  );
-}
-
 /**
  * A big landing headline. Wrap words in [brackets] to set them on a blue
  * marker that sweeps in from the left once the heading scrolls into view.
