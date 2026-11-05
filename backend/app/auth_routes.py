@@ -57,16 +57,13 @@ class _AttemptLimiter:
         self._hits: dict[str, list[float]] = defaultdict(list)
         self._lock = threading.Lock()
 
-    def check(self, key: str) -> None:
+    def check(self, key: str, message: str = "Too many sign-in attempts. Wait a few minutes and try again.") -> None:
         now = time.monotonic()
         with self._lock:
             recent = [stamp for stamp in self._hits[key] if now - stamp < self.window]
             self._hits[key] = recent
             if len(recent) >= self.limit:
-                raise AuthError(
-                    "Too many sign-in attempts. Wait a few minutes and try again.",
-                    status.HTTP_429_TOO_MANY_REQUESTS,
-                )
+                raise AuthError(message, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def record_failure(self, key: str) -> None:
         with self._lock:
@@ -78,6 +75,16 @@ class _AttemptLimiter:
 
 
 login_limiter = _AttemptLimiter()
+# Sign-ups: a few per sender per 10 minutes, and a ceiling for the whole site
+# so a script cannot fill the database with accounts.
+register_limiter = _AttemptLimiter(limit=5, window_seconds=600)
+register_site_limiter = _AttemptLimiter(limit=60, window_seconds=600)
+
+
+def _sender_key(request: Request) -> str:
+    forwarded = ",".join(request.headers.getlist("x-forwarded-for")).replace(" ", "")
+    client = request.client.host if request.client else "unknown"
+    return f"{forwarded}|{client}"
 
 
 def _client_key(request: Request, email: str) -> str:
@@ -160,12 +167,17 @@ class BatchSummary(BaseModel):
 
 
 @router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)) -> UserProfile:
+def register(
+    payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)
+) -> UserProfile:
     if not registration_open(db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="New accounts are closed on this instance.",
         )
+    sender = _sender_key(request)
+    register_limiter.check(sender, "Too many new accounts from here. Wait a few minutes and try again.")
+    register_site_limiter.check("*", "Too many new accounts right now. Try again in a few minutes.")
 
     email = validate_email(payload.email)
     password = validate_password(payload.password)
@@ -189,6 +201,8 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         raise AuthError("An account with that email already exists.", status.HTTP_409_CONFLICT)
 
     db.refresh(user)
+    register_limiter.record_failure(sender)
+    register_site_limiter.record_failure("*")
     set_session_cookie(response, create_session_token(user))
     logger.info("registered user %s", user.id)
     log_activity(db, user.id, "signup", f"Signed up on the {user.plan} plan")

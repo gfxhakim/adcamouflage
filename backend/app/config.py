@@ -13,7 +13,7 @@ from pathlib import Path
 
 from typing import Annotated
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -251,6 +251,20 @@ class Settings(BaseSettings):
     @property
     def btcpay_base_url(self) -> str:
         return self.btcpay_url.strip().rstrip("/")
+
+    @model_validator(mode="after")
+    def _secure_cookie_on_https(self) -> "Settings":
+        # A site served over https gets a Secure session cookie (never sent
+        # over plain http) unless ADCAM_COOKIE_SECURE says otherwise.
+        if "cookie_secure" not in self.model_fields_set and self.public_url.strip().lower().startswith("https://"):
+            self.cookie_secure = True
+        return self
+
+    @property
+    def weak_secret_key(self) -> bool:
+        return self.secret_key.strip() in {"", "change-me-in-production", "changeme", "secret"} or len(
+            self.secret_key.strip()
+        ) < 24
 
     @property
     def cookie_samesite_value(self) -> str:

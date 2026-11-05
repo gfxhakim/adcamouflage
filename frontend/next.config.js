@@ -36,6 +36,16 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // SAMEORIGIN, not DENY: Admin > Landing / Workspace previews the site in a frame.
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          // Browsers only ever reach the site over https once they have seen it.
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          // No camera, microphone, location or payment APIs for embedded content.
+          // (Screen recording for support uses getDisplayMedia, allowed for the site itself.)
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=(self)",
+          },
+          // Only this site may frame its pages, no plugins, and no <base> hijack.
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'" },
         ],
       },
     ];

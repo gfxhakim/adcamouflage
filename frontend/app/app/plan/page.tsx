@@ -24,6 +24,7 @@ import Header from "@/components/Header";
 import DeckRail from "@/components/DeckRail";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
+import CheckoutPanel from "@/components/plan/CheckoutPanel";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
@@ -88,6 +89,8 @@ export default function PlanPage() {
   const [waitingOrder, setWaitingOrder] = useState<string | null>(null);
   /** The payment method the user picked; the first one the server offers until then. */
   const [pickedProvider, setPickedProvider] = useState<PaymentProviderId | null>(null);
+  /** The order shown in the checkout panel (transaction ID, pay, screenshot, check). */
+  const [panelOrder, setPanelOrder] = useState<Order | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Plan labels for the settlement toast, which runs outside the render.
   const labelsRef = useRef<Record<string, string>>({});
@@ -157,6 +160,8 @@ export default function PlanPage() {
       try {
         const order = await fetchOrder(orderId);
         if (cancelled) return;
+        // The checkout panel opens on the order the buyer came back for.
+        setPanelOrder((current) => (current === null || current.id === order.id ? order : current));
         if (order.status === "paid") {
           settled = true;
           setWaitingOrder(null);
@@ -238,9 +243,13 @@ export default function PlanPage() {
       setToast(null);
       try {
         const checkout = await startCheckout(kind, choice, provider);
-        window.location.assign(checkout.checkout_url);
+        // Open the checkout panel: transaction ID first, then the pay button.
+        const order = await fetchOrder(checkout.order_id);
+        setPanelOrder(order);
+        setOrders((list) => [order, ...list.filter((o) => o.id !== order.id)]);
       } catch (err) {
         setToast({ tone: "error", text: err instanceof Error ? err.message : "Could not start the checkout." });
+      } finally {
         setCheckoutBusy(null);
       }
     },
@@ -249,6 +258,28 @@ export default function PlanPage() {
 
   const buyPlan = useCallback((plan: TokenPlanCard) => void buy("subscription", { plan_id: plan.id }, plan.id), [buy]);
   const buyTopup = useCallback((amount: number) => void buy("topup", { amount }, "topup"), [buy]);
+
+  // --- checkout panel ------------------------------------------------------
+  const panelChanged = useCallback((order: Order) => {
+    setPanelOrder(order);
+    setOrders((list) => list.map((o) => (o.id === order.id ? order : o)));
+  }, []);
+
+  const panelActivated = useCallback(
+    (order: Order) => {
+      setToast({
+        tone: "success",
+        text:
+          (order.kind === "subscription"
+            ? `Payment confirmed. Your ${labelsRef.current[order.plan_id] ?? order.plan_id} plan is active.`
+            : `Payment confirmed. ${formatTokens(order.tokens)} top-up tokens were added.`) + " Opening your workspace…",
+        action: { href: "/app", label: "Start rendering" },
+      });
+      void load();
+      window.setTimeout(() => window.location.assign("/app"), OPEN_WORKSPACE_AFTER_MS + 1500);
+    },
+    [load],
+  );
 
   // --- derived -------------------------------------------------------------
   const quota = sub?.monthly_quota ?? null;
@@ -486,7 +517,12 @@ export default function PlanPage() {
                       <Receipt className="h-4 w-4 text-meta-500" aria-hidden />
                       <h2 className="text-sm font-semibold tracking-tight text-black">Orders</h2>
                     </div>
-                    <OrderHistory orders={orders} currency={sub.currency} planLabels={planLabels} />
+                    <OrderHistory
+                      orders={orders}
+                      currency={sub.currency}
+                      planLabels={planLabels}
+                      onOpen={setPanelOrder}
+                    />
                   </NeonCard>
 
                   <NeonCard padding="lg" radius="xl">
@@ -545,6 +581,18 @@ export default function PlanPage() {
           )}
         </main>
       </div>
+
+      {panelOrder ? (
+        <CheckoutPanel
+          order={panelOrder}
+          planLabel={planLabels[panelOrder.plan_id] ?? panelOrder.plan_id}
+          currency={sub?.currency ?? "USD"}
+          waiting={waitingOrder === panelOrder.id}
+          onClose={() => setPanelOrder(null)}
+          onChanged={panelChanged}
+          onActivated={panelActivated}
+        />
+      ) : null}
     </>
   );
 }

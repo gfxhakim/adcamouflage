@@ -1320,3 +1320,156 @@ def activity(
     db: Session = Depends(get_db),
 ) -> list[Activity]:
     return _activity(db, limit, kind=kind)
+
+
+# --------------------------------------------------------------------------
+# payment review: screenshots and transaction IDs
+# --------------------------------------------------------------------------
+
+
+class PaymentReview(BaseModel):
+    order_id: str
+    ref_code: str | None
+    user_id: int
+    email: str
+    kind: str
+    plan_id: str
+    plan_label: str
+    amount: float
+    tokens: int
+    status: str
+    provider: str
+    provider_ref: str | None
+    review_status: str
+    review_note: str | None
+    reviewed_by: str | None
+    reviewed_at: datetime | None
+    proof_note: str | None
+    proof_url: str | None
+    proof_uploaded_at: datetime | None
+    created_at: datetime
+    paid_at: datetime | None
+
+
+class ReviewDecision(BaseModel):
+    note: str = Field(default="", max_length=500)
+
+
+def _payment_review(order: Order, user: User | None, labels: dict[str, str]) -> PaymentReview:
+    return PaymentReview(
+        order_id=order.id,
+        ref_code=order.ref_code,
+        user_id=order.user_id,
+        email=user.email if user else "(deleted)",
+        kind=order.kind,
+        plan_id=order.plan_id,
+        plan_label=labels.get(order.plan_id, order.plan_id),
+        amount=order.amount_usd,
+        tokens=order.tokens,
+        status=order.status,
+        provider=order.provider,
+        provider_ref=order.provider_ref,
+        review_status=order.review_status or "",
+        review_note=order.review_note,
+        reviewed_by=order.reviewed_by,
+        reviewed_at=order.reviewed_at,
+        proof_note=order.proof_note,
+        proof_url=f"/api/v1/billing/orders/{order.id}/proof" if order.proof_file else None,
+        proof_uploaded_at=order.proof_uploaded_at,
+        created_at=order.created_at,
+        paid_at=order.paid_at,
+    )
+
+
+@router.get("/payments", response_model=list[PaymentReview])
+def list_payment_reviews(
+    state: str = Query(default="submitted", pattern="^(submitted|reviewed|all)$"),
+    q: str = Query(default="", max_length=128),
+    db: Session = Depends(get_db),
+) -> list[PaymentReview]:
+    """Orders with a payment screenshot. 'submitted' = waiting for a decision.
+
+    ``q`` finds an order by transaction ID, provider reference or buyer email,
+    whether or not it has a screenshot (for a buyer who pastes the ID in chat).
+    """
+
+    query = select(Order, User).join(User, User.id == Order.user_id, isouter=True)
+    term = q.strip()
+    if term:
+        from .payments import find_ref_code
+
+        code = find_ref_code(term)
+        conditions = [Order.provider_ref == term, Order.btcpay_invoice_id == term, Order.id == term]
+        if code:
+            conditions.append(Order.ref_code == code)
+        if "@" in term:
+            conditions.append(func.lower(User.email) == term.lower())
+        query = query.where(or_(*conditions))
+    elif state == "submitted":
+        query = query.where(Order.review_status == "submitted")
+    elif state == "reviewed":
+        query = query.where(Order.review_status.in_(("approved", "rejected")))
+    else:
+        query = query.where(Order.review_status != "")
+    rows = db.execute(query.order_by(Order.proof_uploaded_at.desc(), Order.created_at.desc()).limit(200)).all()
+    labels = {pid: plan.label for pid, plan in get_token_plans(db).items()}
+    return [_payment_review(order, user, labels) for order, user in rows]
+
+
+def _review_target(db: Session, order_id: str) -> Order:
+    order = db.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return order
+
+
+@router.post("/payments/{order_id}/approve", response_model=PaymentReview)
+def approve_payment(
+    order_id: str,
+    payload: ReviewDecision,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PaymentReview:
+    """The admin checked the money arrived: apply the order (once) and turn the plan on."""
+
+    order = _review_target(db, order_id)
+    if order.status == "paid":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This order is already paid and applied.")
+    applied = settle_order(
+        db, order, source=f"payment approved by {admin.email}", note=payload.note.strip() or "payment screenshot approved"
+    )
+    db.refresh(order)
+    if not applied and order.status != "paid":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This order could not be applied.")
+    order.review_status = "approved"
+    order.reviewed_by = admin.email
+    order.reviewed_at = datetime.now(timezone.utc)
+    order.review_note = payload.note.strip() or None
+    db.commit()
+    log_activity(db, order.user_id, "payment", f"Payment {order.ref_code} approved by {admin.email}")
+    user = db.get(User, order.user_id)
+    labels = {pid: plan.label for pid, plan in get_token_plans(db).items()}
+    return _payment_review(order, user, labels)
+
+
+@router.post("/payments/{order_id}/reject", response_model=PaymentReview)
+def reject_payment(
+    order_id: str,
+    payload: ReviewDecision,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PaymentReview:
+    """The screenshot does not match a payment. The order stays open so the buyer can try again."""
+
+    order = _review_target(db, order_id)
+    if order.status == "paid":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This order is already paid and applied.")
+    order.review_status = "rejected"
+    order.reviewed_by = admin.email
+    order.reviewed_at = datetime.now(timezone.utc)
+    order.review_note = payload.note.strip() or None
+    db.commit()
+    log_activity(db, order.user_id, "payment", f"Payment screenshot for {order.ref_code} rejected by {admin.email}")
+    user = db.get(User, order.user_id)
+    labels = {pid: plan.label for pid, plan in get_token_plans(db).items()}
+    return _payment_review(order, user, labels)

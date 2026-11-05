@@ -19,14 +19,14 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import btcpay, volet
-from .accounts import current_user
+from . import btcpay, payments, volet
+from .accounts import current_user, is_admin
 from .activity import log_activity
 from .app_settings import currency
 from .config import settings
@@ -88,6 +88,8 @@ class CheckoutOut(BaseModel):
     amount: float
     tokens: int
     provider: str
+    # The transaction ID the buyer copies (BC-XXXX-XXXX).
+    ref_code: str | None = None
 
 
 class OrderOut(BaseModel):
@@ -101,6 +103,22 @@ class OrderOut(BaseModel):
     checkout_url: str | None
     created_at: datetime
     paid_at: datetime | None
+    ref_code: str | None = None
+    # '' | submitted | approved | rejected (the payment screenshot's review).
+    review_status: str = ""
+    review_note: str | None = None
+    has_proof: bool = False
+    proof_uploaded_at: datetime | None = None
+
+
+class VerifyIn(BaseModel):
+    code: str = Field(min_length=1, max_length=128)
+
+
+class VerifyOut(BaseModel):
+    outcome: str
+    message: str
+    order: OrderOut | None = None
 
 
 class SubscriptionState(BaseModel):
@@ -146,6 +164,11 @@ def _order_out(order: Order) -> OrderOut:
         checkout_url=order.checkout_url,
         created_at=order.created_at,
         paid_at=order.paid_at,
+        ref_code=order.ref_code,
+        review_status=order.review_status or "",
+        review_note=order.review_note if order.review_status == "rejected" else None,
+        has_proof=bool(order.proof_file),
+        proof_uploaded_at=order.proof_uploaded_at,
     )
 
 
@@ -276,12 +299,16 @@ def checkout(
 
     existing = _open_order(db, user, payload.kind, plan.id, amount, provider)
     if existing is not None:
+        if not existing.ref_code:
+            existing.ref_code = payments.unused_ref_code(db)
+            db.commit()
         return CheckoutOut(
             order_id=existing.id,
             checkout_url=existing.checkout_url or "",
             amount=amount,
             tokens=existing.tokens,
             provider=existing.provider,
+            ref_code=existing.ref_code,
         )
 
     order = new_order(
@@ -295,7 +322,14 @@ def checkout(
         db.commit()
         logger.info("Volet checkout started for order %s", order.id)
         log_activity(db, user.id, "checkout", f"Started Volet checkout for {what} (${amount:g})")
-        return CheckoutOut(order_id=order.id, checkout_url=order.checkout_url, amount=amount, tokens=tokens, provider=provider)
+        return CheckoutOut(
+            order_id=order.id,
+            checkout_url=order.checkout_url,
+            amount=amount,
+            tokens=tokens,
+            provider=provider,
+            ref_code=order.ref_code,
+        )
 
     try:
         invoice_id, checkout_url = btcpay.create_invoice(
@@ -315,7 +349,14 @@ def checkout(
     order.checkout_url = checkout_url
     db.commit()
     log_activity(db, user.id, "checkout", f"Started checkout for {what} (${amount:g})")
-    return CheckoutOut(order_id=order.id, checkout_url=checkout_url, amount=amount, tokens=tokens, provider=provider)
+    return CheckoutOut(
+        order_id=order.id,
+        checkout_url=checkout_url,
+        amount=amount,
+        tokens=tokens,
+        provider=provider,
+        ref_code=order.ref_code,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -397,7 +438,7 @@ def pay_order(
             success_url=f"{base}{_return_path(order.id)}",
             fail_url=f"{base}{_return_path(order.id)}?cancelled=1",
             status_url=f"{settings.public_url.strip().rstrip('/') or base}/api/v1/billing/volet/status",
-            comment=f"{settings.app_name}: {what}",
+            comment=f"{settings.app_name}: {what}" + (f" ({order.ref_code})" if order.ref_code else ""),
         )
     except volet.VoletError as exc:
         logger.warning("Volet pay page for order %s could not be built: %s", order.id, exc)
@@ -663,6 +704,118 @@ def order_status(order_id: str, user: User = Depends(current_user), db: Session 
         raise HTTPException(status_code=404, detail="Order not found.")
     _settle_from_btcpay(db, order)
     return _order_out(order)
+
+
+# --------------------------------------------------------------------------
+# transaction ID check and payment screenshots
+# --------------------------------------------------------------------------
+
+
+@router.post("/verify", response_model=VerifyOut)
+def verify_transaction(
+    payload: VerifyIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> VerifyOut:
+    """The buyer pastes their transaction ID: is that payment confirmed (and so the plan on)?
+
+    Only reports; activation already happened when the provider confirmed
+    the payment or an admin approved it. See ``payments.check_transaction``.
+    """
+
+    result = payments.check_transaction(db, user, payload.code)
+    return VerifyOut(
+        outcome=result.outcome,
+        message=result.message,
+        order=_order_out(result.order) if result.order is not None else None,
+    )
+
+
+def _notify_admins_of_proof(order_id: str, ref_code: str, email: str, amount: float, what: str) -> None:
+    from .mailer import send_email
+
+    base = settings.public_url.strip().rstrip("/")
+    link = f"{base}/admin#payments" if base else "/admin#payments"
+    body = (
+        f"<p>{html.escape(email)} uploaded a payment screenshot for <b>{html.escape(what)}</b> "
+        f"(${amount:g}), transaction ID <b>{html.escape(ref_code)}</b>.</p>"
+        "<p>The payment provider has not confirmed this payment yet. Check that the money arrived, "
+        f'then approve or reject it in <a href="{html.escape(link)}">Admin &gt; Payments</a>.</p>'
+    )
+    for admin in settings.admin_emails:
+        send_email(admin, f"Payment screenshot to review: {ref_code}", body)
+
+
+@router.post("/orders/{order_id}/proof", response_model=OrderOut)
+async def upload_payment_proof(
+    order_id: str,
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    note: str = Form(default="", max_length=500),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> OrderOut:
+    """Attach a screenshot of the payment to one of the buyer's own orders.
+
+    The screenshot is kept with the order for the admin to review; it does
+    not activate the plan. A paid order needs none, so it is refused.
+    """
+
+    order = db.get(Order, order_id)
+    if order is None or order.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    if order.status == "paid":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This order is already paid and active.")
+    if not payments.proof_limiter.hit(f"user:{user.id}"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many uploads. Try again in an hour."
+        )
+
+    data = await file.read(payments.MAX_PROOF_BYTES + 1)
+    if len(data) > payments.MAX_PROOF_BYTES:
+        raise HTTPException(status_code=413, detail="The screenshot must be 8 MB or smaller.")
+    if not data:
+        raise HTTPException(status_code=422, detail="The uploaded file was empty.")
+    cleaned, kind = payments.clean_image(data)
+
+    old = order.proof_file
+    order.proof_file = payments.store_proof(cleaned, kind)
+    order.proof_note = note.strip()[:500] or None
+    order.proof_uploaded_at = datetime.now(timezone.utc)
+    order.review_status = "submitted"
+    order.review_note = None
+    order.reviewed_by = None
+    order.reviewed_at = None
+    if not order.ref_code:
+        order.ref_code = payments.unused_ref_code(db)
+    db.commit()
+    payments.remove_proof(old)
+
+    plans = get_token_plans(db)
+    label = plans[order.plan_id].label if order.plan_id in plans else order.plan_id
+    what = f"{label} period" if order.kind == "subscription" else f"${order.amount_usd:g} top-up on {label}"
+    log_activity(db, user.id, "payment", f"Uploaded a payment screenshot for {what} ({order.ref_code})")
+    background.add_task(_notify_admins_of_proof, order.id, order.ref_code or "", user.email, order.amount_usd, what)
+    return _order_out(order)
+
+
+@router.get("/orders/{order_id}/proof")
+def read_payment_proof(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> FileResponse:
+    """The screenshot, for the buyer who uploaded it or an admin; 404 for anyone else."""
+
+    order = db.get(Order, order_id)
+    if order is None or (order.user_id != user.id and not is_admin(user)):
+        raise HTTPException(status_code=404, detail="Not Found")
+    path = payments.proof_path(order.proof_file)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(
+        path,
+        media_type=payments.proof_media_type(path.name),
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )
 
 
 # --------------------------------------------------------------------------
