@@ -21,6 +21,7 @@ export interface SupportThread {
   id: number;
   user_id: number;
   status: SupportThreadStatus;
+  overdue?: boolean;
   bot_attempts: number;
   max_attempts: number;
   can_escalate: boolean;
@@ -58,6 +59,7 @@ export interface SupportCustomerDossier {
 export interface AdminSupportThreadSummary {
   id: number;
   status: SupportThreadStatus;
+  overdue?: boolean;
   bot_attempts: number;
   issue_summary: string;
   escalated_at: string | null;
@@ -79,6 +81,7 @@ export interface AdminSupportNotifications {
   unread_total: number;
   escalated_count: number;
   active_count: number;
+  overdue_count?: number;
   recent_escalations: AdminSupportThreadSummary[];
 }
 

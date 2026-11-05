@@ -302,7 +302,9 @@ export default function AdminPage() {
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-amber-200">
-                      {supportNotifs.escalated_count > 0
+                      {(supportNotifs.overdue_count ?? 0) > 0
+                        ? `${supportNotifs.overdue_count} ticket(s) waiting 30+ min with no agent reply — ${supportNotifs.escalated_count} open in total`
+                        : supportNotifs.escalated_count > 0
                         ? `${supportNotifs.escalated_count} customer(s) requested a Live Agent from the BluCloaking Bot (≤30min response window)`
                         : `${supportNotifs.unread_total} unread customer support message(s)`}
                     </p>
