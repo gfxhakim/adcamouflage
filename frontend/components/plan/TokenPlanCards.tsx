@@ -107,7 +107,7 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                 </li>
                 <li className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                  {plan.tokens_per_generation} tokens per generation · {formatMoney(plan.price_per_generation, currency)} each
+                  {(plan.seats ?? 1) > 1 ? `Up to ${plan.seats} users sharing the tokens` : "Single user"}
                 </li>
                 <li className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />

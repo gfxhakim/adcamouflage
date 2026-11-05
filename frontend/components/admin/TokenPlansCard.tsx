@@ -25,6 +25,7 @@ interface PlanDraft {
   tokens_per_generation: string;
   rollover_months: string;
   topup_rate: string;
+  seats: string;
 }
 
 interface Draft {
@@ -42,6 +43,7 @@ const PLAN_FIELDS: { key: keyof Omit<PlanDraft, "label">; label: string; step?: 
   { key: "tokens_per_generation", label: "Per generation", hint: "tokens one output costs" },
   { key: "rollover_months", label: "Rollover", hint: "periods of tokens kept (0–12)" },
   { key: "topup_rate", label: "Top-up rate", hint: "tokens per 1 unit of currency" },
+  { key: "seats", label: "Users", hint: "people who share the plan, owner included" },
 ];
 
 function draftOf(config: BillingConfig): Draft {
@@ -57,6 +59,7 @@ function draftOf(config: BillingConfig): Draft {
           tokens_per_generation: String(plan.tokens_per_generation),
           rollover_months: String(plan.rollover_months),
           topup_rate: String(plan.topup_rate),
+          seats: String(plan.seats ?? 1),
         },
       ]),
     ),
@@ -130,6 +133,7 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
         tokens_per_generation: Number.parseInt(plan.tokens_per_generation, 10),
         rollover_months: Number.parseInt(plan.rollover_months, 10),
         topup_rate: Number.parseInt(plan.topup_rate, 10),
+        seats: Number.parseInt(plan.seats, 10),
       };
       if (Number.isNaN(edit.price) || edit.price < 0) return setError(`${edit.label}: enter a price of 0 or more.`);
       if (!(edit.tokens > 0)) return setError(`${edit.label}: tokens per period must be above 0.`);
@@ -138,6 +142,7 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
         return setError(`${edit.label}: rollover is a number of periods from 0 to 12.`);
       }
       if (!(edit.topup_rate > 0)) return setError(`${edit.label}: the top-up rate must be above 0.`);
+      if (!(edit.seats! >= 1 && edit.seats! <= 100)) return setError(`${edit.label}: users must be from 1 to 100.`);
       plans[id] = edit;
     }
     if (amounts.length === 0) return setError("Enter at least one top-up amount, e.g. 20, 40, 80.");
@@ -211,8 +216,8 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
                   {rollover.toLocaleString()}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                <label className="col-span-2 block sm:col-span-3 lg:col-span-1">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+                <label className="col-span-2 block sm:col-span-4 lg:col-span-1">
                   <span className="label">Name</span>
                   <input className="field mt-1" value={plan.label} maxLength={40} onChange={(e) => setPlan(id, { label: e.target.value })} />
                 </label>

@@ -220,6 +220,8 @@ export interface TokenPlanCard {
   rollover_cap?: number;
   /** Tokens per 1 unit of currency on a top-up. */
   topup_rate: number;
+  /** People who share the plan's tokens, owner included. Older APIs leave it out (= 1). */
+  seats?: number;
 }
 
 /** One row of the top-up picker, priced for a plan. */

@@ -206,6 +206,16 @@ def checkout(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> CheckoutOut:
+    from .teams import membership
+
+    seat = membership(db, user)
+    if seat is not None:
+        owner = db.get(User, seat.owner_id)
+        who = owner.email if owner else "the team owner"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"You are on {who}'s team, so they manage the plan. Leave the team to buy your own.",
+        )
     provider = _resolve_provider(payload.provider)
 
     plans = get_token_plans(db)

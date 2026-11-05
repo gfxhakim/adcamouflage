@@ -165,6 +165,8 @@ class TokenPlanEdit(BaseModel):
     tokens_per_generation: int = Field(gt=0, le=1_000_000)
     rollover_months: int = Field(ge=0, le=12)
     topup_rate: int = Field(gt=0, le=1_000_000)
+    # Users who share the plan, owner included. Left out = keep the stored value.
+    seats: int | None = Field(default=None, ge=1, le=100)
 
 
 class TopupsEdit(BaseModel):
@@ -676,7 +678,7 @@ def update_billing_config(
         save_token_plans(
             db,
             {
-                plan_id: {**edit.model_dump(), "label": edit.label.strip(), "price": round(edit.price, 2)}
+                plan_id: {**edit.model_dump(exclude_none=True), "label": edit.label.strip(), "price": round(edit.price, 2)}
                 for plan_id, edit in payload.plans.items()
             },
         )

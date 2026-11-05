@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Sparkles, Users } from "lucide-react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 
 interface PricingSectionProps {
   plans: TokenPlanCard[];
-  topups: TopupTable;
+  /** Still passed by the page; the cards show each plan's own top-up rate. */
+  topups?: TopupTable;
   currency: string;
   /** Where the plan buttons go: sign-up for visitors, the workspace once signed in. */
   ctaHref: string;
@@ -31,7 +32,6 @@ const INCLUDED = [
   "Video & Static Image Support",
   "Complete Metadata & Hash Wipe",
   "Standard Processing Queue",
-  "Single User Access",
 ];
 
 function price(amount: number, currency: string, digits?: number) {
@@ -55,26 +55,21 @@ function rolloverText(plan: TokenPlanCard) {
   return `Roll over up to ${number(rolloverCap(plan))} tokens`;
 }
 
-/** "Top up from $20: 40–65 tokens per $1, with bonus tokens from $40 up." */
-function topupLine(plans: TokenPlanCard[], topups: TopupTable, currency: string): string {
-  const rates = plans.map((p) => p.topup_rate).filter((r) => r > 0);
-  if (rates.length === 0 || topups.amounts.length === 0) return "";
-  const low = Math.min(...rates);
-  const high = Math.max(...rates);
-  const rate = low === high ? `${low}` : `${low}–${high}`;
-  const smallest = Math.min(...topups.amounts);
-  const bonusFrom = topups.amounts
-    .filter((amount) => plans.some((p) => (topups.bonus[p.id]?.[String(amount)] ?? 0) > 0))
-    .sort((a, b) => a - b)[0];
-  const bonus = bonusFrom ? `, with bonus tokens from ${price(bonusFrom, currency)} up` : "";
-  return `Need more? Top up from ${price(smallest, currency)} at ${rate} tokens per ${price(1, currency)}${bonus}.`;
+/** The seat line each card ends its feature list with. */
+function seatsText(plan: TokenPlanCard): string {
+  const seats = plan.seats ?? 1;
+  return seats > 1 ? `Up to ${number(seats)} users` : "Single user";
 }
 
-export function PricingSection({ plans, topups, currency, ctaHref }: PricingSectionProps) {
+/** Seats are printed per plan, so a "single user" line in the shared list would contradict Max. */
+const SEAT_LINE = /single[\s-]*user/i;
+
+export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps) {
   const cms = useCms();
-  const extra = topupLine(plans, topups, currency);
   const popularId = cms.text("pricing.popularPlan", POPULAR, "text", "Highlighted plan id (starter, pro, max)").trim();
-  const included = cms.list("pricing.included", INCLUDED, "Included in every plan", INCLUDED);
+  const included = cms
+    .list("pricing.included", INCLUDED, "Included in every plan", INCLUDED)
+    .filter(({ item }) => !SEAT_LINE.test(item));
 
   return (
     <div>
@@ -142,17 +137,10 @@ export function PricingSection({ plans, topups, currency, ctaHref }: PricingSect
 
               <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs">
                 <div>
-                  <T k="pricing.perGeneration" as="dt" className="text-white/45">Per generation</T>
-                  <dd className="font-semibold text-white">
-                    {price(plan.price_per_generation, currency, 2)}{" "}
-                    <span className="font-normal text-white/45">· {plan.tokens_per_generation} tokens</span>
-                  </dd>
-                </div>
-                <div>
                   <T k="pricing.rollover" as="dt" className="text-white/45">Rollover</T>
                   <dd className="font-semibold text-white">{rolloverText(plan)}</dd>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <T k="pricing.topups" as="dt" className="text-white/45">Top-ups</T>
                   <dd className="font-semibold text-white">
                     {plan.topup_rate} tokens per {price(1, currency)}
@@ -169,6 +157,16 @@ export function PricingSection({ plans, topups, currency, ctaHref }: PricingSect
                     <T k={`${key}.text`}>{feature}</T>
                   </li>
                 ))}
+                <li className="flex items-start gap-2.5 text-sm text-white/75">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
+                    {(plan.seats ?? 1) > 1 ? (
+                      <Users className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                    ) : (
+                      <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                    )}
+                  </span>
+                  <span className={cn((plan.seats ?? 1) > 1 && "font-semibold text-white")}>{seatsText(plan)}</span>
+                </li>
               </ul>
 
               <CmsLink
@@ -197,19 +195,6 @@ export function PricingSection({ plans, topups, currency, ctaHref }: PricingSect
             </motion.div>
           );
         })}
-      </div>
-
-      <div className="mt-8 space-y-2 font-mono text-[11px] uppercase tracking-wider text-white/45">
-        <p className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-meta-500" aria-hidden />
-          <T k="pricing.note">One uploaded file × one variant = one generation. Paid in crypto through BTCPay, per 30-day period.</T>
-        </p>
-        {extra ? (
-          <p className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-meta-500" aria-hidden />
-            {extra}
-          </p>
-        ) : null}
       </div>
     </div>
   );

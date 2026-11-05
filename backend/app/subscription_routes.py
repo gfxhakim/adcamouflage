@@ -32,6 +32,7 @@ from .plans import (
     usage_window_start,
     used_this_month,
 )
+from .teams import TeamOut, team_summary, billing_account
 from .tokens import (
     balance_summary,
     billing_alerts,
@@ -171,6 +172,8 @@ class Subscription(BaseModel):
     payments_enabled: bool
     grace_days: int
     alerts: list[Alert]
+    # Seats and members; a member's subscription, balance and alerts above are the owner's.
+    team: TeamOut | None = None
 
 
 class PlanRequestIn(BaseModel):
@@ -295,18 +298,21 @@ def subscription(user: User = Depends(current_user), db: Session = Depends(get_d
 def _token_fields(db: Session, user: User, now: datetime) -> dict[str, Any]:
     token_plans = get_token_plans(db)
     topups = get_topups(db)
-    current = token_plans.get(user.sub_plan or "")
+    # A seated team member sees (and spends) the owner's plan and tokens.
+    payer = billing_account(db, user)
+    current = token_plans.get(payer.sub_plan or "")
     providers = [{"id": p, "label": provider_label(p)} for p in available_providers()]
     return {
-        "billing_mode": user.billing_mode,
-        "subscription": subscription_summary(db, user, now),
-        "balance": balance_summary(db, user, now),
+        "billing_mode": payer.billing_mode,
+        "subscription": subscription_summary(db, payer, now),
+        "balance": balance_summary(db, payer, now),
         "token_plans": [p.as_dict() for p in token_plans.values()],
         "topups": {"amounts": topups["amounts"], "options": topup_options(current, topups)},
         "payment_providers": providers,
         "payments_enabled": bool(providers),
         "grace_days": get_billing_rules(db)["grace_days"],
-        "alerts": billing_alerts(db, user, now),
+        "alerts": billing_alerts(db, payer, now),
+        "team": team_summary(db, user),
     }
 
 
