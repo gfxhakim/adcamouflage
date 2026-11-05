@@ -105,6 +105,7 @@ async function loadPricing(): Promise<PublicPricing> {
           plans: data.plans,
           topups: isTopupTable(data.topups) ? data.topups : FALLBACK_PRICING.topups,
           rules: data.rules,
+          promo: data.promo && typeof data.promo === "object" ? data.promo : undefined,
         };
       }
     }
@@ -144,6 +145,8 @@ function structuredData(pricing: PublicPricing): string {
         name: `${plan.label} plan`,
         price: plan.price.toFixed(2),
         priceCurrency: pricing.currency,
+        // The launch price is valid until the offer ends (date part, as schema.org expects).
+        ...(plan.offer_ends_at ? { priceValidUntil: plan.offer_ends_at.slice(0, 10) } : {}),
         url: `${base}/#pricing`,
         category: "subscription",
       })),
@@ -191,6 +194,7 @@ export default async function LandingPage() {
                       topups={pricing.topups}
                       currency={pricing.currency}
                       ctaHref={startHref}
+                      promo={pricing.promo}
                     />
                   </div>
                 </CmsSection>

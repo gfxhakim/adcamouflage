@@ -226,6 +226,23 @@ export interface TokenPlanCard {
   seats?: number;
   /** Render-setting groups the plan includes. Older APIs leave it out (= all included). */
   features?: Partial<Record<"full_engine" | "metadata_wipe", boolean>>;
+  /** The price the admin typed: the launch price while a limited-time offer runs. */
+  launch_price?: number;
+  /** Set only while a limited-time offer runs: the price checkouts bill once it ends. */
+  regular_price?: number | null;
+  /** When the offer ends (ISO, UTC); null when no offer runs. */
+  offer_ends_at?: string | null;
+}
+
+/** The limited-time launch offer behind the pricing countdown. */
+export interface PricePromo {
+  enabled: boolean;
+  /** True while the offer runs. */
+  active: boolean;
+  ends_at: string | null;
+  server_time: string;
+  /** plan id → the regular price billed once the offer ends */
+  regular: Record<string, number>;
 }
 
 /** One row of the top-up picker, priced for a plan. */
@@ -259,6 +276,7 @@ export interface PublicPricing {
   plans: TokenPlanCard[];
   topups: TopupTable;
   rules?: BillingRules;
+  promo?: PricePromo;
 }
 
 /** Where a checkout is paid: BTCPay's invoice page or Volet's hosted checkout. */

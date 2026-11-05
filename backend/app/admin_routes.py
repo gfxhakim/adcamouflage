@@ -43,7 +43,9 @@ from .tokens import (
     get_topups,
     new_order,
     save_billing_rules,
+    save_price_promo,
     save_token_plans,
+    promo_public,
     save_topups,
     settle_order,
     subscription_active,
@@ -183,10 +185,20 @@ class BillingRulesEdit(BaseModel):
     period_days: int = Field(ge=1, le=366)
 
 
+class PromoEdit(BaseModel):
+    """The limited-time launch offer: plan prices are launch prices until ends_at."""
+
+    enabled: bool
+    ends_at: datetime
+    # plan id -> the regular price checkouts bill once the offer has ended
+    regular: dict[str, float] = Field(default_factory=dict)
+
+
 class BillingConfigUpdate(BaseModel):
     """Only the parts that are sent are changed."""
 
     plans: dict[str, TokenPlanEdit] | None = None
+    promo: PromoEdit | None = None
     topups: TopupsEdit | None = None
     rules: BillingRulesEdit | None = None
 
@@ -659,6 +671,7 @@ def _billing_config(db: Session) -> dict:
         "plans": {plan_id: p.as_dict() for plan_id, p in get_token_plans(db).items()},
         "topups": get_topups(db),
         "rules": get_billing_rules(db),
+        "promo": promo_public(db),
     }
 
 
@@ -712,6 +725,25 @@ def update_billing_config(
         current = get_topups(db)
         save_topups(db, {"amounts": amounts, "bonus": {**current["bonus"], **bonus}})
         changes.append("top-ups")
+    if payload.promo is not None:
+        unknown = set(payload.promo.regular) - set(TOKEN_PLAN_IDS)
+        if unknown:
+            raise HTTPException(status_code=422, detail=f"Unknown plan '{sorted(unknown)[0]}' in the offer.")
+        if any(value < 0 or value > 1_000_000 for value in payload.promo.regular.values()):
+            raise HTTPException(status_code=422, detail="Regular prices must be from 0 to 1,000,000.")
+        ends_at = payload.promo.ends_at
+        if ends_at.tzinfo is None:
+            ends_at = ends_at.replace(tzinfo=timezone.utc)
+        save_price_promo(
+            db,
+            {
+                "enabled": payload.promo.enabled,
+                "ends_at": ends_at.astimezone(timezone.utc),
+                "regular": {k: round(v, 2) for k, v in payload.promo.regular.items()},
+            },
+        )
+        state = "on" if payload.promo.enabled else "off"
+        changes.append(f"launch offer {state}, ends {ends_at.astimezone(timezone.utc):%Y-%m-%d %H:%M} UTC")
     if payload.rules is not None:
         save_billing_rules(db, payload.rules.model_dump())
         changes.append(f"grace {payload.rules.grace_days} days, period {payload.rules.period_days} days")

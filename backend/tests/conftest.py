@@ -27,6 +27,13 @@ os.environ.setdefault("ADCAM_DEFAULT_PLAN", "unlimited")
 from app.config import settings  # noqa: E402
 from app.ffmpeg import ffmpeg_available  # noqa: E402
 
+# The shipped launch offer ends on a calendar date; keep it off by default so
+# price assertions do not change with the day the suite runs. Offer tests
+# store their own ``price_promo`` setting.
+import app.tokens as _tokens  # noqa: E402
+
+_tokens.DEFAULT_PROMO = {**_tokens.DEFAULT_PROMO, "enabled": False}
+
 requires_ffmpeg = pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg is not installed")
 
 

@@ -5,8 +5,9 @@ import { ArrowRight, Check, Sparkles, Users, X } from "lucide-react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
+import OfferCountdown, { useTimeLeft } from "@/components/landing/OfferCountdown";
 import { CmsHeadline } from "@/components/landing/primitives";
-import { rolloverCap, type TokenPlanCard, type TopupTable } from "@/lib/types";
+import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { featureForLine, planIncludes } from "@/lib/plan-features";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,8 @@ interface PricingSectionProps {
   currency: string;
   /** Where the plan buttons go: sign-up for visitors, the workspace once signed in. */
   ctaHref: string;
+  /** The limited-time launch offer, when one runs. */
+  promo?: PricePromo;
 }
 
 /** The plan the section highlights. */
@@ -65,8 +68,23 @@ function seatsText(plan: TokenPlanCard): string {
 /** Seats are printed per plan, so a "single user" line in the shared list would contradict Max. */
 const SEAT_LINE = /single[\s-]*user/i;
 
-export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps) {
+/** Whole-percent saving of the launch price on the regular price. */
+function savePercent(launch: number, regular: number): number {
+  return regular > launch ? Math.round(((regular - launch) / regular) * 100) : 0;
+}
+
+export function PricingSection({ plans: listed, currency, ctaHref, promo }: PricingSectionProps) {
   const cms = useCms();
+  // The offer ends at the same instant for every plan; the server sends it per plan.
+  const endsAt = promo?.active ? promo.ends_at : listed.find((plan) => plan.offer_ends_at)?.offer_ends_at;
+  const left = useTimeLeft(endsAt);
+  // Once the countdown reaches zero the server bills the regular price, so the cards show it too.
+  const ended = left === 0;
+  const plans = listed.map((plan) =>
+    plan.regular_price && ended ? { ...plan, price: plan.regular_price, regular_price: null } : plan,
+  );
+  const onOffer = !ended && plans.some((plan) => plan.regular_price && plan.regular_price > plan.price);
+  const bestSaving = Math.max(0, ...plans.map((plan) => (plan.regular_price ? savePercent(plan.price, plan.regular_price) : 0)));
   const popularId = cms.text("pricing.popularPlan", POPULAR, "text", "Highlighted plan id (starter, pro, max)").trim();
   const included = cms
     .list("pricing.included", INCLUDED, "Included in every plan", INCLUDED)
@@ -90,9 +108,12 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
         </T>
       </div>
 
-      <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {onOffer ? <OfferCountdown left={left} savePercent={bestSaving} /> : null}
+
+      <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", onOffer ? "mt-10" : "mt-12")}>
         {plans.map((plan, index) => {
           const popular = plan.id === popularId;
+          const regular = !ended && plan.regular_price && plan.regular_price > plan.price ? plan.regular_price : null;
 
           return (
             <motion.div
@@ -122,7 +143,19 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
                 {BLURBS[plan.id] ?? ""}
               </T>
 
-              <p className="mt-6 flex items-baseline gap-1.5">
+              {regular ? (
+                <p className="mt-6 flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-medium text-white/45 line-through decoration-red-400/80 decoration-2">
+                    <span className="sr-only">Regular price </span>
+                    {price(regular, currency)}
+                  </span>
+                  <span className="rounded-full bg-amber-300 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-black">
+                    −{savePercent(plan.price, regular)}%
+                  </span>
+                </p>
+              ) : null}
+              <p className={cn("flex items-baseline gap-1.5", regular ? "mt-1" : "mt-6")}>
+                {regular ? <span className="sr-only">Launch price </span> : null}
                 <span className="text-5xl font-semibold tracking-[-0.05em] text-white">
                   {price(plan.price, currency)}
                 </span>
