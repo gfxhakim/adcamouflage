@@ -112,3 +112,38 @@ def test_chat_media_is_private_to_its_chat():
     assert owner.get(uploaded["url"]).status_code == 200
     stranger = _signed_in(address("media-peek"))
     assert stranger.get(uploaded["url"]).status_code == 404
+
+
+def test_sign_in_failures_are_limited_per_account_across_addresses():
+    from app.auth_routes import account_failures
+
+    email = address("spray")
+    _signed_in(email)
+    client = TestClient(app)
+    for i in range(account_failures.limit):
+        client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "wrong-password-xx"},
+            headers={"X-Real-IP": f"10.0.{i}.1"},
+        )
+    blocked = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": PASSWORD}, headers={"X-Real-IP": "10.9.9.9"}
+    )
+    assert blocked.status_code == 429
+
+
+def test_huge_json_body_is_refused():
+    response = TestClient(app).post(
+        "/api/v1/auth/login",
+        content=b"{" + b" " * (11 * 1024 * 1024) + b"}",
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
+
+
+def test_generated_secret_key_is_kept(tmp_path):
+    from app.config import _pinned_secret
+
+    first = _pinned_secret(tmp_path)
+    assert len(first) >= 32
+    assert _pinned_secret(tmp_path) == first

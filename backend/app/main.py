@@ -149,6 +149,17 @@ async def _security_guard(request: Request, call_next):
     normal sign-in checks.
     """
 
+    content_type = (request.headers.get("content-type") or "").lower()
+    if not content_type.startswith("multipart/form-data"):
+        raw_length = request.headers.get("content-length")
+        if raw_length is not None:
+            try:
+                too_big = int(raw_length) > settings.max_body_bytes
+            except ValueError:
+                too_big = True
+            if too_big:
+                return JSONResponse(status_code=413, content={"detail": "Request body is too large."})
+
     if request.method in _UNSAFE_METHODS and not request.url.path.startswith(_CROSS_SITE_PATHS):
         origin = (request.headers.get("origin") or "").strip()
         if origin and origin != "null" and _host_of(origin) not in _trusted_hosts(request):
@@ -161,14 +172,12 @@ async def _security_guard(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-    if request.url.path.startswith("/api/v1/auth") or request.url.path.startswith("/api/v1/admin"):
+    if request.url.path.startswith(("/api/v1/auth", "/api/v1/admin", "/api/v1/billing/verify")):
         response.headers.setdefault("Cache-Control", "no-store")
     return response
 
 
-if "secret_key" not in settings.model_fields_set:
-    logger.warning("ADCAM_SECRET_KEY is not set: everyone is signed out on every restart. Set a long random value.")
-elif settings.weak_secret_key:
+if "secret_key" in settings.model_fields_set and settings.weak_secret_key:
     logger.error("ADCAM_SECRET_KEY is weak: set a long random value (48+ characters) on the api service.")
 
 
@@ -177,7 +186,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Requested-With"],
     expose_headers=["Content-Disposition"],
 )
 

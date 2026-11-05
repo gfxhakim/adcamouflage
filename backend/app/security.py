@@ -65,3 +65,28 @@ async def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="A valid X-API-Key header is required.",
         )
+
+
+def client_ip(request) -> str:
+    """The visitor's IP address.
+
+    Railway's edge sets ``X-Real-IP`` to the address that connected to it and
+    the web service passes request headers through to the API unchanged, so
+    that header is one a visitor cannot choose (``ADCAM_CLIENT_IP_HEADER``
+    can name another, e.g. cf-connecting-ip behind Cloudflare's proxy).
+    X-Forwarded-For is not used: its left-most entries come from the visitor.
+    """
+
+    import ipaddress
+
+    raw = (request.headers.get(settings.client_ip_header or "x-real-ip") or "").strip()
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        pass
+    # Without that header, keep visitors apart by the whole forwarding chain
+    # (the edge appends each visitor's own address) rather than lumping
+    # everyone behind the web proxy's single address into one bucket.
+    forwarded = ",".join(request.headers.getlist("x-forwarded-for")).replace(" ", "")
+    peer = request.client.host if request.client else "unknown"
+    return f"{forwarded}|{peer}" if forwarded else peer

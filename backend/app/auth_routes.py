@@ -30,6 +30,7 @@ from .accounts import (
 from . import meta_capi
 from .activity import log_activity
 from .app_settings import announcement, registration_open
+from .security import client_ip
 from .db import BatchRecord, User, get_db
 from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
 from .tokens import TOKENS, subscription_active, usable_tokens
@@ -83,14 +84,19 @@ register_site_limiter = _AttemptLimiter(limit=60, window_seconds=600)
 
 
 def _sender_key(request: Request) -> str:
-    forwarded = ",".join(request.headers.getlist("x-forwarded-for")).replace(" ", "")
-    client = request.client.host if request.client else "unknown"
-    return f"{forwarded}|{client}"
+    return client_ip(request)
+
+
+# Wider nets on top of the per-address-and-email limiter above: failures for
+# one account from any address (password spraying across many IPs), and
+# failures from one address across many accounts (credential stuffing).
+account_failures = _AttemptLimiter(limit=20, window_seconds=900)
+address_failures = _AttemptLimiter(limit=40, window_seconds=900)
+password_changes = _AttemptLimiter(limit=10, window_seconds=900)
 
 
 def _client_key(request: Request, email: str) -> str:
-    client = request.client.host if request.client else "unknown"
-    return f"{client}:{email}"
+    return f"{client_ip(request)}:{email}"
 
 
 # --------------------------------------------------------------------------
@@ -224,6 +230,9 @@ def login(
     email = (payload.email or "").strip().lower()
     key = _client_key(request, email)
     login_limiter.check(key)
+    address = client_ip(request)
+    account_failures.check(email)
+    address_failures.check(address)
 
     user = get_user_by_email(db, email)
     # Always run a hash comparison so a missing account and a wrong password
@@ -233,6 +242,8 @@ def login(
 
     if user is None or not password_ok or not user.is_active:
         login_limiter.record_failure(key)
+        account_failures.record_failure(email)
+        address_failures.record_failure(address)
         raise AuthError("That email and password do not match.")
 
     login_limiter.clear(key)
@@ -264,7 +275,9 @@ def change_password(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> UserProfile:
+    password_changes.check(f"user:{user.id}", "Too many password attempts. Wait a few minutes and try again.")
     if not verify_password(payload.current_password or "", user.password_hash):
+        password_changes.record_failure(f"user:{user.id}")
         raise AuthError("Your current password is not correct.")
 
     new_password = validate_password(payload.new_password)
