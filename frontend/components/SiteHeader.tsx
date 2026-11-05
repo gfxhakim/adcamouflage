@@ -57,11 +57,12 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
         {nav}
 
         {minimal ? null : (
-          // Both open the login page, which also offers to create an account.
+          // "Log in" opens the login page; "Get started" opens Create account.
           <nav className="pointer-events-auto flex shrink-0 items-center gap-2 justify-self-end">
             <CmsLink
               k="header.login"
               href="/login"
+              account="login"
               label="Log in"
               className={
                 floating
@@ -71,7 +72,8 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
             />
             <CmsLink
               k="header.start"
-              href="/login"
+              href="/signup"
+              account="signup"
               label="Get started"
               className={
                 floating

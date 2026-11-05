@@ -67,7 +67,8 @@ export function Faq() {
             </T>
             <CmsLink
               k="faq.card.cta"
-              href="/login"
+              href="/signup"
+              account="signup"
               label="Test the Engine Now"
               className="group mt-5 inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white"
             >

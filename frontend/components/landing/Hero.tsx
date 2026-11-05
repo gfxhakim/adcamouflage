@@ -79,6 +79,7 @@ export function Hero({ startHref }: { startHref: string }) {
           <CmsLink
             k="hero.cta"
             href={startHref}
+            account="signup"
             label="Camouflage My Creatives Now"
             className="group inline-flex items-center gap-3 rounded-full bg-white py-1.5 pl-5 pr-1.5 text-sm font-semibold text-black transition hover:bg-meta-50"
           >
