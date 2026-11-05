@@ -7,7 +7,9 @@ import NeonCard from "@/components/NeonCard";
 import SiteHeader from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
-  title: "Create an account — AdCamouflage",
+  title: "Create an account",
+  alternates: { canonical: "/signup" },
+  robots: { index: false, follow: true },
 };
 
 export default function Page() {

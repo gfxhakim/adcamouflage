@@ -52,6 +52,7 @@ import {
   type UserProfile,
 } from "@/lib/auth";
 import { formatDate, formatTokens, timeAgo } from "@/lib/format";
+import { trackCheckout, trackPurchase } from "@/lib/meta";
 import type { TokenPlanCard } from "@/lib/types";
 
 /** After the payment provider sends the browser back, ask about the order this often, for this long. */
@@ -82,6 +83,8 @@ export default function PlanPage() {
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Plan labels for the settlement toast, which runs outside the render.
   const labelsRef = useRef<Record<string, string>>({});
+  // The site currency for Meta events, read inside callbacks.
+  const currencyRef = useRef("USD");
   /**
    * What the payment provider's return link said, read once. The query is
    * dropped as soon as it is read, and in development React's StrictMode runs
@@ -148,6 +151,8 @@ export default function PlanPage() {
         if (cancelled) return;
         if (order.status === "paid") {
           setWaitingOrder(null);
+          // Confirmed by the payment provider; the server sends the same event.
+          void trackPurchase(order.id, order.amount, currencyRef.current, order.plan_id);
           setToast({
             tone: "success",
             text:
@@ -203,6 +208,10 @@ export default function PlanPage() {
       setToast(null);
       try {
         const checkout = await startCheckout(kind, choice, provider);
+        await Promise.race([
+          trackCheckout(checkout.order_id, checkout.amount, currencyRef.current, choice.plan_id ?? "topup"),
+          new Promise((r) => setTimeout(r, 800)),
+        ]);
         window.location.assign(checkout.checkout_url);
       } catch (err) {
         setToast({ tone: "error", text: err instanceof Error ? err.message : "Could not start the checkout." });
@@ -220,6 +229,7 @@ export default function PlanPage() {
   const isTokens = sub?.billing_mode === "tokens";
   const planLabels = Object.fromEntries((sub?.token_plans ?? []).map((p) => [p.id, p.label]));
   labelsRef.current = planLabels;
+  currencyRef.current = sub?.currency || "USD";
 
   return (
     <>

@@ -132,6 +132,16 @@ class Settings(BaseSettings):
         default_factory=lambda: ["50.7.115.5", "51.255.40.139", "13.53.55.89", "13.61.247.159"]
     )
 
+    # --- Meta Pixel + Conversions API ----------------------------------------
+    # Both empty = no tracking at all. The Pixel id is public (the browser
+    # loads it); the CAPI access token is a secret, set only on Railway.
+    meta_pixel_id: str = ""
+    meta_capi_token: SecretStr | None = None
+    # Optional: the code from Events Manager > Test events, so server events
+    # show there while testing. Remove it once the test is done.
+    meta_test_event_code: str = ""
+    meta_graph_version: str = "v21.0"
+
     # --- email (Resend) ---------------------------------------------------
     # Optional. Without a key the billing reminders are silently skipped.
     resend_api_key: SecretStr | None = None

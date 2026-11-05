@@ -28,6 +28,7 @@ from .billing_routes import router as billing_router
 from .config import settings
 from .db import User, get_db, get_session_factory, init_db
 from .live_activity import router as live_activity_router
+from .meta_capi import router as meta_router
 from .site_content import admin_router as site_content_admin_router
 from .site_content import public_router as site_content_router
 from .ffmpeg import ffmpeg_available, ffmpeg_version
@@ -107,6 +108,7 @@ app.include_router(team_router)
 app.include_router(site_content_router)
 app.include_router(site_content_admin_router)
 app.include_router(live_activity_router)
+app.include_router(meta_router)
 app.include_router(support_user_router)
 app.include_router(support_admin_router)
 

@@ -27,6 +27,7 @@ from .accounts import (
     validate_password,
     verify_password,
 )
+from . import meta_capi
 from .activity import log_activity
 from .app_settings import announcement, registration_open
 from .db import BatchRecord, User, get_db
@@ -160,7 +161,9 @@ class BatchSummary(BaseModel):
 
 
 @router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)) -> UserProfile:
+def register(
+    payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)
+) -> UserProfile:
     if not registration_open(db):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -192,6 +195,10 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     set_session_cookie(response, create_session_token(user))
     logger.info("registered user %s", user.id)
     log_activity(db, user.id, "signup", f"Signed up on the {user.plan} plan")
+    try:
+        meta_capi.complete_registration(request, user.id, user.email)
+    except Exception:  # noqa: BLE001 - tracking must never block a sign-up
+        logger.exception("Meta CompleteRegistration for user %s failed", user.id)
     return UserProfile.of(user, db)
 
 
