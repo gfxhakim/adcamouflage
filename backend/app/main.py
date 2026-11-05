@@ -33,6 +33,8 @@ from .site_content import public_router as site_content_router
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .app_settings import currency
+from .teams import billing_account
+from .teams import router as team_router
 from .tokens import InsufficientTokens, check_billing, consume, get_billing_rules, get_token_plans, get_topups
 from .queue import cancel_asset, enqueue_asset, queue_depth, worker_mode
 from .schemas import (
@@ -101,6 +103,7 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(subscription_router)
 app.include_router(billing_router)
+app.include_router(team_router)
 app.include_router(site_content_router)
 app.include_router(site_content_admin_router)
 app.include_router(live_activity_router)
@@ -285,7 +288,9 @@ async def create_batch(
     # Checked before anything is written, so a user over their plan (or
     # without a subscription) never leaves files on disk. Every file counts
     # once per variant; token accounts are charged for the accepted ones below.
-    refusal = check_billing(db, user, len(files), resolved.variants)
+    # A seated team member is checked and charged on the team owner's plan.
+    payer = billing_account(db, user)
+    refusal = check_billing(db, payer, len(files), resolved.variants)
     if refusal:
         log_activity(db, user.id, "blocked", refusal)
         raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=refusal)
@@ -380,7 +385,7 @@ async def create_batch(
     # second batch submitted while this one uploaded cannot spend the same
     # tokens; when it is refused, the uploads go and nothing is queued.
     try:
-        token_cost = consume(db, user, len(accepted), batch.id)
+        token_cost = consume(db, payer, len(accepted), batch.id)
     except InsufficientTokens as exc:
         for path in stored:
             path.unlink(missing_ok=True)

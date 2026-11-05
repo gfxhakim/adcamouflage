@@ -123,6 +123,28 @@ class BatchRecord(Base):
     user: Mapped[User] = relationship(back_populates="batches")
 
 
+class TeamMember(Base):
+    """A seat on another account's plan: the member spends the owner's tokens.
+
+    The owner adds people by email, so a seat can be filled before the
+    person signs up; it takes effect as soon as an account with that email
+    exists. One email belongs to at most one team. Each member keeps their
+    own sign-in, batches and history; only the token balance is shared.
+    """
+
+    __tablename__ = "team_members"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # Lower-cased, like users.email.
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
+    )
+
+
 class AppSetting(Base):
     """Settings an admin changes from the panel, stored as JSON per key."""
 

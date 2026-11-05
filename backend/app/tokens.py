@@ -65,6 +65,7 @@ class TokenPlan:
     tokens_per_generation: int
     rollover_months: int  # the cap is rollover_months x tokens
     topup_rate: int  # tokens per 1 USD on a top-up
+    seats: int = 1  # people who can sign in and share this plan's tokens, owner included
 
     @property
     def generations(self) -> int:
@@ -90,6 +91,7 @@ class TokenPlan:
             "rollover_months": self.rollover_months,
             "rollover_cap": self.rollover_cap,
             "topup_rate": self.topup_rate,
+            "seats": self.seats,
         }
 
 
@@ -98,7 +100,7 @@ DEFAULT_PLANS: dict[str, TokenPlan] = {
     for plan in (
         TokenPlan("starter", "Starter", 37.50, 1500, 100, 0, 40),
         TokenPlan("pro", "Pro", 89.0, 4500, 90, 1, 50),
-        TokenPlan("max", "Max", 149.0, 9600, 80, 2, 65),
+        TokenPlan("max", "Max", 149.0, 9600, 80, 2, 65, seats=5),
     )
 }
 PLAN_IDS = tuple(DEFAULT_PLANS)
@@ -132,6 +134,7 @@ def get_token_plans(db: Session) -> dict[str, TokenPlan]:
             tokens_per_generation=int(edit.get("tokens_per_generation", base.tokens_per_generation)),
             rollover_months=int(edit.get("rollover_months", base.rollover_months)),
             topup_rate=int(edit.get("topup_rate", base.topup_rate)),
+            seats=max(1, int(edit.get("seats", base.seats))),
         )
     return plans
 

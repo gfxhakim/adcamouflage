@@ -32,6 +32,7 @@ import PlanOptions from "@/components/plan/PlanOptions";
 import TokenHero from "@/components/plan/TokenHero";
 import TokenPlanCards from "@/components/plan/TokenPlanCards";
 import TopupPicker from "@/components/plan/TopupPicker";
+import TeamCard from "@/components/plan/TeamCard";
 import TrustPanel from "@/components/plan/TrustPanel";
 import SeriesChart from "@/components/SeriesChart";
 import StatTile from "@/components/StatTile";
@@ -326,6 +327,17 @@ export default function PlanPage() {
                   onBuy={buyPlan}
                 />
               </section>
+
+              {/* Team seats (multi-user plans, or a member of one) ------------ */}
+              {sub.team && sub.team.role !== "none" ? (
+                <TeamCard
+                  team={sub.team}
+                  onChanged={(team) => {
+                    setSub({ ...sub, team });
+                    void load();
+                  }}
+                />
+              ) : null}
 
               {/* Top-ups ---------------------------------------------------- */}
               {isTokens ? (

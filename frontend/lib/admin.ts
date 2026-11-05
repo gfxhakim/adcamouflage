@@ -248,6 +248,8 @@ export interface TokenPlanEdit {
   tokens_per_generation: number;
   rollover_months: number;
   topup_rate: number;
+  /** Users who share the plan, owner included. */
+  seats?: number;
 }
 
 /** Only the parts that are sent are changed. */
