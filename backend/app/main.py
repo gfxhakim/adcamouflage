@@ -34,6 +34,7 @@ from .site_content import public_router as site_content_router
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .app_settings import currency
+from .plan_features import enforce_plan_features, locked_features
 from .teams import billing_account
 from .teams import router as team_router
 from .tokens import (
@@ -298,6 +299,12 @@ async def create_batch(
         raise HTTPException(status_code=422, detail=f"Invalid options payload: {exc}") from exc
 
     resolved = parsed.resolved()
+
+    # Settings the paying plan does not include (Admin > Token plans) are
+    # switched off here, so a direct API call cannot turn them back on.
+    dropped = enforce_plan_features(resolved, locked_features(db, user))
+    if dropped:
+        logger.info("Batch for user %s: plan-locked options turned off: %s", user.id, ", ".join(dropped))
 
     # Checked before anything is written, so a user over their plan (or
     # without a subscription) never leaves files on disk. Every file counts

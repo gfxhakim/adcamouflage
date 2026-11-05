@@ -32,6 +32,7 @@ from .plans import (
     save_plan,
     used_this_month,
 )
+from .plan_features import FEATURE_IDS
 from .tokens import (
     LEGACY,
     PLAN_IDS as TOKEN_PLAN_IDS,
@@ -169,6 +170,8 @@ class TokenPlanEdit(BaseModel):
     topup_rate: int = Field(gt=0, le=1_000_000)
     # Users who share the plan, owner included. Left out = keep the stored value.
     seats: int | None = Field(default=None, ge=1, le=100)
+    # Render-setting groups the plan includes. Left out = keep the stored value.
+    features: dict[str, bool] | None = None
 
 
 class TopupsEdit(BaseModel):
@@ -688,6 +691,11 @@ def update_billing_config(
         unknown = set(payload.plans) - set(TOKEN_PLAN_IDS)
         if unknown:
             raise HTTPException(status_code=422, detail=f"Unknown plan '{sorted(unknown)[0]}'.")
+        for plan_id, edit in payload.plans.items():
+            if edit.features is not None:
+                unknown_features = set(edit.features) - set(FEATURE_IDS)
+                if unknown_features:
+                    raise HTTPException(status_code=422, detail=f"Unknown feature '{sorted(unknown_features)[0]}'.")
         save_token_plans(
             db,
             {

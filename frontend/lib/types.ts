@@ -224,6 +224,8 @@ export interface TokenPlanCard {
   topup_rate: number;
   /** People who share the plan's tokens, owner included. Older APIs leave it out (= 1). */
   seats?: number;
+  /** Render-setting groups the plan includes. Older APIs leave it out (= all included). */
+  features?: Partial<Record<"full_engine" | "metadata_wipe", boolean>>;
   /** The price the admin typed: the launch price while a limited-time offer runs. */
   launch_price?: number;
   /** Set only while a limited-time offer runs: the price checkouts bill once it ends. */

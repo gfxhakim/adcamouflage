@@ -1,3 +1,4 @@
+import type { PlanFeatureId } from "@/lib/plan-features";
 import { API_BASE, ApiError } from "./api";
 import type { BillingMode, PaymentProviderId, TokenPlanCard, TopupOption } from "./types";
 
@@ -207,6 +208,8 @@ export interface Subscription {
   alerts: BillingAlert[];
   /** Seats and members; for a member, subscription/balance/alerts above are the owner's. */
   team?: Team | null;
+  /** Render-setting groups the paying plan does not include (older APIs leave it out = none). */
+  locked_features?: PlanFeatureId[];
 }
 
 // ---------------------------------------------------------------------------

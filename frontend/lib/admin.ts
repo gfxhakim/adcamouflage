@@ -260,6 +260,8 @@ export interface TokenPlanEdit {
   topup_rate: number;
   /** Users who share the plan, owner included. */
   seats?: number;
+  /** Render-setting groups the plan includes. */
+  features?: Record<"full_engine" | "metadata_wipe", boolean>;
 }
 
 /** Only the parts that are sent are changed. */

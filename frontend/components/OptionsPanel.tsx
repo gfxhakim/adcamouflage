@@ -8,6 +8,7 @@ import {
   FlipHorizontal2,
   Gauge,
   Layers,
+  Lock,
   Maximize2,
   Palette,
   RefreshCcw,
@@ -22,6 +23,8 @@ import type { LucideIcon } from "lucide-react";
 
 import type { MutationOptions, PresetCatalogue, PresetId, QualityTier } from "@/lib/types";
 import { UPSCALE_HEIGHTS } from "@/lib/types";
+import { applyPlanLocks, lockingFeature, type PlanFeatureId } from "@/lib/plan-features";
+import Link from "next/link";
 import NeonCard from "./NeonCard";
 
 interface OptionsPanelProps {
@@ -29,6 +32,23 @@ interface OptionsPanelProps {
   onChange: (options: MutationOptions) => void;
   catalogue: PresetCatalogue | null;
   disabled?: boolean;
+  /** Feature groups the user's plan does not include; their controls show locked. */
+  lockedFeatures?: PlanFeatureId[];
+  /** Where the "Upgrade to Pro" hint links. */
+  upgradeHref?: string;
+}
+
+/** The small "Upgrade to Pro" hint shown beside a locked control. */
+function UpgradeHint({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 transition hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200 dark:hover:bg-amber-400/20"
+    >
+      <Lock className="h-3 w-3" aria-hidden />
+      Upgrade to Pro
+    </Link>
+  );
 }
 
 const PRESET_COPY: Record<Exclude<PresetId, "custom">, { blurb: string; accent: string }> = {
@@ -252,20 +272,34 @@ const TOGGLES: { key: ToggleKey; label: string; description: string; icon: Lucid
   },
 ];
 
-export function OptionsPanel({ options, onChange, catalogue, disabled = false }: OptionsPanelProps) {
+export function OptionsPanel({
+  options,
+  onChange,
+  catalogue,
+  disabled = false,
+  lockedFeatures = [],
+  upgradeHref = "/app/plan",
+}: OptionsPanelProps) {
+  // Every change goes through the plan locks, so a preset can never switch a locked option on.
+  const emit = (next: MutationOptions) => onChange(applyPlanLocks(next, lockedFeatures));
+  const engineLocked = lockedFeatures.includes("full_engine");
+  const isLocked = (key: keyof MutationOptions) => lockingFeature(key, lockedFeatures) !== null;
+
   const set = <K extends keyof MutationOptions>(key: K, value: MutationOptions[K]) => {
+    if (isLocked(key)) return;
     // Changing any individual switch means the profile is no longer a preset.
     const preset: PresetId = key === "preset" ? (value as PresetId) : "custom";
-    onChange({ ...options, [key]: value, preset });
+    emit({ ...options, [key]: value, preset });
   };
 
   const applyPreset = (preset: PresetId) => {
     const defaults = catalogue?.presets.find((entry) => entry.id === preset)?.defaults ?? {};
-    onChange({ ...options, ...defaults, preset });
+    emit({ ...options, ...defaults, preset });
   };
 
   const applySmartGen4 = () => {
-    onChange({
+    if (engineLocked) return;
+    emit({
       ...options,
       preset: "custom",
       intensity: 58,
@@ -315,11 +349,12 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
             {options.preset === "custom" ? <span className="chip !text-[10px]">custom</span> : null}
             <button
               type="button"
-              disabled={disabled}
+              disabled={disabled || engineLocked}
               onClick={applySmartGen4}
-              className="inline-flex items-center gap-1.5 rounded-full border border-meta-500/60 bg-meta-50 px-3 py-1 text-[11px] font-semibold text-meta-700 transition hover:bg-meta-100 dark:bg-meta-500/15 dark:text-meta-200 dark:hover:bg-meta-500/25"
+              title={engineLocked ? "Not included in your plan. Upgrade to Pro to use it." : undefined}
+              className="inline-flex items-center gap-1.5 rounded-full border border-meta-500/60 bg-meta-50 px-3 py-1 text-[11px] font-semibold text-meta-700 transition hover:bg-meta-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-meta-500/15 dark:text-meta-200 dark:hover:bg-meta-500/25"
             >
-              <Sparkles className="h-3 w-3" aria-hidden />
+              {engineLocked ? <Lock className="h-3 w-3" aria-hidden /> : <Sparkles className="h-3 w-3" aria-hidden />}
               Smart Anti-Detection (Gen-4 Only)
             </button>
           </div>
@@ -392,20 +427,32 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
             <Sparkles className="h-3.5 w-3.5 text-meta-500" aria-hidden />
             Gen-4 signal, psychoacoustic &amp; forensic layers
           </p>
-          <span className="font-mono text-[10px] text-meta-600 dark:text-meta-300">
-            Zero quality loss · Re-encode resilient
-          </span>
+          {engineLocked ? (
+            <UpgradeHint href={upgradeHref} />
+          ) : (
+            <span className="font-mono text-[10px] text-meta-600 dark:text-meta-300">
+              Zero quality loss · Re-encode resilient
+            </span>
+          )}
         </div>
+        {engineLocked ? (
+          <p className="mb-3 text-[11px] text-ink-subtle dark:text-slate-400">
+            Not included in your plan. These layers are available on Pro and Max.
+          </p>
+        ) : null}
         <div className="grid gap-2 md:grid-cols-2">
           {ADVANCED_TOGGLES.map(({ key, label, badge, description, icon: Icon }) => {
-            const active = Boolean(options[key]);
+            const locked = isLocked(key);
+            const active = !locked && Boolean(options[key]);
             return (
               <button
                 key={key}
                 type="button"
                 role="switch"
                 aria-checked={active}
-                disabled={disabled}
+                aria-disabled={locked || undefined}
+                disabled={disabled || locked}
+                title={locked ? "Not included in your plan. Upgrade to Pro to use it." : undefined}
                 onClick={() => set(key, !active)}
                 className={clsx(
                   "flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all duration-200",
@@ -432,6 +479,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                     <span className="rounded bg-meta-500/15 px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wide text-meta-700 dark:text-meta-300">
                       {badge}
                     </span>
+                    {locked ? <Lock className="h-3 w-3 text-ink-faint dark:text-slate-500" aria-label="Locked" /> : null}
                     <span
                       className={clsx(
                         "ml-auto h-1.5 w-1.5 rounded-full transition-colors",
@@ -451,17 +499,23 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
       </section>
 
       <section>
-        <p className="label mb-3">Classic evasion layers</p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="label">Classic evasion layers</p>
+          {lockedFeatures.includes("metadata_wipe") ? <UpgradeHint href={upgradeHref} /> : null}
+        </div>
         <div className="grid gap-2 md:grid-cols-2">
           {TOGGLES.map(({ key, label, description, icon: Icon }) => {
-            const active = options[key];
+            const locked = isLocked(key);
+            const active = !locked && options[key];
             return (
               <button
                 key={key}
                 type="button"
                 role="switch"
                 aria-checked={active}
-                disabled={disabled}
+                aria-disabled={locked || undefined}
+                disabled={disabled || locked}
+                title={locked ? "Not included in your plan. Upgrade to Pro to use it." : undefined}
                 onClick={() => set(key, !active)}
                 className={clsx(
                   "flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all duration-200",
@@ -485,6 +539,7 @@ export function OptionsPanel({ options, onChange, catalogue, disabled = false }:
                 <span className="min-w-0">
                   <span className="flex items-center gap-1.5 text-xs font-semibold">
                     {label}
+                    {locked ? <Lock className="h-3 w-3 text-ink-faint dark:text-slate-500" aria-label="Locked" /> : null}
                     <span
                       className={clsx(
                         "h-1.5 w-1.5 rounded-full transition-colors",

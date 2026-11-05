@@ -12,6 +12,7 @@ import {
   type TokenPlanEdit,
 } from "@/lib/admin";
 import { formatMoney } from "@/lib/format";
+import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes, type PlanFeatureId } from "@/lib/plan-features";
 
 interface TokenPlansCardProps {
   /** Called after a save so the rest of the panel re-reads prices. */
@@ -27,6 +28,8 @@ interface PlanDraft {
   rollover_months: string;
   topup_rate: string;
   seats: string;
+  /** Render-setting groups this plan includes; off = locked in the workspace. */
+  features: Record<PlanFeatureId, boolean>;
 }
 
 interface Draft {
@@ -51,7 +54,7 @@ function utcField(iso: string | null | undefined): string {
   return when && !Number.isNaN(when.getTime()) ? when.toISOString().slice(0, 16) : "";
 }
 
-const PLAN_FIELDS: { key: keyof Omit<PlanDraft, "label">; label: string; step?: string; hint: string }[] = [
+const PLAN_FIELDS: { key: keyof Omit<PlanDraft, "label" | "features">; label: string; step?: string; hint: string }[] = [
   { key: "price", label: "Price", step: "0.01", hint: "per 30-day period (the launch price while an offer runs)" },
   { key: "tokens", label: "Tokens", hint: "granted each period" },
   { key: "tokens_per_generation", label: "Per generation", hint: "tokens one output costs" },
@@ -74,6 +77,10 @@ function draftOf(config: BillingConfig): Draft {
           rollover_months: String(plan.rollover_months),
           topup_rate: String(plan.topup_rate),
           seats: String(plan.seats ?? 1),
+          features: Object.fromEntries(PLAN_FEATURE_IDS.map((f) => [f, planIncludes({ ...plan, id }, f)])) as Record<
+            PlanFeatureId,
+            boolean
+          >,
         },
       ]),
     ),
@@ -155,6 +162,7 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
         rollover_months: Number.parseInt(plan.rollover_months, 10),
         topup_rate: Number.parseInt(plan.topup_rate, 10),
         seats: Number.parseInt(plan.seats, 10),
+        features: { ...plan.features },
       };
       if (Number.isNaN(edit.price) || edit.price < 0) return setError(`${edit.label}: enter a price of 0 or more.`);
       if (!(edit.tokens > 0)) return setError(`${edit.label}: tokens per period must be above 0.`);
@@ -269,6 +277,22 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
                     />
                   </label>
                 ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+                {PLAN_FEATURE_IDS.map((feature) => (
+                  <label key={feature} className="flex items-center gap-1.5 text-xs text-ink-muted dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-meta-500"
+                      checked={plan.features[feature]}
+                      onChange={(e) => setPlan(id, { features: { ...plan.features, [feature]: e.target.checked } })}
+                    />
+                    {PLAN_FEATURES[feature].label}
+                  </label>
+                ))}
+                <span className="text-[11px] text-ink-faint dark:text-slate-500">
+                  Unticked = shown unavailable on the pricing card and locked in the workspace render settings.
+                </span>
               </div>
             </div>
           );
