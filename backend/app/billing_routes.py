@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import btcpay, volet
+from . import btcpay, meta_capi, volet
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
@@ -256,6 +256,12 @@ def checkout(
         db, user, payload.kind, plan, amount, tokens, bonus=bonus if payload.kind == "topup" else 0, provider=provider
     )
     what = f"{plan.label} period" if order.kind == "subscription" else f"${amount:g} top-up on {plan.label}"
+    try:
+        tracking = meta_capi.initiate_checkout(request, order, user.email, currency(db))
+        order.tracking = json.dumps(tracking) if tracking else None
+        db.commit()
+    except Exception:  # noqa: BLE001 - tracking must never block a checkout
+        logger.exception("Meta InitiateCheckout for order %s failed", order.id)
     if provider == volet.PROVIDER:
         # The signed form is built when the customer opens the pay page, so
         # nothing has to be asked of Volet here.

@@ -7,7 +7,9 @@ import NeonCard from "@/components/NeonCard";
 import SiteHeader from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
-  title: "Log in — AdCamouflage",
+  title: "Log in",
+  alternates: { canonical: "/login" },
+  robots: { index: false, follow: true },
 };
 
 export default function Page() {

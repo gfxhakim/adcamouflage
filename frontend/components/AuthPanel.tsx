@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useState } from "react";
 
 import { fetchMe, signIn, signUp, type UserProfile } from "@/lib/auth";
+import { trackRegistration } from "@/lib/meta";
 import NeonCard from "./NeonCard";
 
 type Mode = "signin" | "signup";
@@ -88,7 +89,9 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       setBusy(true);
       try {
         if (mode === "signup") {
-          await signUp(email.trim(), password, displayName.trim());
+          const profile = await signUp(email.trim(), password, displayName.trim());
+          // Same event id as the server's Conversions API copy, so Meta counts it once.
+          await Promise.race([trackRegistration(profile.id), new Promise((r) => setTimeout(r, 800))]);
         } else {
           await signIn(email.trim(), password);
         }
@@ -216,6 +219,20 @@ export function AuthPanel({ mode }: { mode: Mode }) {
           )}
         </button>
       </form>
+
+      {mode === "signup" ? (
+        <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-subtle">
+          By creating an account you agree to the{" "}
+          <Link href="/terms" className="underline">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline">
+            Privacy policy
+          </Link>
+          .
+        </p>
+      ) : null}
 
       {mode === "signup" ? (
         <p className="mt-5 text-center text-xs leading-relaxed text-ink-subtle">

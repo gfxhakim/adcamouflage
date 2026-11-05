@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const meta = (await loadPublishedContent("workspace")).meta ?? {};
   return {
+    robots: { index: false, follow: false },
     ...(meta.title ? { title: meta.title } : {}),
     ...(meta.description ? { description: meta.description } : {}),
     ...(meta.favicon ? { icons: { icon: meta.favicon } } : {}),

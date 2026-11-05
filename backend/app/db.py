@@ -218,6 +218,9 @@ class Order(Base):
     # The provider's own id for the payment when it is not a BTCPay invoice
     # (Volet's transaction id, ``ac_transfer``, from the status notification).
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # JSON: the buyer's Meta attribution data from checkout, so the Purchase
+    # sent when the payment is confirmed can be matched to the ad click.
+    tracking: Mapped[str | None] = mapped_column(Text, nullable=True)
     checkout_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
@@ -372,6 +375,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Second payment provider (Volet). Every order before it was a BTCPay one.
     ("orders", "provider", "VARCHAR(16) NOT NULL DEFAULT 'btcpay'"),
     ("orders", "provider_ref", "VARCHAR(128)"),
+    # Meta ad attribution captured at checkout (consent, _fbp/_fbc, ip, agent).
+    ("orders", "tracking", "TEXT"),
 ]
 
 

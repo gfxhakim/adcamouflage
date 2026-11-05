@@ -4,8 +4,10 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
 import IntroScreen from "@/components/IntroScreen";
+import MetaPixel from "@/components/MetaPixel";
 import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
 import { INTRO_GATE_SCRIPT } from "@/lib/intro";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, siteUrl } from "@/lib/site";
 import "./globals.css";
 
 // Headlines: Instrument Serif (the blue part set in italic). Text: Geist.
@@ -17,20 +19,35 @@ const display = Instrument_Serif({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "AdCamouflage — Media Mutation & Fingerprint Stripping",
-  description:
-    "Camouflage ad creatives at scale: micro-crop and resample geometry, inject temporal noise, stagger frame rates, shift audio pitch and strip every provenance tag from the container.",
-  applicationName: "AdCamouflage",
-  keywords: [
-    "ad camouflage",
-    "media mutation",
-    "fingerprint stripping",
-    "metadata removal",
-    "video processing",
-  ],
-  robots: { index: false, follow: false },
-};
+// Read on each request so SITE_URL set on Railway applies without a rebuild.
+export async function generateMetadata(): Promise<Metadata> {
+  const base = siteUrl();
+  return {
+    metadataBase: new URL(base),
+    title: { default: SITE_TITLE, template: `%s | ${SITE_NAME}` },
+    description: SITE_DESCRIPTION,
+    applicationName: SITE_NAME,
+    keywords: SITE_KEYWORDS,
+    alternates: { canonical: "/" },
+    openGraph: {
+      type: "website",
+      siteName: SITE_NAME,
+      title: SITE_TITLE,
+      description: SITE_DESCRIPTION,
+      url: base,
+      locale: "en_US",
+    },
+    twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
+    robots: { index: true, follow: true },
+    // Paste the code from Google Search Console / Meta Business domain verification into these env vars.
+    verification: {
+      ...(process.env.GOOGLE_SITE_VERIFICATION ? { google: process.env.GOOGLE_SITE_VERIFICATION } : {}),
+      ...(process.env.FACEBOOK_DOMAIN_VERIFICATION
+        ? { other: { "facebook-domain-verification": process.env.FACEBOOK_DOMAIN_VERIFICATION } }
+        : {}),
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#ffffff",
@@ -54,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen">
         <IntroScreen />
         {children}
+        <MetaPixel />
       </body>
     </html>
   );
