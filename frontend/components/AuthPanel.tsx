@@ -49,8 +49,9 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   const destination = safeDestination(next);
   const otherPage = (mode === "signup" ? "/login" : "/signup") + (next ? `?next=${encodeURIComponent(next)}` : "");
 
+  // On both pages: someone already signed in can carry on instead of making
+  // a second account.
   useEffect(() => {
-    if (mode !== "signin") return;
     let cancelled = false;
     fetchMe()
       .then((profile) => {
@@ -60,7 +61,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     return () => {
       cancelled = true;
     };
-  }, [mode]);
+  }, []);
 
   // The API set an httpOnly cookie; a full navigation lets the Next middleware
   // see it. Admins go to the admin panel, everyone else to the workspace.

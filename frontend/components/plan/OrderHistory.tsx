@@ -10,6 +10,8 @@ interface OrderHistoryProps {
   currency: string;
   /** Labels for plan ids, so a row reads "Pro period" rather than "pro". */
   planLabels: Record<string, string>;
+  /** Open the checkout panel for an order (transaction ID, pay, screenshot, check). */
+  onOpen?: (order: Order) => void;
 }
 
 const STATUS: Record<Order["status"], { text: string; tone: string }> = {
@@ -20,7 +22,12 @@ const STATUS: Record<Order["status"], { text: string; tone: string }> = {
 };
 
 /** Every checkout the user started, newest first, with its outcome. */
-export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps) {
+const REVIEW: Record<string, { text: string; tone: string }> = {
+  submitted: { text: "Screenshot in review", tone: "!border-meta-500/30 !bg-meta-50 !text-meta-800" },
+  rejected: { text: "Screenshot rejected", tone: "!border-red-300 !bg-red-50 !text-red-700" },
+};
+
+export function OrderHistory({ orders, currency, planLabels, onOpen }: OrderHistoryProps) {
   if (orders.length === 0) {
     return <p className="py-4 text-center text-xs text-ink-faint">No orders yet.</p>;
   }
@@ -33,6 +40,7 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
         const providerName = paymentProviderName(order.provider);
         // A Volet order pays on this app's own /pay page, so the link is same-origin.
         const external = /^https?:/i.test(order.checkout_url ?? "");
+        const review = order.status !== "paid" ? REVIEW[order.review_status] : undefined;
         return (
           <li key={order.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
             <div className="min-w-0">
@@ -43,8 +51,21 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
                 {formatMoney(order.amount, currency)} · {formatTokens(order.tokens)} tokens ·{" "}
                 {formatDate(order.paid_at ?? order.created_at)}
               </p>
+              {order.ref_code ? (
+                <p className="mt-0.5 font-mono text-[11px] tracking-wide text-ink-faint">{order.ref_code}</p>
+              ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {onOpen && order.status !== "paid" ? (
+                <button
+                  type="button"
+                  onClick={() => onOpen(order)}
+                  className="text-xs font-semibold text-meta-600 hover:underline"
+                >
+                  {order.has_proof ? "Details" : "Upload screenshot"}
+                </button>
+              ) : null}
+              {review ? <span className={clsx("chip !text-[10px]", review.tone)}>{review.text}</span> : null}
               {order.status === "pending" && order.checkout_url ? (
                 <a
                   href={order.checkout_url}

@@ -30,6 +30,7 @@ from .accounts import (
 from . import meta_capi
 from .activity import log_activity
 from .app_settings import announcement, registration_open
+from .security import client_ip
 from .db import BatchRecord, User, get_db
 from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
 from .tokens import TOKENS, subscription_active, usable_tokens
@@ -58,16 +59,13 @@ class _AttemptLimiter:
         self._hits: dict[str, list[float]] = defaultdict(list)
         self._lock = threading.Lock()
 
-    def check(self, key: str) -> None:
+    def check(self, key: str, message: str = "Too many sign-in attempts. Wait a few minutes and try again.") -> None:
         now = time.monotonic()
         with self._lock:
             recent = [stamp for stamp in self._hits[key] if now - stamp < self.window]
             self._hits[key] = recent
             if len(recent) >= self.limit:
-                raise AuthError(
-                    "Too many sign-in attempts. Wait a few minutes and try again.",
-                    status.HTTP_429_TOO_MANY_REQUESTS,
-                )
+                raise AuthError(message, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def record_failure(self, key: str) -> None:
         with self._lock:
@@ -79,11 +77,26 @@ class _AttemptLimiter:
 
 
 login_limiter = _AttemptLimiter()
+# Sign-ups: a few per sender per 10 minutes, and a ceiling for the whole site
+# so a script cannot fill the database with accounts.
+register_limiter = _AttemptLimiter(limit=5, window_seconds=600)
+register_site_limiter = _AttemptLimiter(limit=60, window_seconds=600)
+
+
+def _sender_key(request: Request) -> str:
+    return client_ip(request)
+
+
+# Wider nets on top of the per-address-and-email limiter above: failures for
+# one account from any address (password spraying across many IPs), and
+# failures from one address across many accounts (credential stuffing).
+account_failures = _AttemptLimiter(limit=20, window_seconds=900)
+address_failures = _AttemptLimiter(limit=40, window_seconds=900)
+password_changes = _AttemptLimiter(limit=10, window_seconds=900)
 
 
 def _client_key(request: Request, email: str) -> str:
-    client = request.client.host if request.client else "unknown"
-    return f"{client}:{email}"
+    return f"{client_ip(request)}:{email}"
 
 
 # --------------------------------------------------------------------------
@@ -169,6 +182,9 @@ def register(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="New accounts are closed on this instance.",
         )
+    sender = _sender_key(request)
+    register_limiter.check(sender, "Too many new accounts from here. Wait a few minutes and try again.")
+    register_site_limiter.check("*", "Too many new accounts right now. Try again in a few minutes.")
 
     email = validate_email(payload.email)
     password = validate_password(payload.password)
@@ -192,6 +208,8 @@ def register(
         raise AuthError("An account with that email already exists.", status.HTTP_409_CONFLICT)
 
     db.refresh(user)
+    register_limiter.record_failure(sender)
+    register_site_limiter.record_failure("*")
     set_session_cookie(response, create_session_token(user))
     logger.info("registered user %s", user.id)
     log_activity(db, user.id, "signup", f"Signed up on the {user.plan} plan")
@@ -212,6 +230,9 @@ def login(
     email = (payload.email or "").strip().lower()
     key = _client_key(request, email)
     login_limiter.check(key)
+    address = client_ip(request)
+    account_failures.check(email)
+    address_failures.check(address)
 
     user = get_user_by_email(db, email)
     # Always run a hash comparison so a missing account and a wrong password
@@ -221,6 +242,8 @@ def login(
 
     if user is None or not password_ok or not user.is_active:
         login_limiter.record_failure(key)
+        account_failures.record_failure(email)
+        address_failures.record_failure(address)
         raise AuthError("That email and password do not match.")
 
     login_limiter.clear(key)
@@ -252,7 +275,9 @@ def change_password(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> UserProfile:
+    password_changes.check(f"user:{user.id}", "Too many password attempts. Wait a few minutes and try again.")
     if not verify_password(payload.current_password or "", user.password_hash):
+        password_changes.record_failure(f"user:{user.id}")
         raise AuthError("Your current password is not correct.")
 
     new_password = validate_password(payload.new_password)

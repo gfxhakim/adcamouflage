@@ -154,9 +154,12 @@ function structuredData(pricing: PublicPricing): string {
 }
 
 export default async function LandingPage() {
-  // Everyone sees the visitor version of this page, and every start button
-  // opens the login page, which also offers to create an account.
-  const startHref = "/login";
+  // Everyone sees the visitor version of this page. Every start button opens
+  // Create account; every "Log in" button opens the login page. A plan's
+  // "Choose" button signs the new account up and then opens the plan page
+  // to pay for it.
+  const startHref = "/signup";
+  const choosePlanHref = `/signup?next=${encodeURIComponent("/app/plan")}`;
   const [pricing, content] = await Promise.all([loadPricing(), loadPublishedContent("landing")]);
 
   return (
@@ -190,7 +193,7 @@ export default async function LandingPage() {
                       plans={pricing.plans}
                       topups={pricing.topups}
                       currency={pricing.currency}
-                      ctaHref={startHref}
+                      ctaHref={choosePlanHref}
                     />
                   </div>
                 </CmsSection>

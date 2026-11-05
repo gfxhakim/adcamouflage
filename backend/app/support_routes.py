@@ -35,7 +35,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -44,6 +44,7 @@ from .activity import log_activity
 from .config import settings
 from .db import BatchRecord, SupportMessage, SupportThread, User, get_db, utcnow
 from .mailer import send_email
+from .payments import SlidingLimiter, sniff_image
 from .plans import get_plans, plan_expired, plan_label, used_this_month
 from .tokens import TOKENS, balance_summary, get_token_plans, subscription_active
 
@@ -98,6 +99,23 @@ admin_router = APIRouter(
 )
 
 
+_upload_limiter = SlidingLimiter(limit=30, window_seconds=3600)
+
+
+def _content_matches(head: bytes, mime: str) -> bool:
+    """Whether a file's first bytes fit the type its name claims (so an HTML page can't pose as a .png)."""
+
+    if mime == "image/gif":
+        return head.startswith(b"GIF87a") or head.startswith(b"GIF89a")
+    if mime.startswith("image/"):
+        kind = sniff_image(head)
+        return kind is not None and SUPPORT_MEDIA_TYPES.get(f".{kind}") == mime
+    if mime in ("video/webm", "video/x-matroska"):
+        return head.startswith(b"\x1a\x45\xdf\xa3")
+    # mp4 / mov / m4v: an ISO box, 'ftyp' (or an older QuickTime atom) at offset 4.
+    return head[4:8] in (b"ftyp", b"moov", b"mdat", b"wide", b"free", b"skip", b"pnot")
+
+
 def support_media_dir() -> Path:
     path = settings.storage_root / "support-media"
     path.mkdir(parents=True, exist_ok=True)
@@ -115,6 +133,7 @@ WELCOME_MESSAGE = (
 )
 
 WELCOME_SUGGESTIONS = [
+    "I paid, check my transaction ID",
     "How do I use BluCloaking step by step?",
     "Which profile & layers are best for Meta or TikTok?",
     "Explain all 23 Camouflage Layers (including Gen-4)",
@@ -599,12 +618,35 @@ class AdminSupportNotificationsOut(BaseModel):
     recent_escalations: list[AdminSupportThreadSummary]
 
 
+_ATTACHMENT_URL_RE = re.compile(r"^/api/v1/support/media/sup_[a-f0-9]{24}\.[a-z0-9]{2,5}$")
+
+
 class SendSupportMessageIn(BaseModel):
     body: str = Field(default="", max_length=8000)
     attachment_url: str | None = Field(default=None, max_length=1000)
     attachment_name: str | None = Field(default=None, max_length=255)
     attachment_type: str | None = Field(default=None, max_length=64)
     attachment_size: int | None = Field(default=None, ge=0)
+
+    @field_validator("attachment_url")
+    @classmethod
+    def _only_our_uploads(cls, value: str | None) -> str | None:
+        # Only a file uploaded through /support/upload may be attached: never
+        # an outside link (or a javascript: one) shown to the other side.
+        if value in (None, ""):
+            return None
+        if not _ATTACHMENT_URL_RE.match(value):
+            raise ValueError("Attach files with the upload button.")
+        return value
+
+    @field_validator("attachment_type")
+    @classmethod
+    def _known_type(cls, value: str | None) -> str | None:
+        if value in (None, ""):
+            return None
+        if value not in ("image", "video"):
+            raise ValueError("Unknown attachment type.")
+        return value
 
 
 class EscalateThreadIn(BaseModel):
@@ -987,6 +1029,47 @@ def _sweep(db: Session, user_id: int | None = None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Payment check: the buyer pastes the transaction ID from the checkout panel
+# ---------------------------------------------------------------------------
+
+_PAYMENT_PHRASES = ("transaction id", "transaction", "i paid", "i have paid", "payment id", "order id", "paid but")
+
+
+def _payment_bot_reply(db: Session, user: User, body: str) -> tuple[str, list[str]] | None:
+    """A bot reply when the message is about checking a payment, else None.
+
+    A message with a transaction ID (BC-XXXX-XXXX) is checked against the
+    buyer's own orders only; a confirmed payment is already active, the bot
+    just reports it. A screenshot never activates anything.
+    """
+
+    from .payments import check_transaction, find_ref_code
+
+    code = find_ref_code(body)
+    if code is None:
+        lowered = body.lower()
+        if not any(phrase in lowered for phrase in _PAYMENT_PHRASES):
+            return None
+        return (
+            "Sure. **Paste your transaction ID** here (it looks like `BC-XXXX-XXXX`). You'll find it on the "
+            "checkout panel and next to the order in **My plan → Orders**.\n\n"
+            "If the payment is confirmed, I'll tell you right away and your plan is already active.",
+            ["Where do I find my transaction ID?", "Tokens or payment issue"],
+        )
+    try:
+        result = check_transaction(db, user, code)
+    except HTTPException as exc:
+        return (str(exc.detail), [])
+    icon = {"activated": "✅", "already_used": "✅", "in_review": "⏳", "pending": "⏳"}.get(result.outcome, "⚠️")
+    chips = (
+        ["How do I use BluCloaking step by step?"]
+        if result.outcome in ("activated", "already_used")
+        else ["Still didn't solve my issue"]
+    )
+    return (f"{icon} {result.message}", chips)
+
+
+# ---------------------------------------------------------------------------
 # Helper: get or create active thread for user
 # ---------------------------------------------------------------------------
 
@@ -1110,12 +1193,26 @@ def post_user_support_message(
     thread.updated_at = utcnow()
     thread.issue_summary = _build_issue_summary(messages)
 
-    if thread.status == "bot" and wants_live_agent(body):
+    payment_reply = _payment_bot_reply(db, user, body) if body else None
+    if payment_reply is None and thread.status == "bot" and wants_live_agent(body):
         thread.bot_attempts += 1
         _open_ticket(db, user, thread, messages, reason="asked")
         return _serialize_thread(thread, messages)
 
-    if thread.status == "bot":
+    if payment_reply is not None:
+        # Checking a payment is not a failed answer, so no attempt is counted.
+        bot_msg = SupportMessage(
+            thread_id=thread.id,
+            sender_role="bot",
+            sender_name="BluCloaking Bot",
+            body=payment_reply[0],
+            suggestions_json=json.dumps(payment_reply[1]),
+        )
+        db.add(bot_msg)
+        messages.append(bot_msg)
+        if thread.status != "bot":
+            thread.unread_admin += 1
+    elif thread.status == "bot":
         thread.bot_attempts += 1
         bot_reply, suggestions = generate_bot_response(
             user_text=body,
@@ -1219,6 +1316,9 @@ async def upload_support_attachment(
 ) -> dict[str, Any]:
     """Upload a screenshot (PNG/JPG/WEBP/GIF) or video/screen recording (MP4/WEBM/MOV/MKV) for chat."""
 
+    if not _upload_limiter.hit(f"user:{_user.id}"):
+        raise HTTPException(status_code=429, detail="Too many uploads. Try again later.")
+
     raw_name = file.filename or "attachment"
     suffix = Path(raw_name).suffix.lower()
     if suffix not in SUPPORT_MEDIA_TYPES:
@@ -1244,6 +1344,11 @@ async def upload_support_attachment(
     try:
         with target.open("wb") as out:
             while chunk := await file.read(1024 * 1024):
+                if size == 0 and not _content_matches(chunk[:16], SUPPORT_MEDIA_TYPES[suffix]):
+                    raise HTTPException(
+                        status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                        detail="That file is not the image or video type its name says.",
+                    )
                 size += len(chunk)
                 if size > MAX_SUPPORT_MEDIA_BYTES:
                     raise HTTPException(status_code=413, detail="Attachment exceeds the 150 MB limit.")
@@ -1271,17 +1376,31 @@ async def upload_support_attachment(
 def read_support_attachment(
     name: str,
     _user: User = Depends(current_user),
+    db: Session = Depends(get_db),
 ) -> FileResponse:
-    """Serve an uploaded chat screenshot or video recording to any signed-in user/admin."""
+    """Serve a chat screenshot or recording to the customer whose chat it is in, or an admin."""
 
     if not _MEDIA_NAME_RE.match(name):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    if not is_admin(_user):
+        owned = db.execute(
+            select(SupportMessage.id)
+            .join(SupportThread, SupportThread.id == SupportMessage.thread_id)
+            .where(
+                SupportMessage.attachment_url == f"/api/v1/support/media/{name}",
+                SupportThread.user_id == _user.id,
+            )
+            .limit(1)
+        ).first()
+        if owned is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     path = support_media_dir() / name
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
     headers = {
         "Cache-Control": "private, max-age=86400",
         "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; media-src 'self'; img-src 'self'; sandbox",
     }
     return FileResponse(
         path,

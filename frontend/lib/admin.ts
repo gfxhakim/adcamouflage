@@ -336,3 +336,51 @@ export const adjustTokens = (id: number, amount: number, note: string) =>
 
 export const setBillingMode = (id: number, mode: BillingMode) =>
   call<UserBilling>(`/users/${id}/billing/mode`, { method: "POST", body: JSON.stringify({ mode }) });
+
+// --- payment review (screenshots and transaction IDs) ----------------------
+
+export interface PaymentReview {
+  order_id: string;
+  ref_code: string | null;
+  user_id: number;
+  email: string;
+  kind: "subscription" | "topup";
+  plan_id: string;
+  plan_label: string;
+  amount: number;
+  tokens: number;
+  status: "pending" | "paid" | "expired" | "invalid";
+  provider: PaymentProviderId;
+  provider_ref: string | null;
+  review_status: "" | "submitted" | "approved" | "rejected";
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  proof_note: string | null;
+  proof_url: string | null;
+  proof_uploaded_at: string | null;
+  created_at: string;
+  paid_at: string | null;
+}
+
+export type PaymentReviewState = "submitted" | "reviewed" | "all";
+
+export function listPaymentReviews(state: PaymentReviewState, q = "") {
+  const qs = new URLSearchParams({ state });
+  if (q.trim()) qs.set("q", q.trim());
+  return call<PaymentReview[]>(`/payments?${qs.toString()}`);
+}
+
+export function approvePayment(orderId: string, note = "") {
+  return call<PaymentReview>(`/payments/${encodeURIComponent(orderId)}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function rejectPayment(orderId: string, note = "") {
+  return call<PaymentReview>(`/payments/${encodeURIComponent(orderId)}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}

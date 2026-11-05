@@ -13,7 +13,7 @@ from pathlib import Path
 
 from typing import Annotated
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -50,8 +50,17 @@ class Settings(BaseSettings):
     # Signing key for download tokens. Generated per-process when unset, which
     # is fine for a single dev server but MUST be pinned in production so the
     # API and any replica agree on token signatures.
-    secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(48))
+    # When ADCAM_SECRET_KEY is unset a random key is generated once and saved
+    # to ``<storage_root>/.secret_key`` (see ``_pinned_secret``), so sessions
+    # survive restarts and the API and workers share it. Setting the variable
+    # on Railway is still the recommended way.
+    secret_key: str = ""
     download_token_ttl: int = 3600
+    # Header that carries the visitor's real address. Railway's edge sets
+    # X-Real-IP; behind Cloudflare's proxy (orange cloud) use cf-connecting-ip.
+    client_ip_header: str = "x-real-ip"
+    # Largest JSON/form body the API reads; file uploads stream with their own caps.
+    max_body_bytes: int = 10 * 1024 * 1024
     api_key: str | None = None
     # NoDecode stops pydantic-settings from JSON-parsing the raw env value, so
     # the documented comma-separated form reaches the validator below instead of
@@ -262,6 +271,20 @@ class Settings(BaseSettings):
     def btcpay_base_url(self) -> str:
         return self.btcpay_url.strip().rstrip("/")
 
+    @model_validator(mode="after")
+    def _secure_cookie_on_https(self) -> "Settings":
+        # A site served over https gets a Secure session cookie (never sent
+        # over plain http) unless ADCAM_COOKIE_SECURE says otherwise.
+        if "cookie_secure" not in self.model_fields_set and self.public_url.strip().lower().startswith("https://"):
+            self.cookie_secure = True
+        return self
+
+    @property
+    def weak_secret_key(self) -> bool:
+        return self.secret_key.strip() in {"", "change-me-in-production", "changeme", "secret"} or len(
+            self.secret_key.strip()
+        ) < 24
+
     @property
     def cookie_samesite_value(self) -> str:
         value = (self.cookie_samesite or "lax").lower()
@@ -272,10 +295,36 @@ class Settings(BaseSettings):
             path.mkdir(parents=True, exist_ok=True)
 
 
+def _pinned_secret(root: Path) -> str:
+    """Read the generated signing key from the storage volume, creating it once."""
+
+    path = root / ".secret_key"
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+        if len(existing) >= 32:
+            return existing
+    except OSError:
+        pass
+    key = secrets.token_urlsafe(48)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(key)
+    except FileExistsError:
+        # Another process (the worker) wrote it first; use theirs.
+        return path.read_text(encoding="utf-8").strip() or key
+    except OSError:
+        return key
+    return key
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     settings = Settings()
     settings.ensure_dirs()
+    if len(settings.secret_key.strip()) < 16:
+        settings.secret_key = _pinned_secret(settings.storage_root)
     return settings
 
 

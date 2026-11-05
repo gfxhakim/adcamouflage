@@ -30,6 +30,23 @@ from app.ffmpeg import ffmpeg_available  # noqa: E402
 requires_ffmpeg = pytest.mark.skipif(not ffmpeg_available(), reason="ffmpeg is not installed")
 
 
+@pytest.fixture(autouse=True)
+def _reset_signup_limits():
+    """Tests create many accounts from one client; the sign-up throttle has its own test."""
+
+    from app.auth_routes import (
+        account_failures,
+        address_failures,
+        password_changes,
+        register_limiter,
+        register_site_limiter,
+    )
+
+    for limiter in (register_limiter, register_site_limiter, account_failures, address_failures, password_changes):
+        limiter._hits.clear()
+    yield
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _storage_root():
     settings.ensure_dirs()

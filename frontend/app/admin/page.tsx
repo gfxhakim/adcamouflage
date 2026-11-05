@@ -11,6 +11,7 @@ import {
   Loader2,
   LogOut,
   PanelsTopLeft,
+  Receipt,
   RefreshCw,
   Settings2,
   Users,
@@ -21,6 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import ContentEditor from "@/components/admin/ContentEditor";
 import OverviewTab from "@/components/admin/OverviewTab";
+import PaymentsTab from "@/components/admin/PaymentsTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 import SupportTab from "@/components/admin/SupportTab";
 import UserPanel from "@/components/admin/UserPanel";
@@ -37,6 +39,7 @@ const SUPPORT_POLL_MS = 8000;
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "support", label: "Support · Live Chat", icon: Headset },
+  { id: "payments", label: "Payments", icon: Receipt },
   { id: "users", label: "Users", icon: Users },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings2 },
@@ -387,6 +390,13 @@ export default function AdminPage() {
               initialThreadId={activeSupportThreadId}
               onSelectUser={setSelected}
               onNotificationsChanged={() => void loadSupportNotifs()}
+            />
+          ) : tab === "payments" ? (
+            <PaymentsTab
+              refreshKey={refreshKey}
+              currency={currency}
+              onSelectUser={setSelected}
+              onChanged={() => void loadShared()}
             />
           ) : tab === "users" ? (
             <UsersTab

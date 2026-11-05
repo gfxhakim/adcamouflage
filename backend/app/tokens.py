@@ -563,8 +563,11 @@ def new_order(
     route that starts the checkout fills in that provider's own ids after.
     """
 
+    from .payments import unused_ref_code
+
     order = Order(
         id=uuid.uuid4().hex,
+        ref_code=unused_ref_code(db),
         user_id=user.id,
         kind=kind,
         plan_id=plan.id,

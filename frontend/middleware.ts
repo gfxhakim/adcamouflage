@@ -80,6 +80,14 @@ export async function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/app") && !session) {
     const url = request.nextUrl.clone();
+    // Back from paying without the session (another browser, cleared
+    // cookies): open the login page and return to the order after it, so
+    // the buyer sees the plan they paid for instead of the landing page.
+    if (request.nextUrl.searchParams.has("order")) {
+      url.pathname = "/login";
+      url.search = `?next=${encodeURIComponent(pathname + request.nextUrl.search)}`;
+      return NextResponse.redirect(url);
+    }
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);

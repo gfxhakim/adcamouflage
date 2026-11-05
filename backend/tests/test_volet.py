@@ -299,8 +299,8 @@ def test_checkout_with_only_volet_serves_a_signed_pay_page(volet_env):
     assert fields["ac_sign"] == hashlib.sha256(signed).hexdigest()
     assert fields["ac_status_url"] == f"{PUBLIC_URL}/api/v1/billing/volet/status"
     assert fields["ac_status_url_method"] == "POST"
-    assert fields["ac_success_url"] == f"{PUBLIC_URL}/app/plan?order={order_id}"
-    assert fields["ac_fail_url"] == f"{PUBLIC_URL}/app/plan?order={order_id}&cancelled=1"
+    assert fields["ac_success_url"] == f"{PUBLIC_URL}/api/v1/billing/r/{order_id}"
+    assert fields["ac_fail_url"] == f"{PUBLIC_URL}/api/v1/billing/r/{order_id}?cancelled=1"
     assert fields["ac_success_url_method"] == "GET" and fields["ac_fail_url_method"] == "GET"
     assert fields["ac_client_lang"] == "en" and "Starter period" in fields["ac_comments"]
 
@@ -333,7 +333,7 @@ def test_pay_page_falls_back_to_the_browsers_origin(volet_env, monkeypatch):
     body = _checkout(client, "starter")
     page = client.get(body["checkout_url"], headers={"referer": "https://site.example.test/app/plan"})
     fields = _form_fields(page.text)
-    assert fields["ac_success_url"] == f"https://site.example.test/app/plan?order={body['order_id']}"
+    assert fields["ac_success_url"] == f"https://site.example.test/api/v1/billing/r/{body['order_id']}"
     assert fields["ac_status_url"] == "https://site.example.test/api/v1/billing/volet/status"
 
 
@@ -519,7 +519,7 @@ def test_notification_for_a_different_amount_is_set_aside(volet_env):
     email = address("amount")
     client = _signed_in(email)
     order_id = _checkout(client, "starter")["order_id"]
-    response = _volet().post(STATUS_PATH, data=_notification(order_id, amount="38.50"))
+    response = _volet().post(STATUS_PATH, data=_notification(order_id, amount="30.00"))
     assert response.status_code == 200 and response.text == "OK"
     assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "pending"
     assert _balances(email) == (0, 0)
@@ -732,3 +732,61 @@ def test_orders_list_carries_the_provider_and_reuses_the_open_order(volet_env, a
     user_id = client.get("/api/v1/auth/me").json()["id"]
     billing = admin.get(f"/api/v1/admin/users/{user_id}/billing").json()
     assert [o["provider"] for o in billing["orders"]] == ["volet", "volet"]
+
+
+def test_pay_page_returns_the_buyer_to_the_host_they_signed_in_on(volet_env, monkeypatch):
+    """The session cookie is per host: a www buyer sent back to the bare domain lands signed out."""
+
+    monkeypatch.setattr(settings, "public_url", "https://example.test")
+    client = _signed_in(address("www-host"))
+    body = _checkout(client, "starter")
+    order_id = body["order_id"]
+
+    page = client.get(body["checkout_url"], headers={"referer": "https://www.example.test/app/plan"})
+    fields = _form_fields(page.text)
+    assert fields["ac_success_url"] == f"https://www.example.test/api/v1/billing/r/{order_id}"
+    assert fields["ac_fail_url"] == f"https://www.example.test/api/v1/billing/r/{order_id}?cancelled=1"
+    # Volet's server-to-server notification keeps the configured address.
+    assert fields["ac_status_url"] == "https://example.test/api/v1/billing/volet/status"
+
+    # A browser on some other site never chooses where the buyer goes.
+    page = client.get(body["checkout_url"], headers={"referer": "https://evil.test/x"})
+    assert _form_fields(page.text)["ac_success_url"] == f"https://example.test/api/v1/billing/r/{order_id}"
+
+
+def test_a_fee_difference_in_the_amount_still_activates_the_plan(volet_env):
+    """Volet's fee can change the reported amount a little; the plan must still turn on."""
+
+    for amount in ("37.89", "36.50"):  # buyer paid the fee / Volet took ~2.7% from it
+        email = address(f"fee-{amount}")
+        client = _signed_in(email)
+        order_id = _checkout(client, "starter")["order_id"]
+        assert _volet().post(STATUS_PATH, data=_notification(order_id, amount=amount)).text == "OK"
+        assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "paid"
+        assert _balances(email) == (1500, 0)
+
+
+def test_amount_covers_unit():
+    from app.billing_routes import amount_covers
+
+    assert amount_covers(37.5, 37.5)
+    assert amount_covers(40.0, 37.5)
+    assert amount_covers(36.4, 37.5)
+    assert not amount_covers(36.0, 37.5)
+    assert not amount_covers(float("nan"), 37.5)
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_return_link_forwards_to_the_plan_page_by_get(volet_env, method):
+    """Volet may send the buyer back with a POST; the hop turns it into a GET that keeps the session."""
+
+    client = TestClient(app)
+    order_id = uuid.uuid4().hex
+    response = getattr(client, method)(f"/api/v1/billing/r/{order_id}", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/app/plan?order={order_id}"
+    back = getattr(client, method)(f"/api/v1/billing/r/{order_id}?cancelled=1", follow_redirects=False)
+    assert back.headers["location"] == f"/app/plan?order={order_id}&cancelled=1"
+    # Nothing but the id goes into the link.
+    odd = client.get("/api/v1/billing/r/abc%22%3E%3Cx", follow_redirects=False)
+    assert odd.headers["location"] == "/app/plan?order=abcx"

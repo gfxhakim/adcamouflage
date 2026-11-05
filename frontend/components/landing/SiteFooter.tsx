@@ -107,7 +107,8 @@ export function SiteFooter() {
             </T>
             <CmsLink
               k="footer.cta"
-              href="/login"
+              href="/signup"
+              account="signup"
               label="Get started"
               className="mt-6 inline-flex items-center rounded-full bg-gradient-to-r from-meta-600 via-meta-500 to-meta-400 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_-10px_rgba(8,102,255,0.9)] transition hover:brightness-110"
             />

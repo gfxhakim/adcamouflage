@@ -229,6 +229,23 @@ class Order(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # When the order poll last asked BTCPay about this invoice (throttles the poll).
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The short transaction ID the buyer sees at checkout (BC-XXXX-XXXX) and
+    # can paste to the support bot. Unique by its index (see init_db).
+    ref_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # A payment screenshot the buyer uploaded: the stored file name in the
+    # private payment-proofs folder, never served without a check. A
+    # screenshot never activates anything by itself; it waits for an admin.
+    proof_file: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    proof_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    proof_uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # '' (nothing to review), 'submitted', 'approved' or 'rejected'.
+    review_status: Mapped[str] = mapped_column(String(16), default="", server_default="", nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When the buyer's transaction ID was first checked and found paid (the
+    # bot or the plan page). Later checks of the same ID say it was used.
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ActivityEvent(Base):
@@ -377,6 +394,23 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "provider_ref", "VARCHAR(128)"),
     # Meta ad attribution captured at checkout (consent, _fbp/_fbc, ip, agent).
     ("orders", "tracking", "TEXT"),
+    # Transaction IDs and payment screenshots.
+    ("orders", "ref_code", "VARCHAR(20)"),
+    ("orders", "proof_file", "VARCHAR(64)"),
+    ("orders", "proof_note", "TEXT"),
+    ("orders", "proof_uploaded_at", "TIMESTAMP WITH TIME ZONE"),
+    ("orders", "review_status", "VARCHAR(16) NOT NULL DEFAULT ''"),
+    ("orders", "reviewed_by", "VARCHAR(320)"),
+    ("orders", "reviewed_at", "TIMESTAMP WITH TIME ZONE"),
+    ("orders", "review_note", "TEXT"),
+    ("orders", "verified_at", "TIMESTAMP WITH TIME ZONE"),
+]
+
+# Indexes made after the columns above exist (CREATE ... IF NOT EXISTS works
+# on both SQLite and Postgres). NULLs never clash in a unique index.
+_ADDED_INDEXES: list[str] = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_orders_ref_code ON orders (ref_code)",
+    "CREATE INDEX IF NOT EXISTS ix_orders_review_status ON orders (review_status)",
 ]
 
 
@@ -441,6 +475,9 @@ def init_db() -> None:
     _wait_for_database(engine)
     Base.metadata.create_all(bind=engine)
     _add_missing_columns(engine)
+    for ddl in _ADDED_INDEXES:
+        with engine.begin() as conn:
+            conn.execute(text(ddl))
     logger.info("database ready at %s", settings.resolved_database_url.split("@")[-1])
 
 

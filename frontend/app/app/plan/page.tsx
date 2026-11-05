@@ -24,6 +24,7 @@ import Header from "@/components/Header";
 import DeckRail from "@/components/DeckRail";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
+import CheckoutPanel from "@/components/plan/CheckoutPanel";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
@@ -55,13 +56,22 @@ import { formatDate, formatTokens, timeAgo } from "@/lib/format";
 import { trackCheckout, trackPurchase } from "@/lib/meta";
 import type { TokenPlanCard } from "@/lib/types";
 
-/** After the payment provider sends the browser back, ask about the order this often, for this long. */
+/**
+ * After the payment provider sends the browser back, ask about the order
+ * every few seconds at first, then less often, for as long as a crypto
+ * payment can take to confirm.
+ */
 const ORDER_POLL_MS = 3000;
-const ORDER_POLL_LIMIT_MS = 120_000;
+const ORDER_POLL_SLOW_MS = 10_000;
+const ORDER_POLL_FAST_FOR_MS = 120_000;
+const ORDER_POLL_LIMIT_MS = 30 * 60_000;
+/** Once the payment shows, the workspace opens on its own after this long. */
+const OPEN_WORKSPACE_AFTER_MS = 3500;
 
 interface Toast {
   tone: "success" | "info" | "error";
   text: string;
+  action?: { href: string; label: string };
 }
 
 function presetName(raw: string): string {
@@ -80,6 +90,8 @@ export default function PlanPage() {
   const [waitingOrder, setWaitingOrder] = useState<string | null>(null);
   /** The payment method the user picked; the first one the server offers until then. */
   const [pickedProvider, setPickedProvider] = useState<PaymentProviderId | null>(null);
+  /** The order shown in the checkout panel (transaction ID, pay, screenshot, check). */
+  const [panelOrder, setPanelOrder] = useState<Order | null>(null);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Plan labels for the settlement toast, which runs outside the render.
   const labelsRef = useRef<Record<string, string>>({});
@@ -142,6 +154,8 @@ export default function PlanPage() {
     setToast({ tone: "info", text: "Waiting for your payment to be confirmed…" });
 
     let cancelled = false;
+    /** The order has an answer: stop asking. */
+    let settled = false;
     const startedAt = Date.now();
 
     const check = async () => {
@@ -149,21 +163,31 @@ export default function PlanPage() {
       try {
         const order = await fetchOrder(orderId);
         if (cancelled) return;
+        // The checkout panel opens on the order the buyer came back for.
+        setPanelOrder((current) => (current === null || current.id === order.id ? order : current));
         if (order.status === "paid") {
+          settled = true;
           setWaitingOrder(null);
           // Confirmed by the payment provider; the server sends the same event.
           void trackPurchase(order.id, order.amount, currencyRef.current, order.plan_id);
           setToast({
             tone: "success",
             text:
-              order.kind === "subscription"
-                ? `Payment received. Your ${labelsRef.current[order.plan_id] ?? order.plan_id} period is active and ${formatTokens(order.tokens)} tokens were added.`
-                : `Payment received. ${formatTokens(order.tokens)} top-up tokens were added.`,
+              (order.kind === "subscription"
+                ? `Payment received. Your ${labelsRef.current[order.plan_id] ?? order.plan_id} plan is active and ${formatTokens(order.tokens)} tokens were added.`
+                : `Payment received. ${formatTokens(order.tokens)} top-up tokens were added.`) +
+              " Opening your workspace…",
+            action: { href: "/app", label: "Start rendering" },
           });
           await load();
+          // Straight into the workspace, ready to render.
+          pollTimer.current = setTimeout(() => {
+            if (!cancelled) window.location.assign("/app");
+          }, OPEN_WORKSPACE_AFTER_MS);
           return;
         }
         if (order.status === "expired" || order.status === "invalid") {
+          settled = true;
           setWaitingOrder(null);
           setToast({
             tone: "error",
@@ -178,21 +202,37 @@ export default function PlanPage() {
       } catch {
         /* A failed poll is retried on the next tick. */
       }
-      if (Date.now() - startedAt >= ORDER_POLL_LIMIT_MS) {
+      const waited = Date.now() - startedAt;
+      if (waited >= ORDER_POLL_LIMIT_MS) {
         setWaitingOrder(null);
         setToast({
           tone: "info",
-          text: "Still waiting for the network to confirm your payment. It will show here as soon as it does; you can leave this page.",
+          text: "Still waiting for the network to confirm your payment. Your plan turns on by itself as soon as it does; you can leave this page.",
         });
         await load();
         return;
       }
-      pollTimer.current = setTimeout(() => void check(), ORDER_POLL_MS);
+      if (waited >= ORDER_POLL_FAST_FOR_MS) {
+        setToast({
+          tone: "info",
+          text: "Waiting for your payment to be confirmed… Crypto payments can take a few minutes; this page updates by itself.",
+        });
+      }
+      pollTimer.current = setTimeout(() => void check(), waited < ORDER_POLL_FAST_FOR_MS ? ORDER_POLL_MS : ORDER_POLL_SLOW_MS);
+    };
+
+    // A buyer who comes back to this tab gets an answer at once, not at the next tick.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || cancelled || settled) return;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+      void check();
     };
 
     void check();
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, [load]);
@@ -208,13 +248,18 @@ export default function PlanPage() {
       setToast(null);
       try {
         const checkout = await startCheckout(kind, choice, provider);
+        // Report the checkout start (consent-gated), without holding the buyer up.
         await Promise.race([
           trackCheckout(checkout.order_id, checkout.amount, currencyRef.current, choice.plan_id ?? "topup"),
           new Promise((r) => setTimeout(r, 800)),
         ]);
-        window.location.assign(checkout.checkout_url);
+        // Open the checkout panel: transaction ID first, then the pay button.
+        const order = await fetchOrder(checkout.order_id);
+        setPanelOrder(order);
+        setOrders((list) => [order, ...list.filter((o) => o.id !== order.id)]);
       } catch (err) {
         setToast({ tone: "error", text: err instanceof Error ? err.message : "Could not start the checkout." });
+      } finally {
         setCheckoutBusy(null);
       }
     },
@@ -223,6 +268,28 @@ export default function PlanPage() {
 
   const buyPlan = useCallback((plan: TokenPlanCard) => void buy("subscription", { plan_id: plan.id }, plan.id), [buy]);
   const buyTopup = useCallback((amount: number) => void buy("topup", { amount }, "topup"), [buy]);
+
+  // --- checkout panel ------------------------------------------------------
+  const panelChanged = useCallback((order: Order) => {
+    setPanelOrder(order);
+    setOrders((list) => list.map((o) => (o.id === order.id ? order : o)));
+  }, []);
+
+  const panelActivated = useCallback(
+    (order: Order) => {
+      setToast({
+        tone: "success",
+        text:
+          (order.kind === "subscription"
+            ? `Payment confirmed. Your ${labelsRef.current[order.plan_id] ?? order.plan_id} plan is active.`
+            : `Payment confirmed. ${formatTokens(order.tokens)} top-up tokens were added.`) + " Opening your workspace…",
+        action: { href: "/app", label: "Start rendering" },
+      });
+      void load();
+      window.setTimeout(() => window.location.assign("/app"), OPEN_WORKSPACE_AFTER_MS + 1500);
+    },
+    [load],
+  );
 
   // --- derived -------------------------------------------------------------
   const quota = sub?.monthly_quota ?? null;
@@ -270,6 +337,11 @@ export default function PlanPage() {
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
               ) : null}
               <span className="min-w-0 flex-1">{toast.text}</span>
+              {toast.action ? (
+                <Link href={toast.action.href} className="btn-primary shrink-0 !px-3 !py-1.5 !text-xs">
+                  {toast.action.label}
+                </Link>
+              ) : null}
               {!waitingOrder ? (
                 <button type="button" className="shrink-0 rounded-md p-0.5 hover:bg-black/5" aria-label="Dismiss" onClick={() => setToast(null)}>
                   <X className="h-4 w-4" aria-hidden />
@@ -456,7 +528,12 @@ export default function PlanPage() {
                       <Receipt className="h-4 w-4 text-meta-500" aria-hidden />
                       <h2 className="text-sm font-semibold tracking-tight text-black">Orders</h2>
                     </div>
-                    <OrderHistory orders={orders} currency={sub.currency} planLabels={planLabels} />
+                    <OrderHistory
+                      orders={orders}
+                      currency={sub.currency}
+                      planLabels={planLabels}
+                      onOpen={setPanelOrder}
+                    />
                   </NeonCard>
 
                   <NeonCard padding="lg" radius="xl">
@@ -515,6 +592,18 @@ export default function PlanPage() {
           )}
         </main>
       </div>
+
+      {panelOrder ? (
+        <CheckoutPanel
+          order={panelOrder}
+          planLabel={planLabels[panelOrder.plan_id] ?? panelOrder.plan_id}
+          currency={sub?.currency ?? "USD"}
+          waiting={waitingOrder === panelOrder.id}
+          onClose={() => setPanelOrder(null)}
+          onChanged={panelChanged}
+          onActivated={panelActivated}
+        />
+      ) : null}
     </>
   );
 }

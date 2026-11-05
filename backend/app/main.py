@@ -96,8 +96,10 @@ app = FastAPI(
         "stagger frame rates, shift audio pitch and strip every provenance tag from the container."
     ),
     lifespan=lifespan,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    # The interactive API docs list every route; only shown when debugging.
+    docs_url="/api/docs" if settings.debug else None,
+    redoc_url=None,
+    openapi_url="/api/openapi.json" if settings.debug else None,
 )
 
 app.include_router(auth_router)
@@ -114,12 +116,77 @@ app.include_router(support_admin_router)
 
 # Credentials must be allowed for the session cookie to reach the API from
 # the browser; with credentials on, the origin list cannot be a wildcard.
+# Calls from a payment provider's server (no browser, no cookie) that must
+# be accepted from any origin.
+_CROSS_SITE_PATHS = ("/api/v1/billing/volet/status", "/api/v1/billing/btcpay/webhook", "/api/v1/billing/r/")
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _host_of(url: str) -> str:
+    host = url.split("://", 1)[-1].split("/", 1)[0].lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _trusted_hosts(request: Request) -> set[str]:
+    hosts = {_host_of(origin) for origin in settings.cors_origins}
+    if settings.public_url.strip():
+        hosts.add(_host_of(settings.public_url))
+    for header in ("x-forwarded-host", "host"):
+        for value in request.headers.getlist(header):
+            for part in value.split(","):
+                if part.strip():
+                    hosts.add(_host_of(part.strip()))
+    return hosts
+
+
+@app.middleware("http")
+async def _security_guard(request: Request, call_next):
+    """Refuse cross-site form posts and add safe headers to every answer.
+
+    A browser always sends Origin on a cross-site POST. If it names another
+    site, the request is forged (CSRF) and refused, whatever the cookie
+    settings. Requests without Origin (servers, curl) are left to the
+    normal sign-in checks.
+    """
+
+    content_type = (request.headers.get("content-type") or "").lower()
+    if not content_type.startswith("multipart/form-data"):
+        raw_length = request.headers.get("content-length")
+        if raw_length is not None:
+            try:
+                too_big = int(raw_length) > settings.max_body_bytes
+            except ValueError:
+                too_big = True
+            if too_big:
+                return JSONResponse(status_code=413, content={"detail": "Request body is too large."})
+
+    if request.method in _UNSAFE_METHODS and not request.url.path.startswith(_CROSS_SITE_PATHS):
+        origin = (request.headers.get("origin") or "").strip()
+        if origin and origin != "null" and _host_of(origin) not in _trusted_hosts(request):
+            logger.warning("refused cross-site %s %s from %s", request.method, request.url.path, origin[:100])
+            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": "Cross-site request refused."})
+        if origin == "null":
+            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content={"detail": "Cross-site request refused."})
+
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    if request.url.path.startswith(("/api/v1/auth", "/api/v1/admin", "/api/v1/billing/verify")):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
+
+if "secret_key" in settings.model_fields_set and settings.weak_secret_key:
+    logger.error("ADCAM_SECRET_KEY is weak: set a long random value (48+ characters) on the api service.")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Requested-With"],
     expose_headers=["Content-Disposition"],
 )
 

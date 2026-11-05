@@ -290,6 +290,28 @@ export interface Order {
   checkout_url: string | null;
   created_at: string;
   paid_at: string | null;
+  /** The transaction ID the buyer copies (BC-XXXX-XXXX). */
+  ref_code: string | null;
+  /** The payment screenshot's review: "" (none), submitted, approved or rejected. */
+  review_status: "" | "submitted" | "approved" | "rejected";
+  review_note: string | null;
+  has_proof: boolean;
+  proof_uploaded_at: string | null;
+}
+
+export type VerifyOutcome =
+  | "activated"
+  | "already_used"
+  | "pending"
+  | "in_review"
+  | "rejected"
+  | "not_paid"
+  | "not_found";
+
+export interface VerifyResult {
+  outcome: VerifyOutcome;
+  message: string;
+  order: Order | null;
 }
 
 export interface Checkout {
@@ -303,6 +325,7 @@ export interface Checkout {
   checkout_url: string;
   amount: number;
   tokens: number;
+  ref_code: string | null;
 }
 
 export interface SubscriptionState {
@@ -349,4 +372,36 @@ export function cancelSubscription() {
 
 export function resumeSubscription() {
   return post<SubscriptionState>("/api/v1/billing/resume");
+}
+
+/** Is the payment behind this transaction ID confirmed? Only the buyer's own orders are searched. */
+export function verifyTransaction(code: string) {
+  return post<VerifyResult>("/api/v1/billing/verify", { code });
+}
+
+/**
+ * Attach a screenshot of the payment to one of the buyer's orders. It is kept
+ * for our team to check; it does not turn the plan on by itself.
+ */
+export async function uploadPaymentProof(orderId: string, file: File, note = ""): Promise<Order> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("note", note);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/v1/billing/orders/${encodeURIComponent(orderId)}/proof`, {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      body: form,
+    });
+  } catch {
+    throw new ApiError("Cannot reach the server. Check your connection.", 0);
+  }
+  if (!response.ok) throw new ApiError(await readDetail(response), response.status);
+  return (await response.json()) as Order;
+}
+
+export function paymentProofUrl(orderId: string): string {
+  return `${API_BASE}/api/v1/billing/orders/${encodeURIComponent(orderId)}/proof`;
 }
