@@ -388,7 +388,9 @@ export default function SupportTab({
                       "w-full rounded-2xl border p-3 text-left transition",
                       active
                         ? "border-meta-500 bg-meta-500/15"
-                        : item.unread_admin > 0
+                        : item.overdue
+                          ? "border-red-500/60 bg-red-500/10 hover:border-red-400"
+                          : item.unread_admin > 0
                           ? "border-amber-400/50 bg-amber-500/10 hover:border-amber-400"
                           : "border-white/10 bg-slate-900/60 hover:border-white/25",
                     )}
@@ -410,7 +412,17 @@ export default function SupportTab({
                     </div>
 
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      <StatusBadge status={item.status} />
+                      <span className="flex items-center gap-1.5">
+                        <StatusBadge status={item.status} />
+                        {item.overdue ? (
+                          <span
+                            className="rounded-md bg-red-500 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase text-white"
+                            title="Waiting 30+ min with no agent reply"
+                          >
+                            Overdue
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="font-mono text-[10px] text-slate-400">
                         {item.bot_attempts} bot tries
                       </span>
