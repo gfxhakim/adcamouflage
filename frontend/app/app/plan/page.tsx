@@ -28,6 +28,7 @@ import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
 import PasswordCard from "@/components/plan/PasswordCard";
+import PaymentProofCard from "@/components/plan/PaymentProofCard";
 import PlanOptions from "@/components/plan/PlanOptions";
 import TokenHero from "@/components/plan/TokenHero";
 import TokenPlanCards from "@/components/plan/TokenPlanCards";
@@ -447,6 +448,19 @@ export default function PlanPage() {
                       <h2 className="text-sm font-semibold tracking-tight text-black">Orders</h2>
                     </div>
                     <OrderHistory orders={orders} currency={sub.currency} planLabels={planLabels} />
+                  </NeonCard>
+
+                  <NeonCard padding="lg" radius="xl">
+                    <div className="mb-4 flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-meta-500" aria-hidden />
+                      <h2 className="text-sm font-semibold tracking-tight text-black">Payment check</h2>
+                    </div>
+                    <PaymentProofCard
+                      orders={orders}
+                      currency={sub.currency}
+                      planLabels={planLabels}
+                      onActivated={() => void load()}
+                    />
                   </NeonCard>
 
                   <NeonCard padding="lg" radius="xl">

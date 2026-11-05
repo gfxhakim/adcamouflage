@@ -36,6 +36,12 @@ const nextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // SAMEORIGIN, not DENY: Admin > Landing / Workspace previews the site in a frame.
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          // Browsers only honour this over HTTPS, so it is harmless on localhost.
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+          { key: "Permissions-Policy", value: "camera=(), geolocation=(), payment=(), usb=()" },
+          // Narrow on purpose: blocks other sites framing pages, <base> hijacks
+          // and plugins, without breaking the intro script, fonts or the Volet form.
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
         ],
       },
     ];

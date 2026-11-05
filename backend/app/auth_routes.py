@@ -28,6 +28,7 @@ from .accounts import (
     verify_password,
 )
 from .activity import log_activity
+from .hardening import RateLimiter, client_ip, rate_limit
 from .app_settings import announcement, registration_open
 from .db import BatchRecord, User, get_db
 from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
@@ -78,11 +79,16 @@ class _AttemptLimiter:
 
 
 login_limiter = _AttemptLimiter()
+# Wider nets on top of the per-address-and-email limiter above: failures for
+# one account from any address (password spraying across many IPs), and
+# failures from one address across many accounts (credential stuffing).
+account_failures = RateLimiter("login-account", limit=20, window_seconds=900)
+address_failures = RateLimiter("login-address", limit=40, window_seconds=900)
+SIGN_IN_WAIT = "Too many sign-in attempts. Wait a few minutes and try again."
 
 
 def _client_key(request: Request, email: str) -> str:
-    client = request.client.host if request.client else "unknown"
-    return f"{client}:{email}"
+    return f"{client_ip(request)}:{email}"
 
 
 # --------------------------------------------------------------------------
@@ -159,7 +165,12 @@ class BatchSummary(BaseModel):
 # --------------------------------------------------------------------------
 
 
-@router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserProfile,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("register", limit=10, window_seconds=3600))],
+)
 def register(payload: RegisterRequest, response: Response, db: Session = Depends(get_db)) -> UserProfile:
     if not registration_open(db):
         raise HTTPException(
@@ -205,6 +216,9 @@ def login(
     email = (payload.email or "").strip().lower()
     key = _client_key(request, email)
     login_limiter.check(key)
+    address = client_ip(request)
+    if account_failures.blocked(email) or address_failures.blocked(address):
+        raise AuthError(SIGN_IN_WAIT, status.HTTP_429_TOO_MANY_REQUESTS)
 
     user = get_user_by_email(db, email)
     # Always run a hash comparison so a missing account and a wrong password
@@ -214,6 +228,8 @@ def login(
 
     if user is None or not password_ok or not user.is_active:
         login_limiter.record_failure(key)
+        account_failures.hit(email)
+        address_failures.hit(address)
         raise AuthError("That email and password do not match.")
 
     login_limiter.clear(key)
@@ -238,7 +254,11 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)) -> Use
     return UserProfile.of(user, db)
 
 
-@router.post("/password", response_model=UserProfile)
+@router.post(
+    "/password",
+    response_model=UserProfile,
+    dependencies=[Depends(rate_limit("password-change", limit=10, window_seconds=900))],
+)
 def change_password(
     payload: PasswordChange,
     response: Response,

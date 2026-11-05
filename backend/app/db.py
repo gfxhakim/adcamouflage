@@ -292,6 +292,37 @@ class SupportMessage(Base):
 
 
 
+class PaymentProof(Base):
+    """A customer's "I paid" claim: the order, the provider's transaction id and a screenshot.
+
+    Never activates anything by itself. If the order is already confirmed
+    paid by the provider it is marked ``matched``; otherwise it waits as
+    ``pending`` until an admin approves (which settles the order through
+    ``settle_order``, exactly once) or rejects it.
+    """
+
+    __tablename__ = "payment_proofs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    order_id: Mapped[str] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    transaction_id: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    screenshot_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # 'pending' | 'matched' | 'approved' | 'rejected'
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    admin_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    reviewed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+
+
 _engine: Engine | None = None
 _SessionFactory: sessionmaker[Session] | None = None
 

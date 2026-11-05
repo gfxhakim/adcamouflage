@@ -21,6 +21,8 @@ os.environ.setdefault("ADCAM_INLINE_WORKER", "1")
 os.environ.setdefault("ADCAM_REDIS_URL", "redis://127.0.0.1:6399/15")
 os.environ.setdefault("ADCAM_SECRET_KEY", "test-secret-key-for-signing-only")
 os.environ.setdefault("ADCAM_INLINE_WORKER_CONCURRENCY", "2")
+# Tests sign up many users from one address; tests/test_hardening.py turns the limits on.
+os.environ.setdefault("ADCAM_RATE_LIMITS_ENABLED", "0")
 # Pipeline tests run many batches as one user; quota tests opt into limits.
 os.environ.setdefault("ADCAM_DEFAULT_PLAN", "unlimited")
 
