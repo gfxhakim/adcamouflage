@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "Is AdCamouflage a video editor like CapCut or Premiere?",
-    a: "No. Video editors are built for humans to cut clips and add captions. AdCamouflage is an automated binary and structural sanitization engine. You upload your finished ad creative, and our engine alters its internal file fingerprint, pixel matrix, and audio frequencies so ad algorithms treat it as a brand-new, never-before-seen asset.",
+    q: "Is BluCloacking a video editor like CapCut or Premiere?",
+    a: "No. Video editors are built for humans to cut clips and add captions. BluCloacking is an automated binary and structural sanitization engine. You upload your finished ad creative, and our engine alters its internal file fingerprint, pixel matrix, and audio frequencies so ad algorithms treat it as a brand-new, never-before-seen asset.",
     tag: "Engine",
   },
   {
@@ -27,11 +27,11 @@ const FAQS = [
   },
   {
     q: "Why is simply removing metadata not enough anymore?",
-    a: "Ad platforms stopped relying solely on basic file metadata years ago. Today, automated review bots generate perceptual hashes of your video frames and run AI speech-to-text on your audio track. If you only strip metadata, the algorithm still recognizes the visual and audio signature in seconds. AdCamouflage modifies all three layers: metadata, optical pixels, and audio frequencies.",
+    a: "Ad platforms stopped relying solely on basic file metadata years ago. Today, automated review bots generate perceptual hashes of your video frames and run AI speech-to-text on your audio track. If you only strip metadata, the algorithm still recognizes the visual and audio signature in seconds. BluCloacking modifies all three layers: metadata, optical pixels, and audio frequencies.",
     tag: "Security",
   },
   {
-    q: "Which ad platforms does AdCamouflage work for?",
+    q: "Which ad platforms does BluCloacking work for?",
     a: "Our presets are engineered specifically for Meta Ads (Facebook & Instagram), TikTok Ads, and Google/YouTube Ads—supporting both vertical short-form videos and static image formats.",
     tag: "Platforms",
   },
