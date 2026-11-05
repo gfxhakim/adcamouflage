@@ -31,12 +31,12 @@ export function StatTile({
         >
           <Icon className="h-5 w-5" aria-hidden />
         </span>
-        <div className="min-w-0">
-          <p className="label">{label}</p>
+        <div className="min-w-0 flex-1">
+          <p className="label break-words [overflow-wrap:anywhere]">{label}</p>
           <p className="mt-1 truncate text-xl font-semibold sm:text-2xl tracking-tight text-black dark:text-slate-100">
             {value}
           </p>
-          {hint ? <p className="mt-0.5 truncate text-xs text-ink-subtle dark:text-slate-400">{hint}</p> : null}
+          {hint ? <p className="mt-0.5 line-clamp-2 break-words text-xs text-ink-subtle dark:text-slate-400">{hint}</p> : null}
         </div>
       </div>
     </NeonCard>

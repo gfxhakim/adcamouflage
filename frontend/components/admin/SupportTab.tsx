@@ -58,7 +58,7 @@ const STATUS_FILTERS: { id: string; label: string }[] = [
 function StatusBadge({ status }: { status: SupportThreadStatus }) {
   if (status === "escalated") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
+      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
         <Clock className="h-3 w-3" aria-hidden />
         Escalated · ≤30m
       </span>
@@ -66,7 +66,7 @@ function StatusBadge({ status }: { status: SupportThreadStatus }) {
   }
   if (status === "agent_active") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
+      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
         <Headset className="h-3 w-3" aria-hidden />
         Agent Active
       </span>
@@ -74,14 +74,14 @@ function StatusBadge({ status }: { status: SupportThreadStatus }) {
   }
   if (status === "resolved") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-slate-500/40 bg-slate-500/15 px-2 py-0.5 font-mono text-[10px] text-slate-300">
+      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-slate-500/40 bg-slate-500/15 px-2 py-0.5 font-mono text-[10px] text-slate-300">
         <CheckCircle2 className="h-3 w-3" aria-hidden />
         Resolved
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-meta-400/40 bg-meta-500/15 px-2 py-0.5 font-mono text-[10px] text-meta-300">
+    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-meta-400/40 bg-meta-500/15 px-2 py-0.5 font-mono text-[10px] text-meta-300">
       <Bot className="h-3 w-3" aria-hidden />
       Bot ({status})
     </span>
@@ -317,9 +317,15 @@ export default function SupportTab({
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
-        {/* Left column: Threads list */}
-        <NeonCard padding="md" radius="xl" className="flex h-[74vh] flex-col">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,280px)_minmax(0,1fr)_minmax(0,300px)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]">
+        {/* Left column: Threads list. The card has a fixed height and only the
+            ticket list inside it scrolls, so tickets never spill out below. */}
+        <NeonCard
+          padding="md"
+          radius="xl"
+          className="flex h-[min(60vh,560px)] min-h-[360px] flex-col overflow-hidden lg:h-[74vh] lg:max-h-[860px]"
+          innerClassName="flex min-h-0 flex-1 flex-col"
+        >
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="font-display text-base font-medium text-slate-100">
               Support Queue ({threads.length})
@@ -366,7 +372,7 @@ export default function SupportTab({
             ))}
           </div>
 
-          <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
             {loadingList && threads.length === 0 ? (
               <div className="flex h-32 items-center justify-center text-xs text-slate-400">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
@@ -412,7 +418,7 @@ export default function SupportTab({
                     </div>
 
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                         <StatusBadge status={item.status} />
                         {item.overdue ? (
                           <span
@@ -423,13 +429,13 @@ export default function SupportTab({
                           </span>
                         ) : null}
                       </span>
-                      <span className="font-mono text-[10px] text-slate-400">
+                      <span className="shrink-0 font-mono text-[10px] text-slate-400">
                         {item.bot_attempts} bot tries
                       </span>
                     </div>
 
                     {item.last_message_preview ? (
-                      <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-300">
+                      <p className="mt-2 line-clamp-2 break-words text-[11px] leading-relaxed text-slate-300 [overflow-wrap:anywhere]">
                         {item.last_message_preview}
                       </p>
                     ) : null}
@@ -440,8 +446,14 @@ export default function SupportTab({
           </div>
         </NeonCard>
 
-        {/* Center column: Live Two-Way Multimedia Conversation */}
-        <NeonCard padding="md" radius="xl" className="flex h-[74vh] flex-col">
+        {/* Center column: Live Two-Way Multimedia Conversation. Only the
+            message stream scrolls; header and reply box stay inside the card. */}
+        <NeonCard
+          padding="md"
+          radius="xl"
+          className="flex h-[78vh] min-h-[440px] flex-col overflow-hidden lg:h-[74vh] lg:max-h-[860px]"
+          innerClassName="flex min-h-0 flex-1 flex-col"
+        >
           {!detail || !thread || !customer ? (
             <div className="flex flex-1 flex-col items-center justify-center text-center text-xs text-slate-400">
               {loadingDetail ? (
@@ -460,21 +472,21 @@ export default function SupportTab({
             <>
               {/* Conversation Header */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate font-display text-lg font-medium text-white">
+                <div className="min-w-0 flex-1 basis-64">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h2 className="min-w-0 truncate font-display text-lg font-medium text-white">
                       Ticket #{thread.id} · {customer.display_name || customer.email}
                     </h2>
                     <StatusBadge status={thread.status} />
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-400">
+                  <p className="mt-0.5 break-words text-xs text-slate-400">
                     {thread.escalated_at
                       ? `Escalated at ${new Date(thread.escalated_at).toLocaleString()} · Promised reply window: ≤30min Max`
                       : `Currently in Bot mode (${thread.bot_attempts}/${thread.max_attempts} attempts used)`}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                   {thread.status !== "resolved" ? (
                     <button
                       type="button"
@@ -504,7 +516,7 @@ export default function SupportTab({
               </div>
 
               {/* Messages Stream */}
-              <div className="flex-1 space-y-3.5 overflow-y-auto py-4 pr-1">
+              <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain py-4 pr-1">
                 {thread.messages.map((msg) => {
                   const isAgent = msg.sender_role === "agent";
                   const isUser = msg.sender_role === "user";
@@ -518,7 +530,7 @@ export default function SupportTab({
                         isAgent ? "items-end" : "items-start",
                       )}
                     >
-                      <div className="flex items-center gap-1.5 px-1 font-mono text-[10px] text-slate-400">
+                      <div className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 font-mono text-[10px] text-slate-400">
                         {isAgent ? (
                           <>
                             <span className="font-semibold text-emerald-400">
@@ -529,7 +541,7 @@ export default function SupportTab({
                         ) : isUser ? (
                           <>
                             <UserIcon className="h-3 w-3 text-amber-400" aria-hidden />
-                            <span className="font-semibold text-amber-300">
+                            <span className="min-w-0 break-all font-semibold text-amber-300">
                               Customer ({customer.email})
                             </span>
                           </>
@@ -544,7 +556,7 @@ export default function SupportTab({
 
                       <div
                         className={clsx(
-                          "max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed",
+                          "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-2.5 text-xs leading-relaxed [overflow-wrap:anywhere] sm:max-w-[85%]",
                           isAgent
                             ? "rounded-br-sm bg-emerald-600 text-white"
                             : isUser
@@ -605,7 +617,7 @@ export default function SupportTab({
                     ) : (
                       <ImageIcon className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
                     )}
-                    <span className="truncate font-mono text-[11px]">{attachment.name}</span>
+                    <span className="min-w-0 truncate font-mono text-[11px]">{attachment.name}</span>
                     <span className="shrink-0 font-mono text-[10px] text-slate-400">
                       ({formatBytes(attachment.size)})
                     </span>
@@ -634,7 +646,9 @@ export default function SupportTab({
                   }}
                 />
 
-                <div className="flex items-end gap-2">
+                {/* Phones: the text box takes its own full-width row above the
+                    buttons, so it never gets squeezed to a sliver. */}
+                <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
@@ -694,14 +708,14 @@ export default function SupportTab({
                       }
                     }}
                     placeholder="Reply as Live Agent (Enter to send, Shift+Enter for newline, or paste a screenshot with Ctrl+V)…"
-                    className="max-h-28 flex-1 resize-none rounded-xl border border-white/15 bg-slate-900/80 px-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
+                    className="order-first max-h-28 min-w-0 basis-full resize-none rounded-xl sm:order-none sm:flex-1 sm:basis-auto border border-white/15 bg-slate-900/80 px-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
                   />
 
                   <button
                     type="button"
                     disabled={sending || uploading || (!draft.trim() && !attachment)}
                     onClick={() => void handleSendReply()}
-                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white shadow transition hover:bg-emerald-500 disabled:opacity-40"
+                    className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 sm:ml-0 px-4 text-xs font-semibold text-white shadow transition hover:bg-emerald-500 disabled:opacity-40"
                   >
                     {sending ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -717,20 +731,25 @@ export default function SupportTab({
         </NeonCard>
 
         {/* Right column: Customer Full Dossier & Issues Reported to Bot */}
-        <NeonCard padding="md" radius="xl" className="flex h-[74vh] flex-col overflow-y-auto">
+        <NeonCard
+          padding="md"
+          radius="xl"
+          className="flex min-w-0 flex-col lg:col-span-2 xl:col-span-1 xl:h-[74vh] xl:max-h-[860px] xl:overflow-y-auto"
+          innerClassName="flex min-h-0 flex-1 flex-col"
+        >
           {!customer || !thread ? (
             <div className="flex flex-1 items-center justify-center text-center text-xs text-slate-400">
               Customer details &amp; reported issues will appear here when a ticket is selected.
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
               {/* Highlighted Issues Reported to Bot */}
               <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3.5">
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-300">
                   <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
                   Issues Reported to Bot
                 </div>
-                <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-amber-100/90">
+                <p className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-amber-100/90 [overflow-wrap:anywhere]">
                   {thread.issue_summary || "No summary recorded yet."}
                 </p>
               </div>
@@ -739,7 +758,7 @@ export default function SupportTab({
               <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-3.5">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white">
+                    <p className="truncate text-xs font-semibold text-white">
                       {customer.display_name || "No display name"}
                     </p>
                     <p className="truncate font-mono text-[11px] text-slate-400">
@@ -756,7 +775,7 @@ export default function SupportTab({
                   </button>
                 </div>
 
-                <dl className="grid grid-cols-2 gap-2.5 border-t border-white/10 pt-3 text-xs">
+                <dl className="grid grid-cols-1 gap-2.5 min-[300px]:grid-cols-2 border-t border-white/10 pt-3 text-xs">
                   <div className="rounded-xl bg-white/[0.03] p-2.5">
                     <dt className="font-mono text-[10px] uppercase text-slate-400">Plan &amp; Mode</dt>
                     <dd className="mt-0.5 font-semibold text-slate-100">
@@ -800,32 +819,33 @@ export default function SupportTab({
                 </dl>
 
                 <div className="mt-3 space-y-1.5 border-t border-white/10 pt-3 font-mono text-[11px] text-slate-400">
-                  <div className="flex justify-between">
-                    <span>Email:</span>
+                  <div className="flex min-w-0 justify-between gap-3">
+                    <span className="shrink-0">Email:</span>
                     <a
                       href={`mailto:${customer.email}`}
-                      className="inline-flex items-center gap-1 text-meta-300 hover:underline"
+                      title={customer.email}
+                      className="inline-flex min-w-0 items-center gap-1 text-meta-300 hover:underline"
                     >
-                      <Mail className="h-3 w-3" aria-hidden />
-                      {customer.email}
+                      <Mail className="h-3 w-3 shrink-0" aria-hidden />
+                      <span className="truncate">{customer.email}</span>
                     </a>
                   </div>
                   {customer.sub_period_end ? (
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-x-3">
                       <span>Period Ends:</span>
                       <span className="text-slate-200">
                         {new Date(customer.sub_period_end).toLocaleDateString()}
                       </span>
                     </div>
                   ) : null}
-                  <div className="flex justify-between">
+                  <div className="flex flex-wrap justify-between gap-x-3">
                     <span>Joined:</span>
                     <span className="text-slate-200">
                       {new Date(customer.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   {customer.last_seen_at ? (
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-x-3">
                       <span>Last Seen:</span>
                       <span className="text-slate-200">
                         {new Date(customer.last_seen_at).toLocaleString()}
@@ -842,7 +862,7 @@ export default function SupportTab({
                     <FileText className="h-3.5 w-3.5 text-slate-400" aria-hidden />
                     Admin Notes on Customer
                   </div>
-                  <p className="whitespace-pre-wrap text-xs text-slate-300">
+                  <p className="whitespace-pre-wrap break-words text-xs text-slate-300 [overflow-wrap:anywhere]">
                     {customer.admin_notes}
                   </p>
                 </div>
