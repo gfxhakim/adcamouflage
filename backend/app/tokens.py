@@ -49,6 +49,7 @@ TOKENS = "tokens"
 PLAN_SETTING = "token_plans"
 TOPUP_SETTING = "token_topups"
 RULES_SETTING = "billing_rules"
+PROMO_SETTING = "price_promo"
 
 
 # --------------------------------------------------------------------------
@@ -66,6 +67,12 @@ class TokenPlan:
     rollover_months: int  # the cap is rollover_months x tokens
     topup_rate: int  # tokens per 1 USD on a top-up
     seats: int = 1  # people who can sign in and share this plan's tokens, owner included
+    # Limited-time offer (see ``get_price_promo``). ``price`` is always what a
+    # checkout bills right now; ``launch_price`` is the price the admin typed,
+    # and ``regular_price``/``offer_ends_at`` are set only while the offer runs.
+    launch_price: float | None = None
+    regular_price: float | None = None
+    offer_ends_at: datetime | None = None
 
     @property
     def generations(self) -> int:
@@ -92,6 +99,9 @@ class TokenPlan:
             "rollover_cap": self.rollover_cap,
             "topup_rate": self.topup_rate,
             "seats": self.seats,
+            "launch_price": self.price if self.launch_price is None else self.launch_price,
+            "regular_price": self.regular_price,
+            "offer_ends_at": self.offer_ends_at.isoformat() if self.offer_ends_at else None,
         }
 
 
@@ -118,11 +128,83 @@ DEFAULT_TOPUPS: dict[str, Any] = {
 
 DEFAULT_RULES: dict[str, int] = {"grace_days": 7, "period_days": 30}
 
+# The launch offer: each plan's price (above, or as edited in the admin panel)
+# is a launch price until ``ends_at``; from then on checkouts bill the regular
+# price below. Plans whose regular price is not above the launch price are not
+# on offer. Admin > Token plans edits all of it (``price_promo`` setting).
+DEFAULT_PROMO: dict[str, Any] = {
+    "enabled": True,
+    "ends_at": "2026-11-08T23:59:59+00:00",
+    "regular": {"starter": 59.0, "pro": 129.0, "max": 199.0},
+}
 
-def get_token_plans(db: Session) -> dict[str, TokenPlan]:
-    """The three plans with any admin edits applied."""
+
+def _parse_when(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        when = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            when = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+
+
+def get_price_promo(db: Session) -> dict[str, Any]:
+    """The limited-time offer as stored, with defaults filled in."""
+
+    stored = get_setting(db, PROMO_SETTING, None) or {}
+    regular_in = {**DEFAULT_PROMO["regular"], **(stored.get("regular") or {})}
+    ends_at = _parse_when(stored.get("ends_at", DEFAULT_PROMO["ends_at"]))
+    return {
+        "enabled": bool(stored.get("enabled", DEFAULT_PROMO["enabled"])) and ends_at is not None,
+        "ends_at": ends_at,
+        "regular": {plan_id: round(float(regular_in.get(plan_id) or 0), 2) for plan_id in PLAN_IDS},
+    }
+
+
+def save_price_promo(db: Session, promo: dict[str, Any]) -> None:
+    current = get_price_promo(db)
+    merged = {**current, **promo, "regular": {**current["regular"], **(promo.get("regular") or {})}}
+    ends_at = merged["ends_at"]
+    set_setting(
+        db,
+        PROMO_SETTING,
+        {
+            "enabled": bool(merged["enabled"]),
+            "ends_at": ends_at.isoformat() if isinstance(ends_at, datetime) else ends_at,
+            "regular": merged["regular"],
+        },
+    )
+
+
+def promo_public(db: Session, now: datetime | None = None) -> dict[str, Any]:
+    """What the pricing page needs: whether the offer runs and when it ends."""
+
+    promo = get_price_promo(db)
+    now = now or _now()
+    active = promo["enabled"] and now < promo["ends_at"]
+    return {
+        "enabled": promo["enabled"],
+        "active": active,
+        "ends_at": promo["ends_at"].isoformat() if promo["ends_at"] else None,
+        "server_time": now.isoformat(),
+        "regular": promo["regular"],
+    }
+
+
+def get_token_plans(db: Session, now: datetime | None = None) -> dict[str, TokenPlan]:
+    """The three plans with any admin edits and the launch offer applied.
+
+    ``price`` is what a checkout bills at ``now``: the launch price while the
+    offer runs, the regular price once it has ended.
+    """
 
     overrides = get_setting(db, PLAN_SETTING, {}) or {}
+    promo = get_price_promo(db)
+    now = now or _now()
     plans: dict[str, TokenPlan] = {}
     for plan_id, base in DEFAULT_PLANS.items():
         edit = overrides.get(plan_id) or {}
@@ -136,6 +218,15 @@ def get_token_plans(db: Session) -> dict[str, TokenPlan]:
             topup_rate=int(edit.get("topup_rate", base.topup_rate)),
             seats=max(1, int(edit.get("seats", base.seats))),
         )
+        plan = plans[plan_id]
+        regular = promo["regular"].get(plan_id) or 0
+        if promo["enabled"] and regular > plan.price:
+            if now < promo["ends_at"]:
+                plans[plan_id] = replace(
+                    plan, launch_price=plan.price, regular_price=regular, offer_ends_at=promo["ends_at"]
+                )
+            else:
+                plans[plan_id] = replace(plan, launch_price=plan.price, price=regular)
     return plans
 
 

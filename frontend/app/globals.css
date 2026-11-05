@@ -755,3 +755,51 @@ html[data-deck-theme="light"] .deck:not(.deck-fixed) {
   background-size: 100% 100%, 54px 54px, 54px 54px;
   background-attachment: fixed;
 }
+
+/* Limited-time offer countdown (components/landing/OfferCountdown.tsx) ----- */
+.offer-glow {
+  background: linear-gradient(110deg, #0866ff, #66a3ff 25%, #fcd34d 50%, #66a3ff 75%, #0866ff);
+  background-size: 300% 100%;
+  animation: offer-border 6s linear infinite;
+  box-shadow:
+    0 0 0 1px rgb(8 102 255 / 0.25),
+    0 0 40px -6px rgb(8 102 255 / 0.65),
+    0 0 90px -30px rgb(252 211 77 / 0.45);
+}
+
+.offer-shine {
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.14) 45%, rgb(255 255 255 / 0.22) 50%, transparent);
+  animation: offer-shine 3.6s ease-in-out infinite;
+}
+
+.offer-text {
+  background-image: linear-gradient(100deg, #fcd34d, #fff7d6 50%, #fcd34d);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: offer-border 3s linear infinite;
+}
+
+.offer-tile {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 0 22px -8px rgb(102 163 255 / 0.8);
+  text-shadow: 0 0 14px rgb(102 163 255 / 0.65);
+}
+
+@keyframes offer-border {
+  to {
+    background-position: -300% 0;
+  }
+}
+
+@keyframes offer-shine {
+  0% {
+    transform: translateX(0) skewX(-12deg);
+  }
+  60%,
+  100% {
+    transform: translateX(450%) skewX(-12deg);
+  }
+}

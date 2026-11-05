@@ -1,5 +1,5 @@
 import { API_BASE, ApiError } from "./api";
-import type { BillingMode, BillingRules, PaymentProviderId, TokenPlanCard, TopupTable } from "./types";
+import type { BillingMode, BillingRules, PaymentProviderId, PricePromo, TokenPlanCard, TopupTable } from "./types";
 
 export interface PlanInfo {
   id: string;
@@ -238,6 +238,16 @@ export interface BillingConfig {
   plans: Record<string, TokenPlanCard>;
   topups: TopupTable;
   rules: BillingRules;
+  promo?: PricePromo;
+}
+
+/** The limited-time offer as the admin saves it. */
+export interface PromoEdit {
+  enabled: boolean;
+  /** ISO time; read as UTC when it has no offset. */
+  ends_at: string;
+  /** plan id → regular price billed once the offer ends */
+  regular: Record<string, number>;
 }
 
 /** The editable part of one token plan (id, generations and prices per generation are derived). */
@@ -255,6 +265,7 @@ export interface TokenPlanEdit {
 /** Only the parts that are sent are changed. */
 export interface BillingConfigUpdate {
   plans?: Record<string, TokenPlanEdit>;
+  promo?: PromoEdit;
   topups?: TopupTable;
   rules?: BillingRules;
 }

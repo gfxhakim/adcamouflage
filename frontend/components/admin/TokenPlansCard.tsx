@@ -8,6 +8,7 @@ import {
   getBillingConfig,
   updateBillingConfig,
   type BillingConfig,
+  type PromoEdit,
   type TokenPlanEdit,
 } from "@/lib/admin";
 import { formatMoney } from "@/lib/format";
@@ -35,10 +36,23 @@ interface Draft {
   bonus: Record<string, Record<string, string>>;
   grace_days: string;
   period_days: string;
+  offer: {
+    enabled: boolean;
+    /** "YYYY-MM-DDTHH:MM" in UTC, as the datetime field types it */
+    ends_at: string;
+    /** plan id → regular price as typed */
+    regular: Record<string, string>;
+  };
+}
+
+/** ISO → the UTC "YYYY-MM-DDTHH:MM" a datetime-local field shows. */
+function utcField(iso: string | null | undefined): string {
+  const when = iso ? new Date(iso) : null;
+  return when && !Number.isNaN(when.getTime()) ? when.toISOString().slice(0, 16) : "";
 }
 
 const PLAN_FIELDS: { key: keyof Omit<PlanDraft, "label">; label: string; step?: string; hint: string }[] = [
-  { key: "price", label: "Price", step: "0.01", hint: "per 30-day period" },
+  { key: "price", label: "Price", step: "0.01", hint: "per 30-day period (the launch price while an offer runs)" },
   { key: "tokens", label: "Tokens", hint: "granted each period" },
   { key: "tokens_per_generation", label: "Per generation", hint: "tokens one output costs" },
   { key: "rollover_months", label: "Rollover", hint: "periods of tokens kept (0–12)" },
@@ -54,7 +68,7 @@ function draftOf(config: BillingConfig): Draft {
         id,
         {
           label: plan.label,
-          price: String(plan.price),
+          price: String(plan.launch_price ?? plan.price),
           tokens: String(plan.tokens),
           tokens_per_generation: String(plan.tokens_per_generation),
           rollover_months: String(plan.rollover_months),
@@ -72,6 +86,13 @@ function draftOf(config: BillingConfig): Draft {
     ),
     grace_days: String(config.rules.grace_days),
     period_days: String(config.rules.period_days),
+    offer: {
+      enabled: config.promo?.enabled ?? false,
+      ends_at: utcField(config.promo?.ends_at),
+      regular: Object.fromEntries(
+        Object.keys(config.plans).map((id) => [id, String(config.promo?.regular?.[id] ?? "")]),
+      ),
+    },
   };
 }
 
@@ -159,12 +180,24 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
     const period_days = Number.parseInt(draft.period_days, 10);
     if (Number.isNaN(grace_days) || grace_days < 0) return setError("Grace days must be 0 or more.");
     if (!(period_days > 0)) return setError("A period must be at least 1 day.");
+    let promo: PromoEdit | undefined;
+    if (config.promo) {
+      const regular: Record<string, number> = {};
+      for (const [id, typed] of Object.entries(draft.offer.regular)) {
+        const value = Number.parseFloat(typed);
+        if (typed.trim() === "") continue;
+        if (Number.isNaN(value) || value < 0) return setError(`${plans[id]?.label ?? id}: enter a regular price of 0 or more.`);
+        regular[id] = value;
+      }
+      if (!draft.offer.ends_at) return setError("Pick when the limited-time offer ends.");
+      promo = { enabled: draft.offer.enabled, ends_at: `${draft.offer.ends_at}:00Z`, regular };
+    }
 
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const saved = await updateBillingConfig({ plans, topups: { amounts, bonus }, rules: { grace_days, period_days } });
+      const saved = await updateBillingConfig({ plans, promo, topups: { amounts, bonus }, rules: { grace_days, period_days } });
       setConfig(saved);
       setDraft(draftOf(saved));
       setNotice("Token plans saved. New purchases use the new prices; running periods are unchanged.");
@@ -241,6 +274,73 @@ export function TokenPlansCard({ onSaved }: TokenPlansCardProps) {
           );
         })}
       </div>
+
+      {/* Limited-time offer -------------------------------------------------- */}
+      {config.promo ? (
+        <div className="mt-5 rounded-xl border border-amber-300/60 bg-amber-50/40 p-3 dark:border-amber-400/30 dark:bg-amber-400/[0.06]">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-black dark:text-slate-100">Limited-time offer</h3>
+            <span
+              className={
+                config.promo.active
+                  ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  : "rounded-full bg-black/[0.05] px-2 py-0.5 text-[11px] font-semibold text-ink-faint dark:bg-white/10 dark:text-slate-400"
+              }
+            >
+              {config.promo.active ? "Running now" : config.promo.enabled ? "Ended: regular prices apply" : "Off"}
+            </span>
+          </div>
+          <p className="mb-3 mt-1 text-xs text-ink-faint dark:text-slate-500">
+            While it runs, the prices above are launch prices: the landing shows the regular price crossed out and a
+            countdown, and checkouts bill the launch price. When the countdown reaches zero, the landing and checkout
+            both switch to the regular price. Paid periods are never changed.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,16rem)] sm:items-end">
+            <label className="flex items-center gap-2 text-sm text-black dark:text-slate-100">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-meta-500"
+                checked={draft.offer.enabled}
+                onChange={(e) => setDraft({ ...draft, offer: { ...draft.offer, enabled: e.target.checked } })}
+              />
+              Offer on
+            </label>
+            <label className="block">
+              <span className="label">Ends (UTC)</span>
+              <input
+                className="field mt-1"
+                type="datetime-local"
+                value={draft.offer.ends_at}
+                onChange={(e) => setDraft({ ...draft, offer: { ...draft.offer, ends_at: e.target.value } })}
+              />
+            </label>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {Object.entries(draft.plans).map(([id, plan]) => (
+              <label key={id} className="block">
+                <span className="label">{plan.label || id}: regular price</span>
+                <input
+                  className="field mt-1"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={draft.offer.regular[id] ?? ""}
+                  onChange={(e) =>
+                    setDraft({ ...draft, offer: { ...draft.offer, regular: { ...draft.offer.regular, [id]: e.target.value } } })
+                  }
+                />
+                <span className="mt-0.5 block text-[11px] text-ink-faint dark:text-slate-500">
+                  Launch price {formatMoney(Number.parseFloat(plan.price) || 0, currency)}
+                  {(Number.parseFloat(draft.offer.regular[id] ?? "") || 0) <= (Number.parseFloat(plan.price) || 0)
+                    ? " · not above it, so no offer on this plan"
+                    : ""}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Top-ups ------------------------------------------------------------ */}
       <div className="mt-5 rounded-xl border border-black/[0.08] dark:border-white/10 p-3">
