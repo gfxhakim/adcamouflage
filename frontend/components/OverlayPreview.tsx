@@ -10,13 +10,31 @@ import type { OverlayLayer, OverlayPosition, OverlaySettings } from "@/lib/types
 interface OverlayPreviewProps {
   layers: OverlayLayer[];
   onChange: (layers: OverlayLayer[]) => void;
-  /** First queued video; the preview falls back to a placeholder frame. */
-  video: File | null;
+  /** Queued videos; the preview shows one at its real shape, or a placeholder frame. */
+  videos: File[];
   disabled?: boolean;
 }
 
-// Placeholder canvas size when no video is queued (1080p landscape).
-const PLACEHOLDER = { width: 1920, height: 1080 };
+// Placeholder frames when no video is queued, one per common ad shape.
+const PLACEHOLDERS = [
+  { id: "16:9", width: 1920, height: 1080 },
+  { id: "9:16", width: 1080, height: 1920 },
+  { id: "1:1", width: 1080, height: 1080 },
+  { id: "4:5", width: 1080, height: 1350 },
+] as const;
+const PLACEHOLDER = PLACEHOLDERS[0];
+// Tallest the preview frame gets; a portrait clip shrinks its width to fit.
+const STAGE_MAX_HEIGHT_REM = 26;
+
+function ratioLabel(width: number, height: number): string {
+  const known: [number, string][] = [
+    [16 / 9, "16:9"], [9 / 16, "9:16"], [1, "1:1"], [4 / 5, "4:5"], [5 / 4, "5:4"],
+    [4 / 3, "4:3"], [3 / 4, "3:4"], [21 / 9, "21:9"], [2 / 3, "2:3"], [3 / 2, "3:2"],
+  ];
+  const ratio = width / height;
+  const hit = known.find(([value]) => Math.abs(value - ratio) < 0.02);
+  return hit ? hit[1] : `${(ratio).toFixed(2)}:1`;
+}
 const FPS_CHOICES = [24, 25, 30, 50, 60];
 const COMMON_FPS = [23.976, 24, 25, 29.97, 30, 48, 50, 59.94, 60];
 const STRIP_FRAMES = 40;
@@ -73,11 +91,17 @@ function snapFps(raw: number): number {
   return Math.abs(nearest - raw) < 0.4 ? nearest : Math.round(raw * 100) / 100;
 }
 
-export function OverlayPreview({ layers, onChange, video, disabled = false }: OverlayPreviewProps) {
+export function OverlayPreview({ layers, onChange, videos, disabled = false }: OverlayPreviewProps) {
+  const [videoIndex, setVideoIndex] = useState(0);
+  const [placeholder, setPlaceholder] = useState<(typeof PLACEHOLDERS)[number]>(PLACEHOLDER);
+  const video = videos[Math.min(videoIndex, videos.length - 1)] ?? null;
+  useEffect(() => {
+    if (videoIndex >= videos.length) setVideoIndex(0);
+  }, [videoIndex, videos.length]);
   const active = useMemo(() => layers.filter((layer) => layer.image), [layers]);
 
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
-  const [dims, setDims] = useState(PLACEHOLDER);
+  const [dims, setDims] = useState<{ width: number; height: number }>(PLACEHOLDER);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [aspects, setAspects] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<string | null>(null);
@@ -98,16 +122,19 @@ export function OverlayPreview({ layers, onChange, video, disabled = false }: Ov
 
   // --- sources -------------------------------------------------------------
   useEffect(() => {
+    stop();
+    setFrame(0);
+    setDetectedFps(null);
     if (!video) {
       setVideoSrc(null);
-      setDims(PLACEHOLDER);
-      setDetectedFps(null);
+      setDims({ width: placeholder.width, height: placeholder.height });
       return;
     }
     const url = URL.createObjectURL(video);
     setVideoSrc(url);
     return () => URL.revokeObjectURL(url);
-  }, [video]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video, placeholder]);
 
   const imageKey = active.map((layer) => `${layer.id}:${layer.image?.name}:${layer.image?.size}`).join("|");
   useEffect(() => {
@@ -273,10 +300,59 @@ export function OverlayPreview({ layers, onChange, video, disabled = false }: Ov
 
   return (
     <div className="space-y-3">
+      {/* Which clip / shape to preview -------------------------------------- */}
+      <div className="flex flex-wrap items-center gap-2">
+        {videos.length > 1 ? (
+          <label className="flex min-w-0 flex-1 items-center gap-1.5 text-[11px] text-ink-subtle dark:text-slate-400">
+            Video
+            <select
+              className="field min-w-0 flex-1 !py-1 !text-xs"
+              value={Math.min(videoIndex, videos.length - 1)}
+              onChange={(event) => setVideoIndex(Number(event.target.value))}
+            >
+              {videos.map((file, i) => (
+                <option key={`${file.name}-${i}`} value={i}>
+                  {i + 1}. {file.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {!video ? (
+          <div className="flex items-center gap-1" role="group" aria-label="Placeholder shape">
+            {PLACEHOLDERS.map((shape) => (
+              <button
+                key={shape.id}
+                type="button"
+                aria-pressed={placeholder.id === shape.id}
+                onClick={() => setPlaceholder(shape)}
+                className={clsx(
+                  "rounded-md border px-2 py-1 font-mono text-[11px] transition-colors",
+                  placeholder.id === shape.id
+                    ? "border-meta-500 bg-meta-500 text-white"
+                    : "border-black/10 dark:border-white/10 text-ink-subtle dark:text-slate-400 hover:border-meta-500/50",
+                )}
+              >
+                {shape.id}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <span className="ml-auto font-mono text-[11px] text-ink-faint dark:text-slate-500">
+          {ratioLabel(W, H)} · {W}×{H}
+        </span>
+      </div>
+
+      <div className="flex justify-center">
       <div
         ref={stageRef}
-        className="relative w-full select-none overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-black touch-none"
-        style={{ aspectRatio: `${W} / ${H}`, maxHeight: "22rem" }}
+        className="relative select-none overflow-hidden rounded-xl border border-black/10 dark:border-white/10 bg-black touch-none"
+        style={{
+          aspectRatio: `${W} / ${H}`,
+          // Width follows the clip's own shape: full column for landscape,
+          // narrower for portrait so the whole frame fits without cropping.
+          width: `min(100%, ${((STAGE_MAX_HEIGHT_REM * W) / H).toFixed(3)}rem, ${((70 * W) / H).toFixed(3)}vh)`,
+        }}
       >
         {videoSrc ? (
           // The user's own clip, used only as a backdrop for placement.
@@ -304,7 +380,7 @@ export function OverlayPreview({ layers, onChange, video, disabled = false }: Ov
           >
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:10%_10%]" />
             <span className="absolute bottom-2 left-3 font-mono text-[10px] uppercase tracking-widest text-white/40">
-              Placeholder frame · 1920×1080
+              Placeholder · {placeholder.id}
             </span>
           </div>
         )}
@@ -360,6 +436,7 @@ export function OverlayPreview({ layers, onChange, video, disabled = false }: Ov
         <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white/80">
           {playing ? `frame ${frame}` : "drag to place"}
         </span>
+      </div>
       </div>
 
       {/* Controls ------------------------------------------------------------ */}

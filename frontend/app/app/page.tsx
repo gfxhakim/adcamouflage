@@ -522,6 +522,7 @@ export default function WorkspacePage() {
 
   // First queued video, used by the poster picker as a scrub preview.
   const firstVideo = useMemo(() => files.find(isVideoFile) ?? null, [files]);
+  const queuedVideos = useMemo(() => files.filter(isVideoFile), [files]);
 
   // Mirrors the API's own validation, so an avoidable 422 never leaves the page.
   const overlayProblem = useMemo(() => {
@@ -876,7 +877,7 @@ export default function WorkspacePage() {
                       <OverlayPreview
                         layers={overlayLayers}
                         onChange={setOverlayLayers}
-                        video={firstVideo}
+                        videos={queuedVideos}
                         disabled={uploading}
                       />
                     </CmsSection>
