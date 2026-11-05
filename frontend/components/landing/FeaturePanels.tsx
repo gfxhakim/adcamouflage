@@ -202,7 +202,8 @@ function PanelBody({ panel, index }: { panel: ShownPanel; index: number }) {
           </T>
           <CmsLink
             k="features.cta"
-            href="/login"
+            href="/signup"
+            account="signup"
             label="Camouflage my ad"
             className={cn(
               "group inline-flex items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5 text-sm font-semibold",
