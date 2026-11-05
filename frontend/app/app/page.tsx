@@ -261,6 +261,7 @@ export default function WorkspacePage() {
   const handleJumpStep = useCallback((stepIndex: number) => {
     if (stepIndex >= 0 && stepIndex < STEPS.length) {
       setStep(stepIndex);
+
     }
   }, []);
 
@@ -1068,7 +1069,7 @@ export default function WorkspacePage() {
         activeStep={step}
         onStartTour={handleStartTour}
         onSkip={handleSkipTour}
-        onJumpStep={handleJumpStep}
+
       />
       <HelpDrawer
         open={helpOpen}
