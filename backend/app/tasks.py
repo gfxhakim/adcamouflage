@@ -182,3 +182,16 @@ def send_billing_reminders() -> dict[str, int]:
     if result["sent"] or result["skipped"]:
         logger.info("billing reminders: %s sent, %s not emailed", result["sent"], result["skipped"])
     return result
+
+
+@celery_app.task(name="app.tasks.open_waiting_support_tickets")
+def open_waiting_support_tickets() -> dict[str, int]:
+    """Every few minutes: customers stuck in the support bot for 30 min get a ticket in Admin."""
+
+    from .support_routes import open_waiting_tickets
+
+    with get_session_factory()() as db:
+        opened = open_waiting_tickets(db)
+    if opened:
+        logger.info("support: opened %s ticket(s) for customers waiting in the bot", opened)
+    return {"opened": opened}

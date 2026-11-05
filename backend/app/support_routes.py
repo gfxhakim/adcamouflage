@@ -29,7 +29,7 @@ import json
 import logging
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +51,31 @@ from .tokens import TOKENS, balance_summary, get_token_plans, subscription_activ
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS_BEFORE_AGENT = 5
+# A customer stuck in the bot (or waiting on an agent) for this long must be
+# visible in Admin: stuck bot chats become tickets, unanswered tickets go overdue.
+AGENT_WAIT_MINUTES = 30
+
+# Plain phrases that mean "I want a person". When a customer types one of these
+# the ticket is opened right away instead of making them go through 5 bot rounds.
+AGENT_REQUEST_PHRASES: tuple[str, ...] = (
+    "real agent",
+    "live agent",
+    "contact agent",
+    "support agent",
+    "an agent",
+    "the agent",
+    "human",
+    "real person",
+    "a person",
+    "someone real",
+    "talk to someone",
+    "speak to someone",
+    "talk to support",
+    "support team",
+    "ticket",
+    "operator",
+    "customer service",
+)
 MAX_SUPPORT_MEDIA_BYTES = 150 * 1024 * 1024
 
 SUPPORT_MEDIA_TYPES: dict[str, str] = {
@@ -114,6 +139,7 @@ WELCOME_SUGGESTIONS = [
     "Explain all 23 Camouflage Layers (including Gen-4)",
     "How do tokens, variants & refunds work?",
     "My ad was flagged or upload failed — help me fix it",
+    "Talk to a real agent",
 ]
 
 
@@ -550,6 +576,7 @@ class SupportThreadOut(BaseModel):
     id: int
     user_id: int
     status: str
+    overdue: bool = False
     bot_attempts: int
     max_attempts: int = MAX_ATTEMPTS_BEFORE_AGENT
     can_escalate: bool
@@ -565,6 +592,7 @@ class SupportThreadOut(BaseModel):
 class AdminSupportThreadSummary(BaseModel):
     id: int
     status: str
+    overdue: bool = False
     bot_attempts: int
     issue_summary: str
     escalated_at: datetime | None
@@ -586,6 +614,7 @@ class AdminSupportNotificationsOut(BaseModel):
     unread_total: int
     escalated_count: int
     active_count: int
+    overdue_count: int = 0
     recent_escalations: list[AdminSupportThreadSummary]
 
 
@@ -628,6 +657,34 @@ class UpdateThreadStatusIn(BaseModel):
     status: str = Field(pattern="^(bot|escalated|agent_active|resolved)$")
 
 
+def _aware(value: datetime | None) -> datetime | None:
+    """SQLite hands back naive datetimes; treat them as UTC so comparisons work."""
+
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _is_overdue(thread: SupportThread, now: datetime | None = None) -> bool:
+    """A ticket no agent has answered within AGENT_WAIT_MINUTES."""
+
+    escalated = _aware(thread.escalated_at)
+    if thread.status != "escalated" or escalated is None:
+        return False
+    return (now or utcnow()) - escalated >= timedelta(minutes=AGENT_WAIT_MINUTES)
+
+
+def wants_live_agent(text: str) -> bool:
+    cleaned = " ".join(re.split(r"\s+", (text or "").strip().lower()))
+    if not cleaned:
+        return False
+    if re.search(r"\bagent\b", cleaned) and any(
+        w in cleaned for w in ("talk", "speak", "contact", "need", "want", "real", "live", "human", "chat")
+    ):
+        return True
+    return any(phrase in cleaned for phrase in AGENT_REQUEST_PHRASES)
+
+
 def _serialize_message(msg: SupportMessage) -> SupportMessageOut:
     suggestions: list[str] = []
     if msg.suggestions_json:
@@ -657,6 +714,7 @@ def _serialize_thread(thread: SupportThread, messages: list[SupportMessage]) -> 
         id=thread.id,
         user_id=thread.user_id,
         status=thread.status,
+        overdue=_is_overdue(thread),
         bot_attempts=thread.bot_attempts,
         max_attempts=MAX_ATTEMPTS_BEFORE_AGENT,
         can_escalate=thread.bot_attempts >= MAX_ATTEMPTS_BEFORE_AGENT or thread.status != "bot",
@@ -802,6 +860,142 @@ def _notify_admins_by_email(
             logger.warning("Could not send support escalation email to %s", recipient, exc_info=True)
 
 
+def _open_ticket(
+    db: Session,
+    user: User,
+    thread: SupportThread,
+    messages: list[SupportMessage],
+    note: str = "",
+    reason: str = "button",
+) -> None:
+    """Turn a bot chat into a live-agent ticket: shows in Admin, emails admins, tells the customer.
+
+    `reason` is "button" (Contact Agent), "asked" (customer typed that they want
+    a person) or "waited" (stuck in the bot for AGENT_WAIT_MINUTES). Commits.
+    """
+
+    already_escalated = thread.status in ("escalated", "agent_active")
+    thread.status = "escalated" if thread.status in ("bot", "resolved") else thread.status
+    thread.escalated_at = thread.escalated_at or utcnow()
+    thread.updated_at = utcnow()
+    thread.issue_summary = _build_issue_summary(messages, note)
+    thread.unread_admin += 1
+
+    if note.strip():
+        note_msg = SupportMessage(
+            thread_id=thread.id,
+            sender_role="user",
+            sender_name=user.display_name or user.email,
+            body=note.strip(),
+        )
+        db.add(note_msg)
+        messages.append(note_msg)
+
+    if not already_escalated:
+        if reason == "waited":
+            intro = (
+                f"✅ **You've been waiting {AGENT_WAIT_MINUTES} minutes, so I've opened a support ticket "
+                f"(#{thread.id}) for you** and sent it to a live BluCloaking agent with your account details "
+                "and everything you shared above.\n\n"
+            )
+        else:
+            intro = (
+                f"✅ **Ticket #{thread.id} is open — your request has been sent to a live BluCloaking agent** "
+                "along with your account details and everything you shared above.\n\n"
+            )
+        auto_reply = SupportMessage(
+            thread_id=thread.id,
+            sender_role="bot",
+            sender_name="BluCloaking Bot",
+            body=(
+                intro
+                + f"⏱️ **The agent may reply to you from now to {AGENT_WAIT_MINUTES}min Max.**\n\n"
+                "You can keep this chat open or come back anytime — the reply will appear right here. "
+                "Feel free to send additional messages, **screenshots**, or **video screen recordings** below while you wait."
+            ),
+        )
+        db.add(auto_reply)
+        messages.append(auto_reply)
+        log_activity(
+            db,
+            user.id,
+            "support_escalated",
+            f"Ticket #{thread.id} escalated to live agent ({reason}, {thread.bot_attempts} bot attempts)",
+        )
+
+    db.commit()
+    db.refresh(thread)
+    for m in messages:
+        db.refresh(m)
+
+    if not already_escalated:
+        try:
+            dossier = _build_customer_dossier(db, user)
+            _notify_admins_by_email(db, user, thread, dossier, messages)
+        except Exception:  # noqa: BLE001 - the ticket is saved; email is best effort
+            logger.warning("Could not email admins about ticket #%s", thread.id, exc_info=True)
+
+
+def open_waiting_tickets(db: Session, now: datetime | None = None, user_id: int | None = None) -> int:
+    """Safety net: a customer stuck in the bot for AGENT_WAIT_MINUTES gets a ticket.
+
+    Covers chats where the customer used up the bot's attempts (or asked for a
+    person) but never pressed Contact Agent. Runs from the beat schedule and
+    whenever Admin loads support, so tickets show even without a worker.
+    """
+
+    now = now or utcnow()
+    cutoff = now - timedelta(minutes=AGENT_WAIT_MINUTES)
+    stmt = select(SupportThread).where(
+        SupportThread.status == "bot",
+        SupportThread.bot_attempts >= 1,
+        SupportThread.escalated_at.is_(None),
+    )
+    if user_id is not None:
+        stmt = stmt.where(SupportThread.user_id == user_id)
+    candidates = list(db.execute(stmt).scalars())
+    opened = 0
+    for thread in candidates:
+        user_msgs = list(
+            db.execute(
+                select(SupportMessage)
+                .where(SupportMessage.thread_id == thread.id, SupportMessage.sender_role == "user")
+                .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
+            ).scalars()
+        )
+        if not user_msgs:
+            continue
+        first_at = _aware(user_msgs[0].created_at)
+        if first_at is None or first_at > cutoff:
+            continue
+        stuck = thread.bot_attempts >= MAX_ATTEMPTS_BEFORE_AGENT or any(
+            wants_live_agent(m.body) for m in user_msgs
+        )
+        if not stuck:
+            continue
+        user = db.get(User, thread.user_id)
+        if user is None:
+            continue
+        messages = list(
+            db.execute(
+                select(SupportMessage)
+                .where(SupportMessage.thread_id == thread.id)
+                .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
+            ).scalars()
+        )
+        _open_ticket(db, user, thread, messages, reason="waited")
+        opened += 1
+    return opened
+
+
+def _sweep(db: Session, user_id: int | None = None) -> None:
+    try:
+        open_waiting_tickets(db, user_id=user_id)
+    except Exception:  # noqa: BLE001 - never break the admin page over the safety net
+        db.rollback()
+        logger.warning("support ticket sweep failed", exc_info=True)
+
+
 # ---------------------------------------------------------------------------
 # Payment check: the buyer pastes the transaction ID from the checkout panel
 # ---------------------------------------------------------------------------
@@ -901,6 +1095,7 @@ def get_my_support_thread(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> SupportThreadOut:
+    _sweep(db, user_id=user.id)
     thread, messages = _get_or_create_thread(db, user)
     if thread.unread_user > 0:
         thread.unread_user = 0
@@ -967,6 +1162,11 @@ def post_user_support_message(
     thread.issue_summary = _build_issue_summary(messages)
 
     payment_reply = _payment_bot_reply(db, user, body) if body else None
+    if payment_reply is None and thread.status == "bot" and wants_live_agent(body):
+        thread.bot_attempts += 1
+        _open_ticket(db, user, thread, messages, reason="asked")
+        return _serialize_thread(thread, messages)
+
     if payment_reply is not None:
         # Checking a payment is not a failed answer, so no attempt is counted.
         bot_msg = SupportMessage(
@@ -1068,52 +1268,7 @@ def escalate_to_live_agent(
             detail=f"Please try asking the BluCloaking Bot first ({thread.bot_attempts}/{MAX_ATTEMPTS_BEFORE_AGENT} attempts used).",
         )
 
-    already_escalated = thread.status in ("escalated", "agent_active")
-    thread.status = "escalated" if thread.status == "bot" else thread.status
-    thread.escalated_at = thread.escalated_at or utcnow()
-    thread.updated_at = utcnow()
-    thread.issue_summary = _build_issue_summary(messages, payload.note)
-    thread.unread_admin += 1
-
-    if payload.note.strip():
-        note_msg = SupportMessage(
-            thread_id=thread.id,
-            sender_role="user",
-            sender_name=user.display_name or user.email,
-            body=payload.note.strip(),
-        )
-        db.add(note_msg)
-        messages.append(note_msg)
-
-    if not already_escalated:
-        auto_reply = SupportMessage(
-            thread_id=thread.id,
-            sender_role="bot",
-            sender_name="BluCloaking Bot",
-            body=(
-                "✅ **Your request has been sent to a live BluCloaking agent** along with your account details and everything you shared above.\n\n"
-                "⏱️ **The agent may reply to you from now to 30min Max.**\n\n"
-                "You can keep this chat open or come back anytime — feel free to send additional messages, **screenshots**, or **video screen recordings** below while you wait."
-            ),
-        )
-        db.add(auto_reply)
-        messages.append(auto_reply)
-        log_activity(
-            db,
-            user.id,
-            "support_escalated",
-            f"Ticket #{thread.id} escalated to live agent ({thread.bot_attempts} bot attempts)",
-        )
-
-    db.commit()
-    db.refresh(thread)
-    for m in messages:
-        db.refresh(m)
-
-    if not already_escalated:
-        dossier = _build_customer_dossier(db, user)
-        _notify_admins_by_email(db, user, thread, dossier, messages)
-
+    _open_ticket(db, user, thread, messages, note=payload.note)
     return _serialize_thread(thread, messages)
 
 
@@ -1251,6 +1406,7 @@ def _build_thread_summary(db: Session, thread: SupportThread, user: User) -> Adm
     return AdminSupportThreadSummary(
         id=thread.id,
         status=thread.status,
+        overdue=_is_overdue(thread),
         bot_attempts=thread.bot_attempts,
         issue_summary=thread.issue_summary,
         escalated_at=thread.escalated_at,
@@ -1267,6 +1423,8 @@ def _build_thread_summary(db: Session, thread: SupportThread, user: User) -> Adm
 @admin_router.get("/notifications", response_model=AdminSupportNotificationsOut)
 def admin_support_notifications(db: Session = Depends(get_db)) -> AdminSupportNotificationsOut:
     """Return unread counts and escalated tickets for the Admin Panel header badge & alert banner."""
+
+    _sweep(db)
 
     unread_total = int(
         db.execute(select(func.coalesce(func.sum(SupportThread.unread_admin), 0))).scalar_one() or 0
@@ -1301,10 +1459,15 @@ def admin_support_notifications(db: Session = Depends(get_db)) -> AdminSupportNo
     ).all()
 
     recent = [_build_thread_summary(db, t, u) for t, u in rows]
+    waiting = db.execute(
+        select(SupportThread).where(SupportThread.status == "escalated")
+    ).scalars()
+    overdue_count = sum(1 for t in waiting if _is_overdue(t))
     return AdminSupportNotificationsOut(
         unread_total=unread_total,
         escalated_count=escalated_count,
         active_count=active_count,
+        overdue_count=overdue_count,
         recent_escalations=recent,
     )
 
@@ -1315,6 +1478,7 @@ def admin_list_support_threads(
     q: str = Query(default=""),
     db: Session = Depends(get_db),
 ) -> list[AdminSupportThreadSummary]:
+    _sweep(db)
     stmt = select(SupportThread, User).join(User, User.id == SupportThread.user_id)
     if status_filter != "all":
         stmt = stmt.where(SupportThread.status == status_filter)

@@ -38,5 +38,9 @@ celery_app.conf.update(
             "task": "app.tasks.send_billing_reminders",
             "schedule": 86400.0,
         },
+        "open-waiting-support-tickets": {
+            "task": "app.tasks.open_waiting_support_tickets",
+            "schedule": 120.0,
+        },
     },
 )

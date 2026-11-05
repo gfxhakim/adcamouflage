@@ -105,6 +105,9 @@ function FormattedMessageBody({ text, onLight }: { text: string; onLight?: boole
   );
 }
 
+// Typing (or tapping) this opens a ticket for a live agent straight away.
+const AGENT_CHIP = "Talk to a real agent";
+
 export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps) {
   const [open, setOpen] = useState(false);
   const [thread, setThread] = useState<SupportThread | null>(null);
@@ -533,9 +536,12 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
             {/* Bot Quick-Reply Suggestions + "Didn't solve my issue" button */}
             {thread?.status === "bot" && lastBotMsg ? (
               <div className="space-y-2 pt-1">
-                {lastBotMsg.suggestions.length > 0 ? (
+                {lastBotMsg.suggestions.length > 0 || !canEscalateNow ? (
                   <div className="flex flex-wrap gap-1.5">
-                    {lastBotMsg.suggestions.map((chip) => (
+                    {(lastBotMsg.suggestions.includes(AGENT_CHIP) || canEscalateNow
+                      ? lastBotMsg.suggestions
+                      : [...lastBotMsg.suggestions, AGENT_CHIP]
+                    ).map((chip) => (
                       <button
                         key={chip}
                         type="button"
