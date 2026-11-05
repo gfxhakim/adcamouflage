@@ -18,7 +18,7 @@ const EASE = [0.76, 0, 0.24, 1] as const;
 type Phase = "playing" | "opening" | "done";
 
 /**
- * Full-screen "LET'S RUN F*CKED ADS" intro, mounted once in the root layout.
+ * Full-screen "RELAUNCH THE ADS THAT WAS PRINTING" intro, mounted once in the root layout.
  *
  * It plays when someone opens the site's link (or refreshes) on the landing
  * page, and nowhere else: not on the login, workspace or admin pages, not after
@@ -87,9 +87,9 @@ export function IntroScreen() {
         />
 
         <HeroText
-          lines={["LET'S RUN", "F*CKED ADS"]}
-          lineClassNames={["text-black", "text-meta-500"]}
-          className="relative"
+          lines={["RELAUNCH THE", "ADS THAT WAS", "PRINTING"]}
+          lineClassNames={["text-black", "text-black", "text-meta-500"]}
+          className="relative text-[clamp(2.25rem,10.5vw,8.5rem)]"
         />
 
         <div className="relative mt-8 h-1 w-40 overflow-hidden rounded-full bg-meta-100 sm:mt-10 sm:w-56">
