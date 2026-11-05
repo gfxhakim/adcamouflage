@@ -146,7 +146,7 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
                 </div>
               </dl>
 
-              <ul className="mt-5 flex-1 space-y-2.5 border-t border-white/10 pt-5">
+              <ul className="mt-5 flex flex-1 flex-col gap-2.5 border-t border-white/10 pt-5">
                 {included.map(({ item: feature, key, id }) => {
                   // The engine and metadata lines follow each plan's switches in Admin > Token plans.
                   const gate = featureForLine(feature);
@@ -154,7 +154,8 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
                   return (
                     <li
                       key={id}
-                      className={cn("flex items-start gap-2.5 text-sm", unavailable ? "text-white/35" : "text-white/75")}
+                      // Lines this plan lacks sit at the bottom of the list, below the seat line.
+                      className={cn("flex items-start gap-2.5 text-sm", unavailable ? "order-last text-white/35" : "text-white/75")}
                     >
                       {unavailable ? (
                         <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/10 text-white/45">

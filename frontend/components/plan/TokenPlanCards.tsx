@@ -106,20 +106,12 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                     <span className="font-semibold text-black">{formatTokens(plan.generations)}</span> generations
                   </span>
                 </li>
-                {PLAN_FEATURE_IDS.map((feature) =>
-                  planIncludes(plan, feature) ? (
-                    <li key={feature} className="flex items-center gap-1.5">
-                      <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                      {PLAN_FEATURES[feature].label}
-                    </li>
-                  ) : (
-                    <li key={feature} className="flex items-center gap-1.5 text-ink-faint">
-                      <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      <span className="line-through">{PLAN_FEATURES[feature].label}</span>
-                      <span className="sr-only"> (not included)</span>
-                    </li>
-                  ),
-                )}
+                {PLAN_FEATURE_IDS.filter((feature) => planIncludes(plan, feature)).map((feature) => (
+                  <li key={feature} className="flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                    {PLAN_FEATURES[feature].label}
+                  </li>
+                ))}
                 <li className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                   {(plan.seats ?? 1) > 1 ? `Up to ${plan.seats} users sharing the tokens` : "Single user"}
@@ -132,6 +124,14 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                   <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                   Top-ups at {plan.topup_rate} tokens per {formatMoney(1, currency)}
                 </li>
+                {/* Features this plan does not include go last. */}
+                {PLAN_FEATURE_IDS.filter((feature) => !planIncludes(plan, feature)).map((feature) => (
+                  <li key={feature} className="flex items-center gap-1.5 text-ink-faint">
+                    <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="line-through">{PLAN_FEATURES[feature].label}</span>
+                    <span className="sr-only"> (not included)</span>
+                  </li>
+                ))}
               </ul>
 
               <div className="mt-auto pt-4">
