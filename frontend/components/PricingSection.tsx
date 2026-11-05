@@ -174,6 +174,7 @@ export function PricingSection({ plans, topups, currency, ctaHref }: PricingSect
               <CmsLink
                 k="pricing.choose"
                 href={ctaHref}
+                account="signup"
                 label="Choose"
                 className={cn(
                   "group/btn mt-7 flex w-full items-center justify-between rounded-full py-1.5 pl-5 pr-1.5 text-sm font-semibold transition-colors",

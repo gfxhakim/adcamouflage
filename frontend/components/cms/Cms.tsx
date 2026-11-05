@@ -277,6 +277,7 @@ export function CmsLink({
   k,
   href,
   label,
+  account,
   className,
   style,
   children,
@@ -285,6 +286,14 @@ export function CmsLink({
   k: string;
   href: string;
   label: string;
+  /**
+   * An account button: "signup" ones always open Create account and "login"
+   * ones always open Log in. A saved destination that points at either
+   * account page is replaced by the right one, so an older edit that sent a
+   * start button to /login cannot bring that back; any other destination
+   * (a section, a full web address) the admin chose still wins.
+   */
+  account?: "signup" | "login";
   className?: string;
   style?: CSSProperties;
   children?: (label: string) => ReactNode;
@@ -293,7 +302,8 @@ export function CmsLink({
   const value = cms.link(k, { href, label });
   if (cms.hidden(k)) return null;
   const css = linkStyle(value);
-  const target = value.href || href;
+  const saved = value.href || href;
+  const target = account && /^\/(login|signup)(?:[/?#]|$)/.test(saved) ? href : saved;
   const props = {
     ...rest,
     ...cms.mark(k),

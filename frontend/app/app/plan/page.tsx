@@ -53,13 +53,22 @@ import {
 import { formatDate, formatTokens, timeAgo } from "@/lib/format";
 import type { TokenPlanCard } from "@/lib/types";
 
-/** After the payment provider sends the browser back, ask about the order this often, for this long. */
+/**
+ * After the payment provider sends the browser back, ask about the order
+ * every few seconds at first, then less often, for as long as a crypto
+ * payment can take to confirm.
+ */
 const ORDER_POLL_MS = 3000;
-const ORDER_POLL_LIMIT_MS = 120_000;
+const ORDER_POLL_SLOW_MS = 10_000;
+const ORDER_POLL_FAST_FOR_MS = 120_000;
+const ORDER_POLL_LIMIT_MS = 30 * 60_000;
+/** Once the payment shows, the workspace opens on its own after this long. */
+const OPEN_WORKSPACE_AFTER_MS = 3500;
 
 interface Toast {
   tone: "success" | "info" | "error";
   text: string;
+  action?: { href: string; label: string };
 }
 
 function presetName(raw: string): string {
@@ -138,6 +147,8 @@ export default function PlanPage() {
     setToast({ tone: "info", text: "Waiting for your payment to be confirmed…" });
 
     let cancelled = false;
+    /** The order has an answer: stop asking. */
+    let settled = false;
     const startedAt = Date.now();
 
     const check = async () => {
@@ -146,18 +157,26 @@ export default function PlanPage() {
         const order = await fetchOrder(orderId);
         if (cancelled) return;
         if (order.status === "paid") {
+          settled = true;
           setWaitingOrder(null);
           setToast({
             tone: "success",
             text:
-              order.kind === "subscription"
-                ? `Payment received. Your ${labelsRef.current[order.plan_id] ?? order.plan_id} period is active and ${formatTokens(order.tokens)} tokens were added.`
-                : `Payment received. ${formatTokens(order.tokens)} top-up tokens were added.`,
+              (order.kind === "subscription"
+                ? `Payment received. Your ${labelsRef.current[order.plan_id] ?? order.plan_id} plan is active and ${formatTokens(order.tokens)} tokens were added.`
+                : `Payment received. ${formatTokens(order.tokens)} top-up tokens were added.`) +
+              " Opening your workspace…",
+            action: { href: "/app", label: "Start rendering" },
           });
           await load();
+          // Straight into the workspace, ready to render.
+          pollTimer.current = setTimeout(() => {
+            if (!cancelled) window.location.assign("/app");
+          }, OPEN_WORKSPACE_AFTER_MS);
           return;
         }
         if (order.status === "expired" || order.status === "invalid") {
+          settled = true;
           setWaitingOrder(null);
           setToast({
             tone: "error",
@@ -172,21 +191,37 @@ export default function PlanPage() {
       } catch {
         /* A failed poll is retried on the next tick. */
       }
-      if (Date.now() - startedAt >= ORDER_POLL_LIMIT_MS) {
+      const waited = Date.now() - startedAt;
+      if (waited >= ORDER_POLL_LIMIT_MS) {
         setWaitingOrder(null);
         setToast({
           tone: "info",
-          text: "Still waiting for the network to confirm your payment. It will show here as soon as it does; you can leave this page.",
+          text: "Still waiting for the network to confirm your payment. Your plan turns on by itself as soon as it does; you can leave this page.",
         });
         await load();
         return;
       }
-      pollTimer.current = setTimeout(() => void check(), ORDER_POLL_MS);
+      if (waited >= ORDER_POLL_FAST_FOR_MS) {
+        setToast({
+          tone: "info",
+          text: "Waiting for your payment to be confirmed… Crypto payments can take a few minutes; this page updates by itself.",
+        });
+      }
+      pollTimer.current = setTimeout(() => void check(), waited < ORDER_POLL_FAST_FOR_MS ? ORDER_POLL_MS : ORDER_POLL_SLOW_MS);
+    };
+
+    // A buyer who comes back to this tab gets an answer at once, not at the next tick.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || cancelled || settled) return;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+      void check();
     };
 
     void check();
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
       if (pollTimer.current) clearTimeout(pollTimer.current);
     };
   }, [load]);
@@ -259,6 +294,11 @@ export default function PlanPage() {
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
               ) : null}
               <span className="min-w-0 flex-1">{toast.text}</span>
+              {toast.action ? (
+                <Link href={toast.action.href} className="btn-primary shrink-0 !px-3 !py-1.5 !text-xs">
+                  {toast.action.label}
+                </Link>
+              ) : null}
               {!waitingOrder ? (
                 <button type="button" className="shrink-0 rounded-md p-0.5 hover:bg-black/5" aria-label="Dismiss" onClick={() => setToast(null)}>
                   <X className="h-4 w-4" aria-hidden />

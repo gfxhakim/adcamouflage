@@ -6,7 +6,7 @@ page; the webhook settles the order, and the order poll settles it too if
 the webhook was missed. With Volet the customer's browser posts a signed
 form (served by the pay page below) to Volet's hosted checkout, and Volet's
 status notification settles the order. Either way the customer comes back
-to /app/plan?order=<id>, and every settlement goes through
+to /app/plan?order=<id> (Volet through the short /r/<id> hop), and every settlement goes through
 ``tokens.settle_order`` so an order is applied once.
 """
 
@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -216,6 +216,15 @@ def _redirect_url(request: Request, order_id: str) -> str:
     return f"{_public_base(request)}/app/plan?order={order_id}"
 
 
+def _return_path(order_id: str) -> str:
+    """Where Volet sends the browser back: a short API hop that forwards to the plan page.
+
+    Kept short because Volet caps each link at 100 characters.
+    """
+
+    return f"/api/v1/billing/r/{order_id}"
+
+
 def _pay_path(order_id: str) -> str:
     # Relative on purpose: the web app proxies /api to this service, so the
     # same link works from the plan page and from the order history.
@@ -375,8 +384,8 @@ def pay_order(
         fields = volet.payment_fields(
             order=order,
             currency=currency(db),
-            success_url=f"{base}/app/plan?order={order.id}",
-            fail_url=f"{base}/app/plan?order={order.id}&cancelled=1",
+            success_url=f"{base}{_return_path(order.id)}",
+            fail_url=f"{base}{_return_path(order.id)}?cancelled=1",
             status_url=f"{settings.public_url.strip().rstrip('/') or base}/api/v1/billing/volet/status",
             comment=f"{settings.app_name}: {what}",
         )
@@ -437,9 +446,24 @@ def _notification_mismatch(db: Session, order: Order, fields: Mapping[str, str])
     except ValueError:
         amount = math.nan
     same_currency = (fields.get("ac_merchant_currency") or "").upper() == currency(db).upper()
-    if not same_currency or not (abs(amount - order.amount_usd) < 0.005):
+    if not same_currency or not amount_covers(amount, order.amount_usd):
         return "amount or currency differs"
     return None
+
+
+# How far below the quoted price a Volet amount may be and still count as paid.
+# The amount is signed into the form, so the buyer cannot change it; a small
+# difference can only come from how Volet reports its own processing fee
+# ("Who pays fee"), and an exact match would leave a real payment unapplied.
+AMOUNT_FEE_ALLOWANCE = 0.03
+
+
+def amount_covers(amount: float, quoted: float) -> bool:
+    """Whether a reported amount pays a quoted price, allowing for Volet's fee either way."""
+
+    if math.isnan(amount):
+        return False
+    return amount >= quoted * (1 - AMOUNT_FEE_ALLOWANCE) - 0.005
 
 
 @router.api_route("/volet/status", methods=["GET", "POST"], response_class=PlainTextResponse)
@@ -499,6 +523,24 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         void_order(db, order, "expired")
     # PENDING and PROCESS mean the money is still on its way: nothing to do yet.
     return PlainTextResponse("OK")
+
+
+@router.api_route("/r/{order_id}", methods=["GET", "POST"], include_in_schema=False)
+def payment_return(order_id: str, cancelled: str | None = None) -> RedirectResponse:
+    """The buyer's way back from Volet, by GET or POST, into the plan page by GET.
+
+    Volet's account setting can send the buyer back with a POST from its own
+    site. Browsers leave the SameSite=Lax session cookie off a cross-site
+    POST, so a POST straight to the plan page arrived signed out and the
+    buyer was sent to the landing page as if the account had gone. This hop
+    needs no session; the 303 turns it into an ordinary GET, which carries
+    the cookie, and the plan page then waits for the payment to show.
+    The Location is relative so the buyer stays on the host they are on.
+    """
+
+    safe = "".join(ch for ch in order_id if ch.isalnum())[:64]
+    target = f"/app/plan?order={safe}" + ("&cancelled=1" if cancelled else "")
+    return RedirectResponse(target, status_code=status.HTTP_303_SEE_OTHER, headers={"Cache-Control": "no-store"})
 
 
 # --------------------------------------------------------------------------
