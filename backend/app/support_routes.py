@@ -749,7 +749,7 @@ def _build_customer_dossier(db: Session, user: User) -> SupportCustomerDossier:
     else:
         usable = 0
         sub_active = not plan_expired(user)
-        p_label = plan_label(user.plan, plans)
+        p_label = plan_label(plans, user.plan)
 
     return SupportCustomerDossier(
         id=user.id,
@@ -772,6 +772,38 @@ def _build_customer_dossier(db: Session, user: User) -> SupportCustomerDossier:
         last_seen_at=user.last_seen_at,
         admin_notes=user.admin_notes,
     )
+
+
+def _safe_dossier(db: Session, user: User) -> SupportCustomerDossier:
+    """The customer card for a ticket; a problem building it never hides the queue."""
+
+    try:
+        # A savepoint, so a failed query here can't spoil the rest of the request.
+        with db.begin_nested():
+            return _build_customer_dossier(db, user)
+    except Exception:  # noqa: BLE001 - show the ticket with basic details instead
+        logger.warning("Could not build support dossier for user #%s", user.id, exc_info=True)
+        return SupportCustomerDossier(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            plan=user.plan or "",
+            plan_label=user.sub_plan or user.plan or "",
+            billing_mode=user.billing_mode or "",
+            usable_tokens=0,
+            subscription_active=False,
+            sub_plan=user.sub_plan,
+            sub_period_end=user.sub_period_end,
+            used_this_month=0,
+            monthly_quota=user.monthly_quota,
+            plan_expired=False,
+            batch_count=0,
+            files_total=0,
+            created_at=user.created_at,
+            last_login_at=user.last_login_at,
+            last_seen_at=user.last_seen_at,
+            admin_notes=user.admin_notes,
+        )
 
 
 def _build_issue_summary(messages: list[SupportMessage], extra_note: str = "") -> str:
@@ -1416,7 +1448,7 @@ def _build_thread_summary(db: Session, thread: SupportThread, user: User) -> Adm
         updated_at=thread.updated_at,
         last_message_preview=preview,
         last_message_at=last_at,
-        customer=_build_customer_dossier(db, user),
+        customer=_safe_dossier(db, user),
     )
 
 
@@ -1526,7 +1558,7 @@ def admin_get_support_thread(
     )
     return AdminSupportThreadDetail(
         thread=_serialize_thread(thread, messages),
-        customer=_build_customer_dossier(db, user),
+        customer=_safe_dossier(db, user),
     )
 
 
@@ -1577,7 +1609,7 @@ def admin_send_support_message(
     )
     return AdminSupportThreadDetail(
         thread=_serialize_thread(thread, messages),
-        customer=_build_customer_dossier(db, user),
+        customer=_safe_dossier(db, user),
     )
 
 
@@ -1610,5 +1642,5 @@ def admin_update_support_thread_status(
     )
     return AdminSupportThreadDetail(
         thread=_serialize_thread(thread, messages),
-        customer=_build_customer_dossier(db, user),
+        customer=_safe_dossier(db, user),
     )

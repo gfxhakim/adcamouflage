@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRef } from "react";
 
 import BrandLogo from "@/components/BrandLogo";
+import { openCookieSettings } from "@/components/MetaPixel";
 import { CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { EASE } from "@/components/landing/primitives";
@@ -118,9 +119,19 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-14 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            © {new Date().getFullYear()} {name}. <T k="footer.rights">All rights reserved.</T>
-          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-5">
+            <p>
+              © {new Date().getFullYear()} {name}. <T k="footer.rights">All rights reserved.</T>
+            </p>
+            {/* Fixed links: Meta and Google expect these on every page that runs ads. */}
+            <nav aria-label="Legal" className="flex gap-4">
+              <Link href="/privacy" className="hover:text-white">Privacy</Link>
+              <Link href="/terms" className="hover:text-white">Terms</Link>
+              <button type="button" onClick={openCookieSettings} className="hover:text-white">
+                Cookie settings
+              </button>
+            </nav>
+          </div>
           <T k="footer.status" as="p" className="max-w-xl sm:text-right">
             All Systems Operational — 99.9% Uptime
           </T>

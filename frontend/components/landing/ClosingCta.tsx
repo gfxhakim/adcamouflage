@@ -5,7 +5,7 @@ import { Rocket } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { CmsIcon, CmsLink, CmsSection, CmsSlot, T } from "@/components/cms/Cms";
-import { CmsHeadline, PillArrow, Reveal, SectionTag } from "@/components/landing/primitives";
+import { CmsHeadline, PillArrow, Reveal } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 function LocalClock() {
@@ -53,14 +53,11 @@ export function ClosingCta({ startHref }: { startHref: string }) {
 
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:px-8">
         <div>
-          <SectionTag k="cta.tag" index="07" dark>
-            Final CTA
-          </SectionTag>
           <CmsHeadline
             k="cta.headline"
             dark
             text="Stop Letting Algorithms Dictate Your Scale."
-            className="mt-5 text-4xl sm:text-6xl lg:text-7xl"
+            className="text-4xl sm:text-6xl lg:text-7xl"
           />
           <T k="cta.lede" long as="p" className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">
             Protect your winning creatives, isolate your ad accounts from hash-linking, and get rejected campaigns back into profit in seconds.

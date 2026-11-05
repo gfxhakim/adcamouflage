@@ -16,12 +16,13 @@ import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
 import { loadPublishedContent } from "@/lib/siteContent";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, siteUrl } from "@/lib/site";
 import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 
 const METADATA: Metadata = {
-  title: "AdCamouflage — One winning ad, endless fresh copies",
-  description:
-    "Turn one winning creative into fresh, unique files. Each copy looks the same to people but carries a new fingerprint, new timing and zero metadata, so reused ads stop being matched as duplicates.",
+  title: { absolute: SITE_TITLE },
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: "/" },
 };
 
 // Admin > Landing can override the tab title, description and icon.
@@ -29,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const meta = (await loadPublishedContent("landing")).meta ?? {};
   return {
     ...METADATA,
-    ...(meta.title ? { title: meta.title } : {}),
+    ...(meta.title ? { title: { absolute: meta.title } } : {}),
     ...(meta.description ? { description: meta.description } : {}),
     ...(meta.favicon ? { icons: { icon: meta.favicon } } : {}),
   };
@@ -113,6 +114,45 @@ async function loadPricing(): Promise<PublicPricing> {
   return FALLBACK_PRICING;
 }
 
+function structuredData(pricing: PublicPricing): string {
+  const base = siteUrl();
+  const graph = [
+    {
+      "@type": "Organization",
+      "@id": `${base}/#org`,
+      name: SITE_NAME,
+      url: base,
+      logo: `${base}/brand/icon-512.png`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${base}/#website`,
+      name: SITE_NAME,
+      url: base,
+      publisher: { "@id": `${base}/#org` },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: SITE_NAME,
+      url: base,
+      applicationCategory: "MultimediaApplication",
+      operatingSystem: "Web",
+      description: SITE_DESCRIPTION,
+      publisher: { "@id": `${base}/#org` },
+      offers: pricing.plans.map((plan) => ({
+        "@type": "Offer",
+        name: `${plan.label} plan`,
+        price: plan.price.toFixed(2),
+        priceCurrency: pricing.currency,
+        url: `${base}/#pricing`,
+        category: "subscription",
+      })),
+    },
+  ];
+  // Escape "<" so content can never close the script tag.
+  return JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replace(/</g, "\\u003c");
+}
+
 export default async function LandingPage() {
   // Everyone sees the visitor version of this page. Every start button opens
   // Create account; every "Log in" button opens the login page. A plan's
@@ -124,6 +164,11 @@ export default async function LandingPage() {
 
   return (
     <ContentProvider namespace="landing" initial={content}>
+      <script
+        type="application/ld+json"
+        // Structured data: lets Google show the product, its prices and the brand.
+        dangerouslySetInnerHTML={{ __html: structuredData(pricing) }}
+      />
       <SiteHeader floating nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />
       <CursorRing />
@@ -136,7 +181,7 @@ export default async function LandingPage() {
             { id: "hero", label: "Hero", node: <Hero startHref={startHref} /> },
             { id: "how-it-works", label: "How it works", node: <WhyRadar /> },
             { id: "features", label: "Features", node: <FeaturePanels /> },
-            { id: "proof", label: "Deep evasion & media showcase", node: <BeforeAfter /> },
+            { id: "proof", label: "Media showcase", node: <BeforeAfter /> },
             { id: "reviews", label: "Reviews", node: <ReviewsSection /> },
             {
               id: "pricing",

@@ -4,7 +4,7 @@ import { ImagePlus } from "lucide-react";
 
 import { CmsSection, CmsSlot, MediaView, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
-import { CmsHeadline, Reveal, SectionTag } from "@/components/landing/primitives";
+import { CmsHeadline, Reveal } from "@/components/landing/primitives";
 import RenderProof from "@/components/RenderProof";
 import type { MediaValue } from "@/lib/siteContent";
 
@@ -91,10 +91,7 @@ export function BeforeAfter() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-end">
           <div>
-            <SectionTag k="proof.tag" index="03" dark>
-              DEEP EVASION LAYER
-            </SectionTag>
-            <CmsHeadline k="proof.headline" dark text="Built for the Buyer. | [Invisible to the Bot.]" className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+            <CmsHeadline k="proof.headline" dark text="Built for the Buyer. | [Invisible to the Bot.]" className="text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <T k="proof.lede" long as="p" className="text-sm leading-relaxed text-white/65">
             Basic metadata cleaners stopped working years ago. Modern ad networks scan pixel structures and transcribe audio tracks in real time. AdCamouflage neutralizes both.

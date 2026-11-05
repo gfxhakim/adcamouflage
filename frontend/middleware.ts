@@ -65,6 +65,11 @@ export async function middleware(request: NextRequest) {
   const session = request.cookies.get(SESSION_COOKIE)?.value;
   const { pathname } = request.nextUrl;
 
+  // One address for Google: www.<site> -> <site> (or the other way round),
+  // only when SITE_URL is set on the web service.
+  const canonical = canonicalRedirect(request);
+  if (canonical) return canonical;
+
   if (pathname.startsWith("/admin")) {
     const access = session ? await sessionAccess(session) : "expired";
     // When the API cannot answer, the page's own check decides.
@@ -91,6 +96,29 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
+/**
+ * Sends a visitor on the other spelling of the site host (www or bare) to the
+ * SITE_URL one with a permanent redirect. Only GET/HEAD page loads: API calls
+ * and payment notifications are never redirected.
+ */
+function canonicalRedirect(request: NextRequest): NextResponse | null {
+  const site = (process.env.SITE_URL || "").trim();
+  if (!site || !["GET", "HEAD"].includes(request.method)) return null;
+  let target: URL;
+  try {
+    target = new URL(site);
+  } catch {
+    return null;
+  }
+  const host = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").split(":")[0].toLowerCase();
+  const want = target.hostname.toLowerCase();
+  const twin = want.startsWith("www.") ? want.slice(4) : `www.${want}`;
+  if (host !== twin) return null;
+  const url = new URL(request.nextUrl.pathname + request.nextUrl.search, target.origin);
+  return NextResponse.redirect(url, 308);
+}
+
 export const config = {
-  matcher: ["/app/:path*", "/admin/:path*"],
+  // Every page (for the www redirect); not the API, Next's files or static assets.
+  matcher: ["/((?!api/|_next/|brand/|landing/|favicon.ico|icon.png|apple-icon.png).*)"],
 };

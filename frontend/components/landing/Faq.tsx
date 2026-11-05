@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { CmsIcon, CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
-import { CmsHeadline, EASE, PillArrow, SectionTag } from "@/components/landing/primitives";
+import { CmsHeadline, EASE, PillArrow } from "@/components/landing/primitives";
 import { cn } from "@/lib/utils";
 
 const FAQS = [
@@ -51,8 +51,7 @@ export function Faq() {
     <CmsSection k="faq" label="FAQ" id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <SectionTag k="faq.tag" index="06">FREQUENTLY ASKED QUESTIONS</SectionTag>
-          <CmsHeadline k="faq.headline" text="Everything You Need to Know Before You Upload." className="mt-5 text-4xl sm:text-5xl lg:text-6xl" />
+          <CmsHeadline k="faq.headline" text="Everything You Need to Know Before You Upload." className="text-4xl sm:text-5xl lg:text-6xl" />
 
           <CmsSection k="faq.card" label="Help card" as="div" className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-white/60">

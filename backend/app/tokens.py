@@ -660,6 +660,15 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
     else:
         detail = f"{what.capitalize()} {note or 'granted'} ({source})"
     log_activity(db, user.id, "payment", detail)
+    if order.amount_usd and order.amount_usd > 0:
+        # Real money confirmed by the payment provider: tell Meta (no-op unless set up).
+        from . import meta_capi
+        from .app_settings import currency
+
+        try:
+            meta_capi.purchase(order, user.email, currency(db))
+        except Exception:  # noqa: BLE001 - tracking must never undo a payment
+            logger.exception("Meta Purchase event for order %s failed", order.id)
     return True
 
 
