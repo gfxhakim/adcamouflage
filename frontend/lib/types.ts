@@ -224,6 +224,8 @@ export interface TokenPlanCard {
   topup_rate: number;
   /** People who share the plan's tokens, owner included. Older APIs leave it out (= 1). */
   seats?: number;
+  /** Render-setting groups the plan includes. Older APIs leave it out (= all included). */
+  features?: Partial<Record<"full_engine" | "metadata_wipe", boolean>>;
 }
 
 /** One row of the top-up picker, priced for a plan. */

@@ -1,12 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Check, Sparkles, Users, X } from "lucide-react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { CmsHeadline } from "@/components/landing/primitives";
 import { rolloverCap, type TokenPlanCard, type TopupTable } from "@/lib/types";
+import { featureForLine, planIncludes } from "@/lib/plan-features";
 import { cn } from "@/lib/utils";
 
 interface PricingSectionProps {
@@ -146,14 +147,31 @@ export function PricingSection({ plans, currency, ctaHref }: PricingSectionProps
               </dl>
 
               <ul className="mt-5 flex-1 space-y-2.5 border-t border-white/10 pt-5">
-                {included.map(({ item: feature, key, id }) => (
-                  <li key={id} className="flex items-start gap-2.5 text-sm text-white/75">
-                    <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
-                      <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
-                    </span>
-                    <T k={`${key}.text`}>{feature}</T>
-                  </li>
-                ))}
+                {included.map(({ item: feature, key, id }) => {
+                  // The engine and metadata lines follow each plan's switches in Admin > Token plans.
+                  const gate = featureForLine(feature);
+                  const unavailable = gate !== null && !planIncludes(plan, gate);
+                  return (
+                    <li
+                      key={id}
+                      className={cn("flex items-start gap-2.5 text-sm", unavailable ? "text-white/35" : "text-white/75")}
+                    >
+                      {unavailable ? (
+                        <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/10 text-white/45">
+                          <X className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
+                          <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                        </span>
+                      )}
+                      <span className={cn(unavailable && "line-through decoration-white/40")}>
+                        <T k={`${key}.text`}>{feature}</T>
+                        {unavailable ? <span className="sr-only"> (not included in {plan.label})</span> : null}
+                      </span>
+                    </li>
+                  );
+                })}
                 <li className="flex items-start gap-2.5 text-sm text-white/75">
                   <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
                     {(plan.seats ?? 1) > 1 ? (

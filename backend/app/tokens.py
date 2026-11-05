@@ -66,6 +66,10 @@ class TokenPlan:
     rollover_months: int  # the cap is rollover_months x tokens
     topup_rate: int  # tokens per 1 USD on a top-up
     seats: int = 1  # people who can sign in and share this plan's tokens, owner included
+    # Render-setting groups this plan may use (see plan_features.py). Off = the
+    # matching workspace controls are locked and the render API turns them off.
+    full_engine: bool = True
+    metadata_wipe: bool = True
 
     @property
     def generations(self) -> int:
@@ -92,13 +96,14 @@ class TokenPlan:
             "rollover_cap": self.rollover_cap,
             "topup_rate": self.topup_rate,
             "seats": self.seats,
+            "features": {"full_engine": self.full_engine, "metadata_wipe": self.metadata_wipe},
         }
 
 
 DEFAULT_PLANS: dict[str, TokenPlan] = {
     plan.id: plan
     for plan in (
-        TokenPlan("starter", "Starter", 37.50, 1500, 100, 0, 40),
+        TokenPlan("starter", "Starter", 37.50, 1500, 100, 0, 40, full_engine=False, metadata_wipe=False),
         TokenPlan("pro", "Pro", 89.0, 4500, 90, 1, 50),
         TokenPlan("max", "Max", 149.0, 9600, 80, 2, 65, seats=5),
     )
@@ -135,6 +140,8 @@ def get_token_plans(db: Session) -> dict[str, TokenPlan]:
             rollover_months=int(edit.get("rollover_months", base.rollover_months)),
             topup_rate=int(edit.get("topup_rate", base.topup_rate)),
             seats=max(1, int(edit.get("seats", base.seats))),
+            full_engine=bool((edit.get("features") or {}).get("full_engine", base.full_engine)),
+            metadata_wipe=bool((edit.get("features") or {}).get("metadata_wipe", base.metadata_wipe)),
         )
     return plans
 

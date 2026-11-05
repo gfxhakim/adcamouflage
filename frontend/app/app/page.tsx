@@ -34,6 +34,7 @@ import PosterPicker from "@/components/PosterPicker";
 import JobQueue from "@/components/JobQueue";
 import NeonCard from "@/components/NeonCard";
 import OptionsPanel from "@/components/OptionsPanel";
+import { applyPlanLocks, type PlanFeatureId } from "@/lib/plan-features";
 import PlatformPicker from "@/components/PlatformPicker";
 import BillingAlerts from "@/components/plan/BillingAlerts";
 import ProgressBar from "@/components/ProgressBar";
@@ -404,7 +405,7 @@ export default function WorkspacePage() {
       // layer settings, in order.
       const activeLayers = overlayLayers.filter((layer) => layer.image);
       const payload: MutationOptions = {
-        ...options,
+        ...applyPlanLocks(options, billing?.locked_features ?? []),
         overlays: activeLayers.map((layer) => ({ ...layer.settings, enabled: true })),
       };
       const overlayImages = activeLayers.map((layer) => layer.image as File);
@@ -452,7 +453,7 @@ export default function WorkspacePage() {
         })
         .catch(() => undefined);
     }
-  }, [files, loadBilling, options, overlayLayers, refresh, uploading]);
+  }, [billing, files, loadBilling, options, overlayLayers, refresh, uploading]);
 
   const handleCancel = useCallback(
     async (assetId: string) => {
@@ -544,6 +545,14 @@ export default function WorkspacePage() {
 
   // --- token billing ------------------------------------------------------
   const tokenMode = user?.billing_mode === "tokens";
+  // Once the plan is known, switch off what it does not include so the panel
+  // never shows a locked option as on.
+  const lockedKey = (billing?.locked_features ?? []).join(",");
+  useEffect(() => {
+    if (!lockedKey) return;
+    setOptions((current) => applyPlanLocks(current, lockedKey.split(",") as PlanFeatureId[]));
+  }, [lockedKey]);
+
   // No active period: nothing can be generated until they subscribe or renew.
   const paywalled = Boolean(user && tokenMode && !user.subscription_active);
   const perGeneration = billing?.subscription?.tokens_per_generation ?? 0;
@@ -849,6 +858,7 @@ export default function WorkspacePage() {
                       onChange={setOptions}
                       catalogue={catalogue}
                       disabled={uploading}
+                      lockedFeatures={billing?.locked_features ?? []}
                     />
                   </div>
                 ) : null}

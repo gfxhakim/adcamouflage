@@ -33,6 +33,7 @@ from .plans import (
     used_this_month,
 )
 from .teams import TeamOut, team_summary, billing_account
+from .plan_features import locked_features
 from .tokens import (
     balance_summary,
     billing_alerts,
@@ -110,6 +111,9 @@ class TokenPlanCard(BaseModel):
     rollover_months: int
     rollover_cap: int
     topup_rate: int
+    seats: int = 1
+    # Render-setting groups the plan includes (full_engine, metadata_wipe).
+    features: dict[str, bool] = {}
 
 
 class TopupOption(BaseModel):
@@ -174,6 +178,9 @@ class Subscription(BaseModel):
     alerts: list[Alert]
     # Seats and members; a member's subscription, balance and alerts above are the owner's.
     team: TeamOut | None = None
+    # Render-setting groups the paying plan does not include; the workspace
+    # shows their controls locked and the render API switches them off.
+    locked_features: list[str] = []
 
 
 class PlanRequestIn(BaseModel):
@@ -313,6 +320,7 @@ def _token_fields(db: Session, user: User, now: datetime) -> dict[str, Any]:
         "grace_days": get_billing_rules(db)["grace_days"],
         "alerts": billing_alerts(db, payer, now),
         "team": team_summary(db, user),
+        "locked_features": locked_features(db, user),
     }
 
 
