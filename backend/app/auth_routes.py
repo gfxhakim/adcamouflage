@@ -27,7 +27,7 @@ from .accounts import (
     validate_password,
     verify_password,
 )
-from . import meta_capi
+from . import mailer, meta_capi
 from .activity import log_activity
 from .app_settings import announcement, registration_open
 from .db import BatchRecord, User, get_db
@@ -199,6 +199,7 @@ def register(
         meta_capi.complete_registration(request, user.id, user.email)
     except Exception:  # noqa: BLE001 - tracking must never block a sign-up
         logger.exception("Meta CompleteRegistration for user %s failed", user.id)
+    mailer.welcome(db, user)
     return UserProfile.of(user, db)
 
 

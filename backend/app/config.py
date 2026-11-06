@@ -167,10 +167,20 @@ class Settings(BaseSettings):
     # empty it is derived from the bot token, so nothing else has to be set.
     notify_telegram_webhook_secret: SecretStr | None = None
 
-    # --- email (Resend) ---------------------------------------------------
-    # Optional. Without a key the billing reminders are silently skipped.
+    # --- customer email ---------------------------------------------------
+    # Optional. Any SMTP server works (Gmail/Google Workspace, Zoho, Brevo,
+    # Mailgun, Amazon SES, ...); SMTP wins when both it and Resend are set.
+    # With neither, welcome / plan activated / reminder emails are skipped.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    # starttls (port 587, the usual), ssl (port 465) or none (local relay only).
+    smtp_security: str = "starttls"
+    smtp_username: str = ""
+    smtp_password: SecretStr | None = None
     resend_api_key: SecretStr | None = None
     email_from: str = "BluCloacking <billing@blucloack.online>"
+    # Where customer replies go; empty = back to the From address.
+    email_reply_to: str = ""
 
     # --- media engine -----------------------------------------------------
     ffmpeg_binary: str = "ffmpeg"

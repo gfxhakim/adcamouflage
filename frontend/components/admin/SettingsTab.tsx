@@ -4,6 +4,7 @@ import { Loader2, Megaphone, Save, Settings2, Tags } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import DangerZoneCard from "@/components/admin/DangerZoneCard";
+import EmailsCard from "@/components/admin/EmailsCard";
 import PhoneAlertsCard from "@/components/admin/PhoneAlertsCard";
 import TokenPlansCard from "@/components/admin/TokenPlansCard";
 import NeonCard from "@/components/NeonCard";
@@ -124,6 +125,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
     <TokenPlansCard onSaved={onPlansChanged} />
 
     <PhoneAlertsCard />
+
+    <EmailsCard />
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <NeonCard padding="lg" radius="xl">

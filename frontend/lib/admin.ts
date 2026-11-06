@@ -405,6 +405,36 @@ export const connectTelegramButtons = () =>
     { method: "POST" },
   );
 
+// --- customer emails -----------------------------------------------------------
+
+export type EmailKind = "welcome" | "activated" | "ending" | "ended";
+
+export interface EmailTemplate {
+  label: string;
+  when: string;
+  enabled: boolean;
+  subject: string;
+  body: string;
+  /** Renewal reminder only: how many days before the period ends. */
+  days_before?: number;
+}
+
+export interface EmailSettings {
+  /** "smtp", "resend" or "" when email is not set up on the server. */
+  transport: string;
+  from: string;
+  public_url_set: boolean;
+  placeholders: Record<string, string>;
+  templates: Record<EmailKind, EmailTemplate>;
+  defaults: Record<EmailKind, EmailTemplate>;
+}
+
+export const getEmailSettings = () => call<EmailSettings>("/emails");
+export const saveEmailSettings = (templates: Record<string, Pick<EmailTemplate, "enabled" | "subject" | "body" | "days_before">>) =>
+  call<EmailSettings>("/emails", { method: "PUT", body: JSON.stringify({ templates }) });
+export const sendTestEmail = (kind: EmailKind) =>
+  call<{ sent_to: string }>("/emails/test", { method: "POST", body: JSON.stringify({ kind }) });
+
 // --- danger zone: delete every non-admin account ------------------------------
 
 export interface PurgeSummary {
