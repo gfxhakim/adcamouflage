@@ -919,11 +919,42 @@ def _open_ticket(
         db.refresh(m)
 
     if not already_escalated:
+        dossier: SupportCustomerDossier | None = None
         try:
             dossier = _build_customer_dossier(db, user)
             _notify_admins_by_email(db, user, thread, dossier, messages)
         except Exception:  # noqa: BLE001 - the ticket is saved; email is best effort
             logger.warning("Could not email admins about ticket #%s", thread.id, exc_info=True)
+        _phone_alert_ticket(user, thread, messages, reason, dossier)
+
+
+def _phone_alert_ticket(
+    user: User,
+    thread: SupportThread,
+    messages: list[SupportMessage],
+    reason: str,
+    dossier: SupportCustomerDossier | None,
+) -> None:
+    """Telegram / ntfy alert for a new ticket. Best effort, never raises."""
+
+    try:
+        from . import notify
+
+        user_msgs = [m for m in messages if m.sender_role == "user" and ((m.body or "").strip() or m.attachment_name)]
+        first = user_msgs[0] if user_msgs else None
+        latest = user_msgs[-1] if len(user_msgs) > 1 else None
+        notify.support_ticket(
+            thread.id,
+            user.email,
+            user.display_name,
+            reason,
+            first.body if first else None,
+            latest_message=latest.body if latest else None,
+            plan_label=dossier.plan_label if dossier else None,
+            attachment_name=(latest or first).attachment_name if (latest or first) else None,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not send phone alert for ticket #%s", thread.id, exc_info=True)
 
 
 def open_waiting_tickets(db: Session, now: datetime | None = None, user_id: int | None = None) -> int:
@@ -1091,6 +1122,7 @@ def post_user_support_message(
         raise HTTPException(status_code=422, detail="Enter a message or attach a screenshot/video.")
 
     thread, messages = _get_or_create_thread(db, user)
+    reopened = thread.status == "resolved" and thread.escalated_at is not None
     if thread.status == "resolved":
         # Re-open into agent chat if previously escalated, otherwise bot mode
         thread.status = "agent_active" if thread.escalated_at else "bot"
@@ -1139,6 +1171,20 @@ def post_user_support_message(
     db.refresh(thread)
     for m in messages:
         db.refresh(m)
+    if thread.status in ("escalated", "agent_active"):
+        try:
+            from . import notify
+
+            notify.support_reply(
+                thread.id,
+                user.email,
+                user.display_name,
+                body,
+                attachment_name=payload.attachment_name,
+                reopened=reopened,
+            )
+        except Exception:  # noqa: BLE001 - the message is saved; the alert is best effort
+            logger.warning("Could not send phone alert for ticket #%s", thread.id, exc_info=True)
     return _serialize_thread(thread, messages)
 
 

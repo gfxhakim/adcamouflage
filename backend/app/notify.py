@@ -15,6 +15,9 @@ Events (ADCAM_NOTIFY_EVENTS picks which, all by default):
                   an order was opened (or an open one reused)
 - ``paid``        the payment provider confirmed the money; the plan is on
 - ``review``      a payment notification was set aside and needs a look
+- ``support``     a customer opened a live-agent support ticket (pressed
+                  Contact Agent, asked for a person, or waited 30 min in the bot)
+- ``support_reply`` the customer wrote again in a ticket that is already open
 
 Sending happens on a background thread, so a slow or broken Telegram never
 slows or breaks a checkout or a payment notification. The same alert
@@ -43,7 +46,7 @@ from .db import User, get_db
 
 logger = logging.getLogger(__name__)
 
-EVENTS = ("plan_click", "checkout", "paid", "review")
+EVENTS = ("plan_click", "checkout", "paid", "review", "support", "support_reply")
 # Hard ceiling across every event: past this the extra alerts are dropped
 # (and logged) until the minute rolls over.
 MAX_PER_MINUTE = 20
@@ -330,6 +333,97 @@ def needs_review(order: Any, email: str | None, reason: str, name: str | None = 
     )
 
 
+SUPPORT_TEXT_LIMIT = 400
+TICKET_REASONS = {
+    "button": "pressed Contact Live Agent",
+    "asked": "asked to talk to a person",
+    "waited": "waited 30 min in the bot",
+}
+
+
+def _short(text: str | None, limit: int = SUPPORT_TEXT_LIMIT) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def admin_support_link() -> str:
+    """Where the owner answers tickets: Admin > Support (empty without ADCAM_PUBLIC_URL)."""
+
+    base = settings.public_url.strip().rstrip("/")
+    return f"{base}/admin#support" if base else ""
+
+
+def _support_buttons() -> list[list[dict]] | None:
+    link = admin_support_link()
+    # Telegram only takes http(s) links on a button; keep it to https.
+    if not link.startswith("https://"):
+        return None
+    return [[{"text": "💬 Open Admin > Support", "url": link}]]
+
+
+def _message_text(body: str | None, attachment_name: str | None) -> str:
+    text = _short(body)
+    if attachment_name:
+        text = f"{text} 📎 {_short(attachment_name, 80)}".strip()
+    return text or "(no text)"
+
+
+def support_ticket(
+    ticket_id: int,
+    email: str | None,
+    name: str | None,
+    reason: str,
+    first_message: str | None,
+    latest_message: str | None = None,
+    plan_label: str | None = None,
+    attachment_name: str | None = None,
+) -> bool:
+    """A customer wants a live agent: a new support ticket is open."""
+
+    link = admin_support_link()
+    first = _message_text(first_message, None)
+    latest = _message_text(latest_message, attachment_name) if latest_message or attachment_name else ""
+    return alert(
+        "support",
+        f"🆘 Live agent requested: ticket #{ticket_id}",
+        [
+            f"Customer: {_customer(email, name)}",
+            f"Plan: {plan_label}" if plan_label else "",
+            f"Why: {TICKET_REASONS.get(reason, reason)}",
+            f"First message: {first}",
+            f"Latest: {latest}" if latest and latest != first else "",
+            f"Answer here: {link}" if link else "Answer in Admin > Support",
+        ],
+        key=f"ticket:{ticket_id}",
+        priority="high",
+        buttons=_support_buttons(),
+    )
+
+
+def support_reply(
+    ticket_id: int,
+    email: str | None,
+    name: str | None,
+    body: str | None,
+    attachment_name: str | None = None,
+    reopened: bool = False,
+) -> bool:
+    """The customer wrote again in an open ticket (at most one alert per ticket per dedupe window)."""
+
+    link = admin_support_link()
+    return alert(
+        "support_reply",
+        f"💬 {'Ticket re-opened' if reopened else 'New customer message'}: ticket #{ticket_id}",
+        [
+            f"Customer: {_customer(email, name)}",
+            f"Message: {_message_text(body, attachment_name)}",
+            f"Answer here: {link}" if link else "Answer in Admin > Support",
+        ],
+        key=f"ticket-reply:{ticket_id}",
+        buttons=_support_buttons(),
+    )
+
+
 # --------------------------------------------------------------------------
 # routes
 # --------------------------------------------------------------------------
@@ -422,6 +516,6 @@ def notify_test(admin: User = Depends(require_admin)) -> NotifyTest:
         )
     results = deliver(
         "🔔 Test alert from BluCloacking",
-        [f"Sent by {admin.email}.", "Plan clicks, checkouts and payments will arrive here."],
+        [f"Sent by {admin.email}.", "Plan clicks, checkouts, payments and support tickets will arrive here."],
     )
     return NotifyTest(results=results)

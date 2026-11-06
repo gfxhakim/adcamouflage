@@ -11,6 +11,8 @@ const EVENT_LABELS: Record<string, string> = {
   checkout: "Checkout started (Subscribe / Renew / Top up)",
   paid: "Payment confirmed",
   review: "Payment that needs a look",
+  support: "Support ticket: customer wants a live agent",
+  support_reply: "Customer wrote again in an open ticket",
 };
 
 /** Shows whether phone alerts are set up on the server and sends a test one. */
