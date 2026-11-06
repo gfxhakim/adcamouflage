@@ -349,3 +349,11 @@ export const adjustTokens = (id: number, amount: number, note: string) =>
 
 export const setBillingMode = (id: number, mode: BillingMode) =>
   call<UserBilling>(`/users/${id}/billing/mode`, { method: "POST", body: JSON.stringify({ mode }) });
+
+// --- phone alerts (Telegram / ntfy) ------------------------------------------
+export interface NotifyStatus {
+  channels: string[];
+  events: string[];
+}
+export const getNotifyStatus = () => call<NotifyStatus>("/notify");
+export const sendTestAlert = () => call<{ results: Record<string, string> }>("/notify/test", { method: "POST" });

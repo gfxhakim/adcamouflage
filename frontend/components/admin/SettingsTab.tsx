@@ -3,6 +3,7 @@
 import { Loader2, Megaphone, Save, Settings2, Tags } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import PhoneAlertsCard from "@/components/admin/PhoneAlertsCard";
 import TokenPlansCard from "@/components/admin/TokenPlansCard";
 import NeonCard from "@/components/NeonCard";
 import { editPlan, getSettings, updateSettings, type AppSettings, type PlanInfo } from "@/lib/admin";
@@ -120,6 +121,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
   return (
     <div className="space-y-6">
     <TokenPlansCard onSaved={onPlansChanged} />
+
+    <PhoneAlertsCard />
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
       <NeonCard padding="lg" radius="xl">

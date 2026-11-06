@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import btcpay, meta_capi, volet
+from . import btcpay, meta_capi, notify, volet
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
@@ -244,6 +244,9 @@ def checkout(
 
     existing = _open_order(db, user, payload.kind, plan.id, amount, provider)
     if existing is not None:
+        notify.checkout_started(
+            existing, user.email, plan.label, provider_label(provider), currency(db), reused=True
+        )
         return CheckoutOut(
             order_id=existing.id,
             checkout_url=existing.checkout_url or "",
@@ -262,6 +265,7 @@ def checkout(
         db.commit()
     except Exception:  # noqa: BLE001 - tracking must never block a checkout
         logger.exception("Meta InitiateCheckout for order %s failed", order.id)
+    notify.checkout_started(order, user.email, plan.label, provider_label(provider), currency(db), reused=False)
     if provider == volet.PROVIDER:
         # The signed form is built when the customer opens the pay page, so
         # nothing has to be asked of Volet here.
@@ -478,6 +482,8 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
     if reason:
         logger.warning("Volet notification for order %s ignored: %s", order.id, reason)
         log_activity(db, order.user_id, "payment", f"Volet notification for order {order.id} ignored: {reason}")
+        owner = db.get(User, order.user_id)
+        notify.needs_review(order, owner.email if owner else None, f"Volet notification ignored: {reason}")
         return PlainTextResponse("OK")
 
     state = (fields.get("ac_transaction_status") or "").upper()

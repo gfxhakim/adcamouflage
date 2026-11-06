@@ -764,6 +764,9 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
             meta_capi.purchase(order, user.email, currency(db))
         except Exception:  # noqa: BLE001 - tracking must never undo a payment
             logger.exception("Meta Purchase event for order %s failed", order.id)
+        from . import notify
+
+        notify.paid(order, user.email, plan.label, currency(db), source)
     return True
 
 
