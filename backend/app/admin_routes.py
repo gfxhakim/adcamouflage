@@ -19,6 +19,7 @@ from .activity import log_activity
 from .app_settings import announcement, currency, get_setting, registration_open, set_setting
 from .config import settings
 from . import meta_capi
+from . import purge as purge_mod
 from .db import ActivityEvent, BatchRecord, Order, TokenLedger, User, get_db
 from .plans import (
     PLAN_IDS,
@@ -1356,6 +1357,44 @@ def delete_user(
     # Logged on the admin, since the deleted user's own history goes with them.
     log_activity(db, admin.id, "admin", f"Deleted the account {email}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class PurgeRequest(BaseModel):
+    # Must be exactly purge_mod.CONFIRM_PHRASE.
+    confirm: str
+    # The user count the admin saw in the preview; a mismatch means accounts
+    # changed in the meantime, so the admin should look again first.
+    expected_users: int = Field(ge=0)
+
+
+@router.get("/purge-users")
+def purge_users_preview(admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    """What 'Delete all users' would remove. Admins (and you) are always kept."""
+
+    data = purge_mod.preview(db, [admin.email]).as_dict()
+    data["confirm_phrase"] = purge_mod.CONFIRM_PHRASE
+    return data
+
+
+@router.post("/purge-users")
+def purge_users(
+    payload: PurgeRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete every non-admin account and its data. Cannot be undone."""
+
+    if payload.confirm.strip() != purge_mod.CONFIRM_PHRASE:
+        raise HTTPException(status_code=400, detail=f"Type {purge_mod.CONFIRM_PHRASE} to confirm.")
+    current = purge_mod.preview(db, [admin.email])
+    if current.users != payload.expected_users:
+        raise HTTPException(
+            status_code=409,
+            detail=f"The number of accounts changed (now {current.users}). Check the preview again.",
+        )
+    summary = purge_mod.purge(db, [admin.email])
+    log_activity(db, admin.id, "admin", f"Deleted all {summary.users} non-admin accounts")
+    return summary.as_dict()
 
 
 @router.get("/activity", response_model=list[Activity])

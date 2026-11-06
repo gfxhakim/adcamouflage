@@ -367,3 +367,24 @@ export const connectTelegramButtons = () =>
     "/notify/telegram/connect",
     { method: "POST" },
   );
+
+// --- danger zone: delete every non-admin account ------------------------------
+
+export interface PurgeSummary {
+  users: number;
+  batches: number;
+  orders: number;
+  token_entries: number;
+  activity: number;
+  support_threads: number;
+  team_seats: number;
+  kept: string[];
+  confirm_phrase?: string;
+}
+
+export const previewPurgeUsers = () => call<PurgeSummary>("/purge-users");
+export const purgeUsers = (confirm: string, expectedUsers: number) =>
+  call<PurgeSummary>("/purge-users", {
+    method: "POST",
+    body: JSON.stringify({ confirm, expected_users: expectedUsers }),
+  });
