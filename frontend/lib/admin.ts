@@ -364,6 +364,19 @@ export interface UserBilling {
   /** The last 20 ledger lines, newest first. */
   ledger: LedgerEntry[];
   orders: AdminOrder[];
+  /** The latest admin actions on this user's plan and tokens, newest first. */
+  audit?: AuditEntry[];
+}
+
+/** One admin action on a plan or tokens: who, when, what. */
+export interface AuditEntry {
+  id: number;
+  admin_email: string;
+  user_id: number | null;
+  user_email: string;
+  action: string;
+  detail: string;
+  created_at: string;
 }
 
 export const getBillingConfig = () => call<BillingConfig>("/billing/config");
@@ -385,6 +398,24 @@ export const adjustTokens = (id: number, amount: number, note: string) =>
     method: "POST",
     body: JSON.stringify({ amount, note }),
   });
+
+/** Cancel a token plan: at the period end (like the customer's Cancel) or now (tokens left are written off). */
+export const cancelPlan = (id: number, mode: "end_of_period" | "now", reason: string) =>
+  call<UserBilling>(`/users/${id}/billing/cancel`, { method: "POST", body: JSON.stringify({ mode, reason }) });
+
+/** Undo a cancel-at-period-end while the period is still running. */
+export const resumePlan = (id: number) => call<UserBilling>(`/users/${id}/billing/resume`, { method: "POST" });
+
+/** Add days to the token period (from its end, or today if it ended). No tokens are added. */
+export const extendTokenPlan = (id: number, days: number, reason: string) =>
+  call<UserBilling>(`/users/${id}/billing/extend`, { method: "POST", body: JSON.stringify({ days, reason }) });
+
+/** Give bonus tokens (top-up bucket, never expire). */
+export const giveBonusTokens = (id: number, amount: number, note: string) =>
+  call<UserBilling>(`/users/${id}/billing/bonus`, { method: "POST", body: JSON.stringify({ amount, note }) });
+
+export const getAudit = (userId?: number) =>
+  call<AuditEntry[]>(`/audit${userId ? `?user_id=${userId}` : ""}`);
 
 export const setBillingMode = (id: number, mode: BillingMode) =>
   call<UserBilling>(`/users/${id}/billing/mode`, { method: "POST", body: JSON.stringify({ mode }) });

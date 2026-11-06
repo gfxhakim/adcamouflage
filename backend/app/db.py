@@ -247,6 +247,27 @@ class ActivityEvent(Base):
     )
 
 
+class AdminAudit(Base):
+    """One admin action on a customer's plan or tokens: who did what, to whom, when.
+
+    Ids are plain integers (no foreign keys) and the emails are copied in, so
+    the trail survives the account being deleted and never blocks a delete.
+    """
+
+    __tablename__ = "admin_audit"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    admin_email: Mapped[str] = mapped_column(String(320), default="", nullable=False)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    user_email: Mapped[str] = mapped_column(String(320), default="", nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+
+
 class SupportThread(Base):
     """A conversation between a signed-in user, the BluCloaking AI bot, and a live admin agent."""
 

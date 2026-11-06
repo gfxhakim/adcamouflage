@@ -1,13 +1,17 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarPlus, Coins, Loader2, Repeat } from "lucide-react";
+import { Ban, CalendarClock, CalendarPlus, Coins, Gift, Loader2, Repeat, RotateCcw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import NeonCard from "@/components/NeonCard";
 import {
   adjustTokens,
+  cancelPlan,
+  extendTokenPlan,
   getBillingConfig,
+  giveBonusTokens,
+  resumePlan,
   getUserBilling,
   grantPeriod,
   setBillingMode,
@@ -54,6 +58,11 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
   const [grantMonths, setGrantMonths] = useState("1");
   const [tokenAmount, setTokenAmount] = useState("");
   const [tokenNote, setTokenNote] = useState("");
+  const [extendDays, setExtendDays] = useState("7");
+  const [extendReason, setExtendReason] = useState("");
+  const [bonusAmount, setBonusAmount] = useState("");
+  const [bonusNote, setBonusNote] = useState("");
+  const [cancelReason, setCancelReason] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -114,6 +123,45 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
       setTokenAmount("");
       setTokenNote("");
     });
+  };
+
+  const extend = () => {
+    const days = Number.parseInt(extendDays, 10);
+    if (!(days >= 1 && days <= 365)) return setError("Enter 1 to 365 days.");
+    const label = billing?.subscription?.plan_label ?? "plan";
+    if (!window.confirm(`Add ${days} day${days === 1 ? "" : "s"} to ${user.email}'s ${label} period? No tokens are added.`)) return;
+    void run("extend", () => extendTokenPlan(user.id, days, extendReason.trim()), `Period extended by ${days} day${days === 1 ? "" : "s"}.`).then(() =>
+      setExtendReason(""),
+    );
+  };
+
+  const bonus = () => {
+    const amount = Number.parseInt(bonusAmount, 10);
+    if (!(amount >= 1)) return setError("Enter a bonus of at least 1 token.");
+    if (!window.confirm(`Give ${user.email} ${amount} bonus tokens? They never expire.`)) return;
+    void run("bonus", () => giveBonusTokens(user.id, amount, bonusNote.trim()), `+${amount} bonus tokens given.`).then(() => {
+      setBonusAmount("");
+      setBonusNote("");
+    });
+  };
+
+  const cancel = (mode: "end_of_period" | "now") => {
+    const sub = billing?.subscription;
+    if (!sub) return;
+    const left = billing?.balance.subscription_tokens ?? 0;
+    const text =
+      mode === "now"
+        ? `Cancel ${user.email}'s ${sub.plan_label} NOW?\n\nThe period ends today, ${left} subscription tokens are written off and top-up tokens are frozen until they buy a plan again. This cannot be undone (Extend days can give access back, but not the written-off tokens).`
+        : `Cancel ${user.email}'s ${sub.plan_label} at the period end (${sub.period_end ? formatDate(sub.period_end) : "end"})?\n\nThey keep access until then; their next purchase gets no rollover.`;
+    if (!window.confirm(text)) return;
+    void run("cancel-" + mode, () => cancelPlan(user.id, mode, cancelReason.trim()), mode === "now" ? "Plan cancelled now." : "Plan will end at the period end.").then(() =>
+      setCancelReason(""),
+    );
+  };
+
+  const resume = () => {
+    if (!window.confirm(`Undo the cancellation for ${user.email}? Their plan keeps running and rollover works again.`)) return;
+    void run("resume", () => resumePlan(user.id), "Cancellation undone.");
   };
 
   const switchMode = (mode: BillingMode) => {
@@ -259,6 +307,113 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
             Goes into the top-up bucket, so it never expires; a negative number takes tokens away.
           </p>
 
+          {/* Plan tools: extend, bonus, cancel --------------------------------- */}
+          <div className="space-y-3 rounded-xl border border-black/[0.06] dark:border-white/10 p-3">
+            <p className="label">Plan tools</p>
+
+            <div className="grid gap-2 sm:grid-cols-[6rem_1fr_auto] sm:items-end">
+              <label className="block">
+                <span className="label">Days</span>
+                <input
+                  className="field mt-1"
+                  type="number"
+                  min={1}
+                  max={365}
+                  inputMode="numeric"
+                  value={extendDays}
+                  onChange={(e) => setExtendDays(e.target.value)}
+                  aria-label="Days to add to the period"
+                />
+              </label>
+              <label className="block">
+                <span className="label">Reason</span>
+                <input
+                  className="field mt-1"
+                  maxLength={500}
+                  placeholder="e.g. outage compensation"
+                  value={extendReason}
+                  onChange={(e) => setExtendReason(e.target.value)}
+                />
+              </label>
+              <button type="button" className="btn-ghost" disabled={busy !== null || !sub} onClick={extend}>
+                {busy === "extend" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarClock className="h-4 w-4" aria-hidden />}
+                Extend days
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-[6rem_1fr_auto] sm:items-end">
+              <label className="block">
+                <span className="label">Bonus</span>
+                <input
+                  className="field mt-1"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  placeholder="300"
+                  value={bonusAmount}
+                  onChange={(e) => setBonusAmount(e.target.value)}
+                  aria-label="Bonus tokens to give"
+                />
+              </label>
+              <label className="block">
+                <span className="label">Note</span>
+                <input
+                  className="field mt-1"
+                  maxLength={500}
+                  placeholder="e.g. thanks for the feedback"
+                  value={bonusNote}
+                  onChange={(e) => setBonusNote(e.target.value)}
+                />
+              </label>
+              <button type="button" className="btn-ghost" disabled={busy !== null} onClick={bonus}>
+                {busy === "bonus" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Gift className="h-4 w-4" aria-hidden />}
+                Give bonus
+              </button>
+            </div>
+
+            {sub?.active ? (
+              <div className="space-y-2">
+                <label className="block">
+                  <span className="label">Cancel reason</span>
+                  <input
+                    className="field mt-1"
+                    maxLength={500}
+                    placeholder="e.g. refunded $89 on request"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {sub.cancelled ? (
+                    <button type="button" className="btn-ghost" disabled={busy !== null} onClick={resume}>
+                      {busy === "resume" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RotateCcw className="h-4 w-4" aria-hidden />}
+                      Undo cancel
+                    </button>
+                  ) : (
+                    <button type="button" className="btn-ghost" disabled={busy !== null} onClick={() => cancel("end_of_period")}>
+                      {busy === "cancel-end_of_period" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Ban className="h-4 w-4" aria-hidden />}
+                      Cancel at period end
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-ghost !border-red-300 !text-red-700 dark:!border-red-500/40 dark:!text-red-300"
+                    disabled={busy !== null}
+                    onClick={() => cancel("now")}
+                  >
+                    {busy === "cancel-now" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Ban className="h-4 w-4" aria-hidden />}
+                    Cancel now (refund)
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <p className="text-[11px] text-ink-faint dark:text-slate-500">
+              Extend adds days only. Bonus tokens go in the top-up bucket and never expire. Cancel now ends the period today and
+              writes off the subscription tokens left; money refunds are done in Volet / your wallet, not here.
+            </p>
+          </div>
+
           {/* Billing mode ----------------------------------------------------- */}
           <div>
             {billing.billing_mode === "tokens" ? (
@@ -271,6 +426,34 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
                 {busy === "mode" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Repeat className="h-4 w-4" aria-hidden />}
                 Switch to token billing
               </button>
+            )}
+          </div>
+
+          {/* Admin actions (audit) -------------------------------------------- */}
+          <div>
+            <p className="label mb-1 flex items-center gap-1">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> Admin actions
+            </p>
+            {!billing.audit || billing.audit.length === 0 ? (
+              <p className="py-2 text-xs text-ink-faint dark:text-slate-500">No admin changes yet.</p>
+            ) : (
+              <ul className="divide-y divide-black/[0.06] dark:divide-white/10">
+                {billing.audit.map((row) => (
+                  <li key={row.id} className="flex items-start justify-between gap-3 py-1.5 text-xs">
+                    <span className="min-w-0">
+                      <span className="block text-black dark:text-slate-100">{row.detail}</span>
+                      <span className="block truncate text-ink-faint dark:text-slate-500">by {row.admin_email}</span>
+                    </span>
+                    <time
+                      className="shrink-0 text-ink-faint dark:text-slate-500"
+                      dateTime={row.created_at}
+                      title={new Date(row.created_at).toLocaleString()}
+                    >
+                      {timeAgo(row.created_at)}
+                    </time>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
