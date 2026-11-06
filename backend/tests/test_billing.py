@@ -1052,8 +1052,8 @@ def test_reminders_pick_the_right_users_once():
     mine = {k: v for k, v in due.items() if k.endswith(f"-{RUN_ID}@example.com")}
     assert {ending, ended} <= set(mine)
     assert not {long_gone, far_off, legacy} & set(mine)
-    assert mine[ending][0] == "ending" and mine[ending][1].startswith("Your Pro period ends on ")
-    assert mine[ended] == ("ended", "Your period ended")
+    assert mine[ending][0] == "ending" and mine[ending][1].startswith("Your Pro plan ends on ")
+    assert mine[ended] == ("ended", "Your Pro plan has ended")
 
     sent: list[tuple[str, str]] = []
 
@@ -1106,4 +1106,4 @@ def test_reminder_task_is_scheduled():
 
     entry = celery_app.conf.beat_schedule["send-billing-reminders"]
     assert entry["task"] == task.name == "app.tasks.send_billing_reminders"
-    assert entry["schedule"] == 86400.0
+    assert entry["schedule"] == 3600.0

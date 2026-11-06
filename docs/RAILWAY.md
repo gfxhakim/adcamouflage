@@ -289,13 +289,7 @@ see VOLET.md sections 4 and 6 before changing it). The status notification is th
 a Volet order (there is no polling fallback), so an order whose notification
 never arrives stays pending until you settle it by hand from the admin panel.
 
-Optional email reminders (period ends in 3 days / period just ended) go out
-through Resend once a day from the Celery beat schedule:
-
-```bash
-ADCAM_RESEND_API_KEY=<Resend API key>
-ADCAM_EMAIL_FROM="BluCloacking <billing@blucloack.online>"
-```
-
-Without `ADCAM_RESEND_API_KEY` the reminders are skipped silently; the
-in-app alerts on /app and /app/plan still show.
+Optional customer emails (welcome, plan activated, renewal reminder, plan
+ended) go out through any SMTP server, or Resend. Setup, variables and the
+Admin editor are in [EMAIL.md](EMAIL.md). Without a mail server they are
+skipped silently; the in-app alerts on /app and /app/plan still show.

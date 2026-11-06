@@ -822,6 +822,11 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
         from . import notify
 
         notify.paid(order, user.email, plan.label, currency(db), source, name=user.display_name)
+    if order.kind == "subscription":
+        from . import mailer
+
+        granted = order.tokens or plan.tokens * max(1, periods)
+        mailer.plan_activated(db, user, plan.label, granted)
     return True
 
 

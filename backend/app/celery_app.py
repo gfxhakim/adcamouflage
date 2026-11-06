@@ -36,7 +36,10 @@ celery_app.conf.update(
         },
         "send-billing-reminders": {
             "task": "app.tasks.send_billing_reminders",
-            "schedule": 86400.0,
+            # Hourly, not daily: beat restarts on every deploy and an interval
+            # schedule starts counting again, so a daily one could never fire.
+            # Each reminder is marked once sent, so running often is safe.
+            "schedule": 3600.0,
         },
         "open-waiting-support-tickets": {
             "task": "app.tasks.open_waiting_support_tickets",
