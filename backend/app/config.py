@@ -142,6 +142,20 @@ class Settings(BaseSettings):
     meta_test_event_code: str = ""
     meta_graph_version: str = "v21.0"
 
+    # --- phone alerts (Telegram / ntfy) -----------------------------------
+    # Off until a channel is set. See docs/PHONE_ALERTS.md. The bot token is
+    # a secret, set only on Railway.
+    notify_telegram_bot_token: SecretStr | None = None
+    notify_telegram_chat_id: str = ""
+    notify_ntfy_topic: str = ""
+    notify_ntfy_url: str = "https://ntfy.sh"
+    notify_ntfy_token: SecretStr | None = None
+    # Which alerts to send, comma separated: plan_click, checkout, paid,
+    # review. Empty = all of them.
+    notify_events: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # The same alert (same event, person and plan) at most once per this many seconds.
+    notify_dedupe_seconds: int = 120
+
     # --- email (Resend) ---------------------------------------------------
     # Optional. Without a key the billing reminders are silently skipped.
     resend_api_key: SecretStr | None = None
@@ -182,7 +196,7 @@ class Settings(BaseSettings):
             return [str(email).strip().lower() for email in value if str(email).strip()]
         return value
 
-    @field_validator("volet_notify_ips", mode="before")
+    @field_validator("volet_notify_ips", "notify_events", mode="before")
     @classmethod
     def _split_notify_ips(cls, value: object) -> object:
         if isinstance(value, str):

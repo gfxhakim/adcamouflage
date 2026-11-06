@@ -8,6 +8,7 @@ import { useCms } from "@/components/cms/ContentProvider";
 import OfferCountdown, { useTimeLeft } from "@/components/landing/OfferCountdown";
 import { CmsHeadline } from "@/components/landing/primitives";
 import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
+import { reportPlanClick } from "@/lib/notify";
 import { featureForLine, planIncludes } from "@/lib/plan-features";
 import { cn } from "@/lib/utils";
 
@@ -222,6 +223,7 @@ export function PricingSection({ plans: listed, currency, ctaHref, promo }: Pric
                 k="pricing.choose"
                 href={ctaHref}
                 label="Choose"
+                onClick={() => reportPlanClick(plan.id)}
                 className={cn(
                   "group/btn mt-7 flex w-full items-center justify-between rounded-full py-1.5 pl-5 pr-1.5 text-sm font-semibold transition-colors",
                   popular ? "bg-white text-black hover:bg-meta-50" : "bg-white/[0.08] text-white hover:bg-white/[0.14]",
