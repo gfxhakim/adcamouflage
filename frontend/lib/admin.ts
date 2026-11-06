@@ -130,6 +130,41 @@ export interface Analytics {
   presets: Record<string, number>;
 }
 
+export interface SalesTotals {
+  signups: number;
+  checkouts: number;
+  approved: number;
+  revenue: number;
+  conversion: number;
+  average_order: number;
+  subscriptions: number;
+  topups: number;
+}
+
+export interface Sales {
+  start: string;
+  end: string;
+  days: number;
+  currency: string;
+  totals: SalesTotals;
+  previous: SalesTotals;
+  signups: Point[];
+  checkouts: Point[];
+  approved: Point[];
+  revenue: Point[];
+  by_plan: { id: string; label: string; approved: number; revenue: number }[];
+  recent: {
+    id: string;
+    paid_at: string;
+    user_id: number;
+    email: string;
+    kind: string;
+    plan_label: string;
+    amount: number;
+    provider: string;
+  }[];
+}
+
 export interface AppSettings {
   registration_open: boolean;
   registration_locked: boolean;
@@ -180,6 +215,8 @@ export const getPlans = () => call<PlanInfo[]>("/plans");
 export const getActivity = (limit = 50, kind = "") =>
   call<ActivityEvent[]>(`/activity?limit=${limit}&kind=${encodeURIComponent(kind)}`);
 export const getAnalytics = (days: number) => call<Analytics>(`/analytics?days=${days}`);
+export const getSales = (start: string, end: string) =>
+  call<Sales>(`/sales?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const getSettings = () => call<AppSettings>("/settings");
 export const updateSettings = (changes: Partial<Omit<AppSettings, "registration_locked">>) =>
   call<AppSettings>("/settings", { method: "PATCH", body: JSON.stringify(changes) });

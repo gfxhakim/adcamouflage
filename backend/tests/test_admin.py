@@ -428,3 +428,48 @@ def test_admin_password_variable_creates_and_resets_the_admin_login(monkeypatch)
 
     boot("short")  # too short: ignored, the last good password still works
     assert _login(email, "second-admin-pass").get("/api/v1/admin/settings").status_code == 200
+
+
+def test_sales_stats_count_signups_checkouts_and_approved_revenue(admin):
+    from app.db import Order, get_session_factory
+
+    buyer = _signed_in(address("sales-buyer"))
+    buyer_id = _user_id(buyer)
+    now = datetime.now(timezone.utc)
+    before = admin.get("/api/v1/admin/sales").json()
+
+    with get_session_factory()() as db:
+        db.add_all(
+            [
+                Order(id=f"s1-{RUN_ID}", user_id=buyer_id, kind="subscription", plan_id="pro", amount_usd=89.0, status="paid", paid_at=now),
+                Order(id=f"s2-{RUN_ID}", user_id=buyer_id, kind="topup", plan_id="pro", amount_usd=40.0, status="paid", paid_at=now),
+                # A pending checkout counts as a checkout, not a sale.
+                Order(id=f"s3-{RUN_ID}", user_id=buyer_id, kind="subscription", plan_id="max", amount_usd=149.0, status="pending"),
+                # A free admin grant is not a sale.
+                Order(id=f"s4-{RUN_ID}", user_id=buyer_id, kind="subscription", plan_id="max", amount_usd=0.0, status="paid", paid_at=now),
+            ]
+        )
+        db.commit()
+
+    response = admin.get("/api/v1/admin/sales")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["days"] == 30 and len(data["revenue"]) == 30 and len(data["approved"]) == 30
+    totals, old = data["totals"], before["totals"]
+    assert totals["checkouts"] == old["checkouts"] + 4
+    assert totals["approved"] == old["approved"] + 2
+    assert totals["revenue"] == pytest.approx(old["revenue"] + 129.0)
+    assert totals["topups"] == old["topups"] + 1
+    assert totals["signups"] >= 1
+    assert data["revenue"][-1]["value"] >= 129.0
+    assert any(r["id"] == f"s1-{RUN_ID}" and r["email"] == address("sales-buyer") for r in data["recent"])
+    assert any(p["id"] == "topup" for p in data["by_plan"])
+
+    # A custom range in the past has none of today's sales.
+    old_day = (now - timedelta(days=400)).date().isoformat()
+    past = admin.get("/api/v1/admin/sales", params={"start": old_day, "end": old_day}).json()
+    assert past["days"] == 1 and past["totals"]["approved"] == 0
+
+    assert admin.get("/api/v1/admin/sales", params={"start": "2026-02-01", "end": "2026-01-01"}).status_code == 422
+    assert admin.get("/api/v1/admin/sales", params={"start": "2020-01-01", "end": "2026-01-01"}).status_code == 422
+    assert _signed_in(address("sales-plain")).get("/api/v1/admin/sales").status_code == 404

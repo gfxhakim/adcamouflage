@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BarChart3,
   Bell,
+  CircleDollarSign,
   Headset,
   LayoutDashboard,
   Loader2,
@@ -21,6 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import ContentEditor from "@/components/admin/ContentEditor";
 import OverviewTab from "@/components/admin/OverviewTab";
+import SalesTab from "@/components/admin/SalesTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 import SupportTab from "@/components/admin/SupportTab";
 import UserPanel from "@/components/admin/UserPanel";
@@ -38,6 +40,7 @@ const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "support", label: "Support · Live Chat", icon: Headset },
   { id: "users", label: "Users", icon: Users },
+  { id: "sales", label: "Sales", icon: CircleDollarSign },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings2 },
   { id: "landing", label: "Landing page", icon: PanelsTopLeft },
@@ -396,6 +399,8 @@ export default function AdminPage() {
               onSelectUser={setSelected}
               onChanged={() => void loadShared()}
             />
+          ) : tab === "sales" ? (
+            <SalesTab refreshKey={refreshKey} onSelectUser={setSelected} />
           ) : tab === "analytics" ? (
             <AnalyticsTab refreshKey={refreshKey} onSelectUser={setSelected} />
           ) : tab === "landing" ? (
