@@ -8,6 +8,12 @@ Get an instant message on your phone when:
 | 🛒 **Checkout started** | a signed-in customer presses Subscribe / Renew / Top up and an order opens |
 | ✅ **PAID** | Volet or BTCPay confirms the money and the plan turns on |
 | ⚠️ **Payment needs a look** | a payment notification was set aside (wrong amount, currency or gateway) |
+| 🆘 **Live agent requested** | a customer opens a support ticket: presses **Contact Live Agent**, types that they want a person, or waits 30 min in the support bot |
+| 💬 **New customer message** | the customer writes again (text or screenshot/video) in a ticket that is already open |
+
+Support alerts show the ticket number, the customer's name and email, their plan, their first message (and latest
+one) and an **Open Admin > Support** button (the button needs `ADCAM_PUBLIC_URL` set to your `https://` site).
+Customer messages in one ticket send at most one alert every 2 minutes.
 
 Each message shows the plan, the amount, the customer's email (or "visitor" if not signed in) and the order number
 (the `BC-XXXX-XXXX` transaction ID once transaction IDs are live, otherwise `#` + the first 8 characters of the order).
@@ -92,7 +98,8 @@ Optional for a private or self-hosted ntfy server: `ADCAM_NOTIFY_NTFY_URL` (defa
 
 `ADCAM_NOTIFY_EVENTS` (optional), comma separated. Empty or not set = all of them.
 
-- `plan_click,checkout,paid,review` everything (default)
+- `plan_click,checkout,paid,review,support,support_reply` everything (default)
+- `support,support_reply` only support tickets
 - `checkout,paid` skip landing clicks
 - `paid` only real money
 
