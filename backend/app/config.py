@@ -155,6 +155,17 @@ class Settings(BaseSettings):
     notify_events: Annotated[list[str], NoDecode] = Field(default_factory=list)
     # The same alert (same event, person and plan) at most once per this many seconds.
     notify_dedupe_seconds: int = 120
+    # Approve / Reject buttons under Telegram payment alerts (see
+    # docs/PHONE_ALERTS.md). On by default once Telegram is set up; they work
+    # after Admin > Settings > Phone alerts > Connect buttons.
+    notify_telegram_buttons: bool = True
+    # Telegram user ids allowed to press the buttons, comma separated. Empty =
+    # the chat id when it is a private chat (a positive number). A group chat
+    # (negative id) needs this list, or nobody can press.
+    notify_telegram_approver_ids: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Optional: the secret Telegram sends back on every button press. When
+    # empty it is derived from the bot token, so nothing else has to be set.
+    notify_telegram_webhook_secret: SecretStr | None = None
 
     # --- email (Resend) ---------------------------------------------------
     # Optional. Without a key the billing reminders are silently skipped.
@@ -196,7 +207,7 @@ class Settings(BaseSettings):
             return [str(email).strip().lower() for email in value if str(email).strip()]
         return value
 
-    @field_validator("volet_notify_ips", "notify_events", mode="before")
+    @field_validator("volet_notify_ips", "notify_events", "notify_telegram_approver_ids", mode="before")
     @classmethod
     def _split_notify_ips(cls, value: object) -> object:
         if isinstance(value, str):

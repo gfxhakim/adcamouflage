@@ -38,6 +38,44 @@ down, the alert is just skipped and logged. The same alert (same person, same pl
 6. In the app: **Admin → Settings → Phone alerts** shows **On: telegram**. Press **Send test alert**; the message
    should arrive in a few seconds.
 
+### Approve or reject a payment right from Telegram
+
+The 🛒 **Checkout started** and ⚠️ **Payment needs a look** alerts come with two buttons: **✅ Approve** and
+**❌ Reject**. The message shows the customer's name and email, the plan, the amount and the order number.
+
+- **Approve** asks once more (**✅ Yes, activate** / **↩️ Back**). **Yes, activate** turns the plan or top-up on the
+  same way a confirmed payment does: tokens credited once, the customer's activity log gets a line, Meta gets its
+  Purchase event, and the ✅ **PAID** alert follows ("Confirmed by: approved in Telegram").
+- **Reject** asks once more, then marks the order invalid. If the payment provider confirms that order later
+  anyway, it is still applied.
+- Pressing twice, or Volet confirming an order you already approved, never credits twice ("Already active").
+- Only use **Approve** when you can see the money arrived (for example in your Volet balance). A screenshot from a
+  customer is not proof on its own.
+
+**Turn the buttons on (once):**
+
+1. Telegram alerts work (steps 1-6 above) and `ADCAM_PUBLIC_URL` on the api service is your https address
+   (for example `https://blucloack.online`).
+2. **Admin → Settings → Phone alerts → Connect buttons.** The card then says *Approve from Telegram: connected*.
+   This tells Telegram to send button presses to `https://<your site>/api/v1/notify/telegram` with a secret
+   made from your bot token; nothing else to copy or paste.
+3. Open a checkout with a test account, press **Approve → Yes, activate** in Telegram, and check the account.
+
+**Who can press:** only you. A press counts only if it comes from Telegram with the secret, from the alert chat,
+by an allowed person, on a button the app itself signed for that order. Anyone else gets "Not allowed.".
+
+- Private chat with your bot (chat ID is a positive number): you are the allowed person, nothing to set.
+- Group chat (chat ID starts with `-`): set `ADCAM_NOTIFY_TELEGRAM_APPROVER_IDS` to the Telegram user IDs allowed to
+  press, comma separated (each person gets theirs from @userinfobot). Without it, nobody can press in a group.
+
+Optional variables: `ADCAM_NOTIFY_TELEGRAM_BUTTONS=false` removes the buttons (alerts still arrive);
+`ADCAM_NOTIFY_TELEGRAM_WEBHOOK_SECRET` sets the secret yourself instead of deriving it from the token (then press
+**Connect buttons** again).
+
+After you change the bot token, press **Connect buttons** again. Once the buttons are connected, the
+`getUpdates` link from step 3 stops working for that bot (Telegram allows one or the other); get group chat IDs
+before connecting.
+
 ## Option B: ntfy (no account needed)
 
 1. Install the **ntfy** app (Android / iPhone) and **subscribe to a topic**. Use a long random name, for example
@@ -69,6 +107,9 @@ Delete the variables (or clear their values) on the api service and deploy.
 - **Admin → Settings → Phone alerts says Off**: the variables are not on the **api** service, or it was not redeployed.
 - **The test shows "Telegram answered 401"**: the bot token is wrong. **"400 chat not found"**: wrong chat ID, or
   you did not press **Start** on your bot.
+- **Buttons spin and nothing happens**: press **Connect buttons** again in Admin → Settings → Phone alerts; check that
+  `ADCAM_PUBLIC_URL` is your real https address. Refused presses are logged as `Telegram button press refused: ...`
+  or `Telegram webhook refused: ...`.
 - Railway → api → **Deploy logs**: failed alerts are logged as `Telegram alert failed: ...` / `ntfy alert failed: ...`.
 
 Never paste the bot token in a chat or a screenshot. If it leaks, open @BotFather → `/revoke` and put the new

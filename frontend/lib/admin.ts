@@ -356,6 +356,14 @@ export const setBillingMode = (id: number, mode: BillingMode) =>
 export interface NotifyStatus {
   channels: string[];
   events: string[];
+  /** Approve / Reject buttons under Telegram payment alerts. */
+  telegram_buttons?: "off" | "not_connected" | "connected" | "unknown";
+  telegram_buttons_detail?: string;
 }
 export const getNotifyStatus = () => call<NotifyStatus>("/notify");
 export const sendTestAlert = () => call<{ results: Record<string, string> }>("/notify/test", { method: "POST" });
+export const connectTelegramButtons = () =>
+  call<{ telegram_buttons: NotifyStatus["telegram_buttons"]; telegram_buttons_detail: string }>(
+    "/notify/telegram/connect",
+    { method: "POST" },
+  );

@@ -1,10 +1,10 @@
 "use client";
 
-import { BellRing, Loader2, Send } from "lucide-react";
+import { BellRing, Link2, Loader2, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import NeonCard from "@/components/NeonCard";
-import { getNotifyStatus, sendTestAlert, type NotifyStatus } from "@/lib/admin";
+import { connectTelegramButtons, getNotifyStatus, sendTestAlert, type NotifyStatus } from "@/lib/admin";
 
 const EVENT_LABELS: Record<string, string> = {
   plan_click: "Plan clicks on the landing page",
@@ -17,6 +17,7 @@ const EVENT_LABELS: Record<string, string> = {
 export default function PhoneAlertsCard() {
   const [status, setStatus] = useState<NotifyStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
@@ -43,7 +44,26 @@ export default function PhoneAlertsCard() {
     }
   };
 
+  const connect = async () => {
+    setConnecting(true);
+    setMessage(null);
+    try {
+      const result = await connectTelegramButtons();
+      setStatus((s) => (s ? { ...s, ...result } : s));
+      setMessage(
+        result.telegram_buttons === "connected"
+          ? { ok: true, text: "Buttons connected. Approve and Reject now work from Telegram." }
+          : { ok: false, text: result.telegram_buttons_detail || "Telegram did not confirm. Try again." },
+      );
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof Error ? err.message : "Could not connect the buttons." });
+    } finally {
+      setConnecting(false);
+    }
+  };
+
   const on = (status?.channels.length ?? 0) > 0;
+  const buttons = status?.telegram_buttons ?? "off";
 
   return (
     <NeonCard padding="lg" radius="xl">
@@ -73,6 +93,32 @@ export default function PhoneAlertsCard() {
             <li key={e}>• {EVENT_LABELS[e] ?? e}</li>
           ))}
         </ul>
+      ) : null}
+      {buttons !== "off" ? (
+        <div className="mb-4 rounded-lg border border-black/10 p-3 text-xs dark:border-white/10">
+          <p className="font-semibold text-black dark:text-slate-100">
+            Approve from Telegram:{" "}
+            <span className={buttons === "connected" ? "text-emerald-700 dark:text-emerald-300" : "text-ink-faint dark:text-slate-400"}>
+              {buttons === "connected" ? "connected" : buttons === "unknown" ? "could not check" : "not connected"}
+            </span>
+          </p>
+          <p className="mt-1 text-ink-faint dark:text-slate-500">
+            Checkout and payment-needs-a-look alerts get Approve and Reject buttons. Approve asks once more, then turns
+            the plan on exactly like a confirmed payment.
+            {status?.telegram_buttons_detail ? ` ${status.telegram_buttons_detail}` : ""}
+          </p>
+          {buttons !== "connected" ? (
+            <button
+              type="button"
+              className="btn-primary mt-2 !text-xs"
+              disabled={connecting}
+              onClick={() => void connect()}
+            >
+              {connecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Link2 className="h-3.5 w-3.5" aria-hidden />}
+              Connect buttons
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" className="btn-primary !text-xs" disabled={!on || busy} onClick={() => void test()}>

@@ -766,7 +766,7 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
             logger.exception("Meta Purchase event for order %s failed", order.id)
         from . import notify
 
-        notify.paid(order, user.email, plan.label, currency(db), source)
+        notify.paid(order, user.email, plan.label, currency(db), source, name=user.display_name)
     return True
 
 

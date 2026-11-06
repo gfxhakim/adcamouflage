@@ -245,7 +245,13 @@ def checkout(
     existing = _open_order(db, user, payload.kind, plan.id, amount, provider)
     if existing is not None:
         notify.checkout_started(
-            existing, user.email, plan.label, provider_label(provider), currency(db), reused=True
+            existing,
+            user.email,
+            plan.label,
+            provider_label(provider),
+            currency(db),
+            reused=True,
+            name=user.display_name,
         )
         try:
             # The same pending order again: keep its Meta data current (the
@@ -274,7 +280,9 @@ def checkout(
         db.commit()
     except Exception:  # noqa: BLE001 - tracking must never block a checkout
         logger.exception("Meta InitiateCheckout for order %s failed", order.id)
-    notify.checkout_started(order, user.email, plan.label, provider_label(provider), currency(db), reused=False)
+    notify.checkout_started(
+        order, user.email, plan.label, provider_label(provider), currency(db), reused=False, name=user.display_name
+    )
     if provider == volet.PROVIDER:
         # The signed form is built when the customer opens the pay page, so
         # nothing has to be asked of Volet here.
@@ -492,7 +500,12 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         logger.warning("Volet notification for order %s ignored: %s", order.id, reason)
         log_activity(db, order.user_id, "payment", f"Volet notification for order {order.id} ignored: {reason}")
         owner = db.get(User, order.user_id)
-        notify.needs_review(order, owner.email if owner else None, f"Volet notification ignored: {reason}")
+        notify.needs_review(
+            order,
+            owner.email if owner else None,
+            f"Volet notification ignored: {reason}",
+            name=owner.display_name if owner else None,
+        )
         return PlainTextResponse("OK")
 
     state = (fields.get("ac_transaction_status") or "").upper()

@@ -107,19 +107,18 @@ def reset() -> None:
 # --------------------------------------------------------------------------
 
 
-def _send_telegram(title: str, lines: list[str]) -> None:
+def _send_telegram(title: str, lines: list[str], buttons: list[list[dict]] | None = None) -> None:
     token = _secret(settings.notify_telegram_bot_token)
     body = "\n".join([f"<b>{html.escape(title)}</b>", *(html.escape(line) for line in lines)])
-    response = httpx.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={
-            "chat_id": settings.notify_telegram_chat_id.strip(),
-            "text": body,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        },
-        timeout=TIMEOUT,
-    )
+    message: dict[str, Any] = {
+        "chat_id": settings.notify_telegram_chat_id.strip(),
+        "text": body,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
+    if buttons:
+        message["reply_markup"] = {"inline_keyboard": buttons}
+    response = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json=message, timeout=TIMEOUT)
     if response.status_code >= 400:
         # The token is part of the URL, so only the status and Telegram's
         # own description are logged, never the request.
@@ -149,13 +148,19 @@ def _send_ntfy(title: str, lines: list[str], priority: str) -> None:
         raise RuntimeError(f"ntfy answered {response.status_code}: {response.text[:200]}")
 
 
-def deliver(title: str, lines: list[str], priority: str = "default") -> dict[str, str]:
-    """Send now on every channel that is set up. Returns channel -> "ok" or the error."""
+def deliver(
+    title: str, lines: list[str], priority: str = "default", buttons: list[list[dict]] | None = None
+) -> dict[str, str]:
+    """Send now on every channel that is set up. Returns channel -> "ok" or the error.
+
+    ``buttons`` (Telegram inline keyboard rows) only go to Telegram: ntfy
+    gets the same text without them.
+    """
 
     results: dict[str, str] = {}
     if telegram_ready():
         try:
-            _send_telegram(title, lines)
+            _send_telegram(title, lines, buttons)
             results["telegram"] = "ok"
         except Exception as exc:  # noqa: BLE001 - an alert must never raise
             logger.warning("Telegram alert failed: %s", exc)
@@ -195,11 +200,21 @@ def _admit(key: str | None) -> bool:
     return True
 
 
-def _dispatch(title: str, lines: list[str], priority: str) -> None:
-    threading.Thread(target=deliver, args=(title, lines, priority), daemon=True, name="phone-alert").start()
+def _dispatch(title: str, lines: list[str], priority: str, buttons: list[list[dict]] | None = None) -> None:
+    threading.Thread(
+        target=deliver, args=(title, lines, priority, buttons), daemon=True, name="phone-alert"
+    ).start()
 
 
-def alert(event: str, title: str, lines: list[str], *, key: str | None = None, priority: str = "default") -> bool:
+def alert(
+    event: str,
+    title: str,
+    lines: list[str],
+    *,
+    key: str | None = None,
+    priority: str = "default",
+    buttons: list[list[dict]] | None = None,
+) -> bool:
     """Queue one alert. Never raises; returns True if it was queued."""
 
     try:
@@ -207,7 +222,11 @@ def alert(event: str, title: str, lines: list[str], *, key: str | None = None, p
             return False
         if not _admit(f"{event}:{key}" if key else None):
             return False
-        _dispatch(title, [line for line in lines if line], priority)
+        kept = [line for line in lines if line]
+        if buttons:
+            _dispatch(title, kept, priority, buttons)
+        else:
+            _dispatch(title, kept, priority)
         return True
     except Exception:  # noqa: BLE001 - alerts must never break the caller
         logger.exception("Phone alert %s could not be queued", event)
@@ -230,6 +249,21 @@ def _money(amount: float, currency: str) -> str:
     return f"${amount:g}" if currency.upper() == "USD" else f"{amount:g} {currency.upper()}"
 
 
+def _customer(email: str | None, name: str | None) -> str:
+    name = (name or "").strip()
+    if name and email:
+        return f"{name} ({email})"
+    return name or email or "unknown"
+
+
+def _approve_buttons(order: Any) -> list[list[dict]] | None:
+    """Approve / Reject buttons for an order that is not paid yet (None when they are off)."""
+
+    from . import telegram_approve
+
+    return telegram_approve.order_buttons(order)
+
+
 def plan_click(plan_label: str, price: float | None, currency: str, who: str | None, address: str) -> bool:
     price_text = f" ({_money(price, currency)})" if price else ""
     return alert(
@@ -241,7 +275,14 @@ def plan_click(plan_label: str, price: float | None, currency: str, who: str | N
 
 
 def checkout_started(
-    order: Any, email: str, plan_label: str, provider_label: str, currency: str, *, reused: bool
+    order: Any,
+    email: str,
+    plan_label: str,
+    provider_label: str,
+    currency: str,
+    *,
+    reused: bool,
+    name: str | None = None,
 ) -> bool:
     what = f"{plan_label} subscription" if order.kind == "subscription" else f"Top-up on {plan_label}"
     return alert(
@@ -249,21 +290,22 @@ def checkout_started(
         f"🛒 Checkout {'re-opened' if reused else 'started'}: {what}",
         [
             f"Amount: {_money(order.amount_usd, currency)} ({order.tokens:,} tokens)",
-            f"Customer: {email}",
+            f"Customer: {_customer(email, name)}",
             f"Pay with: {provider_label}",
             f"Order: {order_ref(order)}",
         ],
         key=f"{email}:{order.kind}:{order.plan_id}:{order.amount_usd:g}",
+        buttons=_approve_buttons(order),
     )
 
 
-def paid(order: Any, email: str, plan_label: str, currency: str, source: str) -> bool:
+def paid(order: Any, email: str, plan_label: str, currency: str, source: str, name: str | None = None) -> bool:
     what = f"{plan_label} subscription" if order.kind == "subscription" else f"Top-up on {plan_label}"
     return alert(
         "paid",
         f"✅ PAID {_money(order.amount_usd, currency)}: {what}",
         [
-            f"Customer: {email}",
+            f"Customer: {_customer(email, name)}",
             f"Tokens: {order.tokens:,}",
             f"Confirmed by: {source}",
             f"Order: {order_ref(order)}",
@@ -273,17 +315,18 @@ def paid(order: Any, email: str, plan_label: str, currency: str, source: str) ->
     )
 
 
-def needs_review(order: Any, email: str | None, reason: str) -> bool:
+def needs_review(order: Any, email: str | None, reason: str, name: str | None = None) -> bool:
     return alert(
         "review",
         "⚠️ Payment needs a look",
         [
             f"Order: {order_ref(order)} ({_money(order.amount_usd, 'USD')})",
-            f"Customer: {email or 'unknown'}",
+            f"Customer: {_customer(email, name)}",
             f"Why: {reason}",
         ],
         key=f"review:{order.id}:{reason}",
         priority="high",
+        buttons=_approve_buttons(order),
     )
 
 
@@ -346,6 +389,9 @@ def plan_click_route(
 class NotifyStatus(BaseModel):
     channels: list[str]
     events: list[str]
+    # Approve / Reject buttons in Telegram: off | not_connected | connected | unknown
+    telegram_buttons: str = "off"
+    telegram_buttons_detail: str = ""
 
 
 class NotifyTest(BaseModel):
@@ -354,7 +400,15 @@ class NotifyTest(BaseModel):
 
 @router.get("/api/v1/admin/notify", response_model=NotifyStatus)
 def notify_status(_: User = Depends(require_admin)) -> NotifyStatus:
-    return NotifyStatus(channels=channels(), events=[e for e in EVENTS if event_on(e)])
+    from . import telegram_approve
+
+    state, detail = telegram_approve.webhook_state()
+    return NotifyStatus(
+        channels=channels(),
+        events=[e for e in EVENTS if event_on(e)],
+        telegram_buttons=state,
+        telegram_buttons_detail=detail,
+    )
 
 
 @router.post("/api/v1/admin/notify/test", response_model=NotifyTest)
