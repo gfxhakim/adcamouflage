@@ -614,6 +614,61 @@ def activate_period(
     return {"granted": granted, "rollover": rollover, "expired": written_off}
 
 
+def cancel_period(db: Session, user: User, *, immediately: bool, reason: str = "", now: datetime | None = None) -> dict[str, Any]:
+    """Cancel the subscription, the same way a customer would or harder. Does not commit.
+
+    * ``immediately=False`` - what the customer's own Cancel does: access runs
+      to the end of the paid period and the next purchase gets no rollover.
+    * ``immediately=True`` - the period ends now (for a refund). The
+      subscription tokens left are written off, as the loss-on-cancel rule
+      says; top-up tokens stay on the account but are frozen until the user
+      buys a plan again, as they are for any lapsed subscription.
+    """
+
+    now = now or _now()
+    if user.sub_cancelled_at is None:
+        user.sub_cancelled_at = now
+    written_off = 0
+    if immediately:
+        leftover, _top = balances(db, user)
+        if leftover > 0:
+            written_off = leftover
+            _entry(
+                db,
+                user.id,
+                SUBSCRIPTION,
+                "expire",
+                -leftover,
+                note=f"{leftover} subscription tokens written off: cancelled now by admin"
+                + (f" ({reason})" if reason else ""),
+            )
+        end = aware(user.sub_period_end)
+        if end is None or end > now:
+            user.sub_period_end = now
+    return {"expired": written_off, "period_end": aware(user.sub_period_end)}
+
+
+def extend_period(user: User, days: int, now: datetime | None = None) -> datetime:
+    """Add ``days`` to the paid period, from its end or from now if it already ended. Does not commit.
+
+    No tokens are granted: the user keeps spending what is on the account.
+    A period that had lapsed comes back to life with its subscription tokens,
+    which are only written off at the next purchase.
+    """
+
+    now = now or _now()
+    end = aware(user.sub_period_end)
+    base = end if end is not None and end > now else now
+    user.sub_period_end = base + timedelta(days=days)
+    return user.sub_period_end
+
+
+def grant_bonus(db: Session, user: User, amount: int, note: str) -> TokenLedger:
+    """Give ``amount`` bonus tokens in the top-up bucket (never expire). Does not commit."""
+
+    return _entry(db, user.id, TOPUP, "bonus", amount, note=note)
+
+
 def apply_topup(
     db: Session,
     user: User,

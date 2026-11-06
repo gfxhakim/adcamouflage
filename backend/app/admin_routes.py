@@ -16,11 +16,12 @@ from sqlalchemy.orm import Session
 
 from .accounts import hash_password, is_admin, require_admin, validate_email, validate_password
 from .activity import log_activity
+from . import audit
 from .app_settings import announcement, currency, get_setting, registration_open, set_setting
 from .config import settings
 from . import meta_capi
 from . import purge as purge_mod
-from .db import ActivityEvent, BatchRecord, Order, TokenLedger, User, get_db
+from .db import ActivityEvent, AdminAudit, BatchRecord, Order, TokenLedger, User, get_db
 from .plans import (
     PLAN_IDS,
     Plan,
@@ -40,6 +41,9 @@ from .tokens import (
     PLAN_IDS as TOKEN_PLAN_IDS,
     TOKENS,
     balance_summary,
+    cancel_period,
+    extend_period,
+    grant_bonus,
     get_billing_rules,
     get_token_plans,
     get_topups,
@@ -231,6 +235,16 @@ class AdminOrder(BaseModel):
     meta_purchase: str = ""
 
 
+class AuditEntry(BaseModel):
+    id: int
+    admin_email: str
+    user_id: int | None
+    user_email: str
+    action: str
+    detail: str
+    created_at: datetime
+
+
 class UserBilling(BaseModel):
     user_id: int
     billing_mode: str
@@ -238,6 +252,25 @@ class UserBilling(BaseModel):
     balance: dict
     ledger: list[LedgerEntry]
     orders: list[AdminOrder]
+    # The latest admin actions on this user's plan and tokens, newest first.
+    audit: list[AuditEntry] = []
+
+
+class PlanCancel(BaseModel):
+    # end_of_period: like the customer's own Cancel. now: the period ends today
+    # and the subscription tokens left are written off (refunds).
+    mode: str = Field(pattern="^(end_of_period|now)$")
+    reason: str = Field(default="", max_length=500)
+
+
+class PlanExtend(BaseModel):
+    days: int = Field(ge=1, le=365)
+    reason: str = Field(default="", max_length=500)
+
+
+class BonusTokens(BaseModel):
+    amount: int = Field(ge=1, le=1_000_000)
+    note: str = Field(default="", max_length=500)
 
 
 class GrantPeriod(BaseModel):
@@ -857,7 +890,30 @@ def _user_billing(db: Session, user: User) -> UserBilling:
             )
             for o in orders
         ],
+        audit=_audit_rows(db, user_id=user.id, limit=20),
     )
+
+
+def _audit_rows(db: Session, *, user_id: int | None = None, limit: int = 50) -> list[AuditEntry]:
+    query = select(AdminAudit).order_by(AdminAudit.created_at.desc(), AdminAudit.id.desc()).limit(limit)
+    if user_id is not None:
+        query = query.where(AdminAudit.user_id == user_id)
+    return [
+        AuditEntry(
+            id=row.id,
+            admin_email=row.admin_email,
+            user_id=row.user_id,
+            user_email=row.user_email,
+            action=row.action,
+            detail=row.detail,
+            created_at=row.created_at,
+        )
+        for row in db.execute(query).scalars().all()
+    ]
+
+
+def _clean(text: str) -> str:
+    return " ".join(text.split())
 
 
 @router.get("/users/{user_id}/billing", response_model=UserBilling)
@@ -883,6 +939,7 @@ def grant_period(
     db.refresh(user)
     noun = "month" if payload.months == 1 else "months"
     log_activity(db, user.id, "admin", f"Granted {payload.months} {noun} of {plan.label} by {admin.email}")
+    audit.record(db, admin, user, "grant_period", f"Granted {payload.months} {noun} of {plan.label}")
     return _user_billing(db, user)
 
 
@@ -902,6 +959,109 @@ def adjust_tokens(
     db.add(TokenLedger(user_id=user.id, bucket="topup", kind="admin", amount=payload.amount, note=note))
     db.commit()
     log_activity(db, user.id, "admin", f"{payload.amount:+d} tokens by {admin.email}: {note}")
+    audit.record(db, admin, user, "adjust_tokens", f"{payload.amount:+d} top-up tokens: {note}")
+    return _user_billing(db, user)
+
+
+@router.post("/users/{user_id}/billing/bonus", response_model=UserBilling)
+def bonus_tokens(
+    user_id: int,
+    payload: BonusTokens,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    """Give one user bonus tokens. They go in the top-up bucket, so they never expire."""
+
+    user = _load(db, user_id)
+    note = _clean(payload.note)
+    grant_bonus(db, user, payload.amount, f"Admin bonus: {note}" if note else "Admin bonus")
+    db.commit()
+    detail = f"+{payload.amount} bonus tokens" + (f": {note}" if note else "")
+    log_activity(db, user.id, "admin", f"{detail} by {admin.email}")
+    audit.record(db, admin, user, "bonus_tokens", detail)
+    return _user_billing(db, user)
+
+
+@router.post("/users/{user_id}/billing/cancel", response_model=UserBilling)
+def cancel_plan(
+    user_id: int,
+    payload: PlanCancel,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    """Cancel a token subscription at the period end, or right now (refunds)."""
+
+    user = _load(db, user_id)
+    if user.sub_plan is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This user has no token subscription.")
+    immediately = payload.mode == "now"
+    if not subscription_active(user):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The subscription has already ended.")
+    if not immediately and user.sub_cancelled_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already cancelled; it runs to the period end.")
+    reason = _clean(payload.reason)
+    result = cancel_period(db, user, immediately=immediately, reason=reason)
+    db.commit()
+    db.refresh(user)
+    if immediately:
+        detail = f"Cancelled {user.sub_plan} now; {result['expired']} subscription tokens written off"
+    else:
+        detail = f"Cancelled {user.sub_plan} at period end ({aware(user.sub_period_end):%Y-%m-%d})"
+    if reason:
+        detail += f". Reason: {reason}"
+    log_activity(db, user.id, "admin", f"{detail} by {admin.email}")
+    audit.record(db, admin, user, "cancel_now" if immediately else "cancel_end", detail)
+    return _user_billing(db, user)
+
+
+@router.post("/users/{user_id}/billing/resume", response_model=UserBilling)
+def resume_plan(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    """Undo a cancel-at-period-end while the period is still running."""
+
+    user = _load(db, user_id)
+    if not subscription_active(user) or user.sub_cancelled_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no cancelled, running subscription to resume.")
+    user.sub_cancelled_at = None
+    db.commit()
+    db.refresh(user)
+    detail = f"Resumed {user.sub_plan}"
+    log_activity(db, user.id, "admin", f"{detail} by {admin.email}")
+    audit.record(db, admin, user, "resume", detail)
+    return _user_billing(db, user)
+
+
+@router.post("/users/{user_id}/billing/extend", response_model=UserBilling)
+def extend_token_plan(
+    user_id: int,
+    payload: PlanExtend,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserBilling:
+    """Add days to the token period, from its end or from today if it already ended. No tokens are added."""
+
+    user = _load(db, user_id)
+    if user.sub_plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This user has no token subscription; use Grant period to give them one.",
+        )
+    old_end = aware(user.sub_period_end)
+    new_end = extend_period(user, payload.days)
+    db.commit()
+    db.refresh(user)
+    noun = "day" if payload.days == 1 else "days"
+    detail = f"Extended {user.sub_plan} by {payload.days} {noun}: " + (
+        f"{old_end:%Y-%m-%d} -> " if old_end else ""
+    ) + f"{new_end:%Y-%m-%d}"
+    reason = _clean(payload.reason)
+    if reason:
+        detail += f". Reason: {reason}"
+    log_activity(db, user.id, "admin", f"{detail} by {admin.email}")
+    audit.record(db, admin, user, "extend_period", detail)
     return _user_billing(db, user)
 
 
@@ -919,6 +1079,7 @@ def set_billing_mode(
         user.billing_mode = payload.mode
         db.commit()
         log_activity(db, user.id, "admin", f"Billing switched to {payload.mode} by {admin.email}")
+        audit.record(db, admin, user, "billing_mode", f"Billing switched to {payload.mode}")
     return _user_billing(db, user)
 
 
@@ -1484,6 +1645,7 @@ def extend_plan(
         "admin",
         f"Plan extended {payload.days} days to {user.plan_expires_at:%Y-%m-%d} by {admin.email}",
     )
+    audit.record(db, admin, user, "extend_legacy", f"Legacy plan extended {payload.days} days to {user.plan_expires_at:%Y-%m-%d}")
     return _row(db, user)
 
 
@@ -1576,6 +1738,17 @@ def purge_users(
     summary = purge_mod.purge(db, [admin.email])
     log_activity(db, admin.id, "admin", f"Deleted all {summary.users} non-admin accounts")
     return summary.as_dict()
+
+
+@router.get("/audit", response_model=list[AuditEntry])
+def audit_log(
+    user_id: int | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> list[AuditEntry]:
+    """Admin actions on plans and tokens, newest first; optionally for one user."""
+
+    return _audit_rows(db, user_id=user_id, limit=limit)
 
 
 @router.get("/activity", response_model=list[Activity])
