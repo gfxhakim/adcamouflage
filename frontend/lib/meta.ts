@@ -5,6 +5,7 @@
  * same id, so Meta counts it once (deduplication):
  *   CompleteRegistration  signup-<user id>
  *   InitiateCheckout      checkout-<order id>
+ *   AddPaymentInfo        payinfo-<order id>
  *   Purchase              purchase-<order id>   (only after the payment is confirmed)
  *   PageView/ViewContent  random id, forwarded to the server via /api/v1/meta/event
  *
@@ -71,6 +72,63 @@ function installPixel(id: string) {
   fbq("init", id);
 }
 
+const CLICK_KEY = "bc_fbclid";
+const CLICK_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Remember the ad click id (?fbclid=) from the page the visitor landed on.
+ *
+ * The Pixel only turns it into the _fbc cookie when it is running on that
+ * same page, but here it only runs after the cookie banner is accepted,
+ * often on a later page. Without _fbc a Purchase confirmed hours later is
+ * hard for Meta to tie to the ad, so the click id is kept in this browser
+ * only (never sent anywhere) until the visitor allows tracking.
+ */
+export function rememberAdClick() {
+  if (typeof window === "undefined") return;
+  try {
+    const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+    if (fbclid && /^[A-Za-z0-9_-]{8,512}$/.test(fbclid)) {
+      localStorage.setItem(CLICK_KEY, JSON.stringify({ id: fbclid, at: Date.now() }));
+    }
+  } catch {
+    /* Storage blocked: the Pixel's own _fbc still covers same-page consent. */
+  }
+}
+
+function readCookie(name: string) {
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? match[1] : "";
+}
+
+function writeCookie(name: string, value: string) {
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${name}=${value}; Path=/; Max-Age=${60 * 60 * 24 * 90}; SameSite=Lax${secure}`;
+}
+
+/**
+ * After consent: make sure _fbc (ad click) and _fbp (browser id) exist, in
+ * Meta's own format, so the server has them at checkout even when the Pixel
+ * script is blocked or the click came in before consent. The Pixel adopts
+ * cookies already set in this format.
+ */
+function ensureMetaCookies() {
+  try {
+    if (!readCookie("_fbc")) {
+      const saved = JSON.parse(localStorage.getItem(CLICK_KEY) || "null") as { id?: string; at?: number } | null;
+      if (saved?.id && saved.at && Date.now() - saved.at < CLICK_MAX_AGE_MS) {
+        writeCookie("_fbc", `fb.1.${saved.at}.${saved.id}`);
+      }
+    }
+    if (!readCookie("_fbp")) {
+      const rand = Math.floor(1_000_000_000 + Math.random() * 8_999_999_999);
+      writeCookie("_fbp", `fb.1.${Date.now()}.${rand}`);
+    }
+  } catch {
+    /* Cookies or storage blocked: Meta falls back to email / IP matching. */
+  }
+}
+
 /** Load the Pixel if the visitor accepted and Meta is set up. Returns whether it is running. */
 export async function startPixel(): Promise<boolean> {
   if (started) return true;
@@ -78,6 +136,7 @@ export async function startPixel(): Promise<boolean> {
   const id = await loadConfig();
   if (!id) return false;
   pixelId = id;
+  ensureMetaCookies();
   installPixel(id);
   started = true;
   return true;
@@ -113,12 +172,13 @@ export function trackRegistration(userId: number | string) {
   return fire("CompleteRegistration", { status: "registered" }, `signup-${userId}`);
 }
 
-export function trackCheckout(orderId: string, value: number, currency: string, planId: string) {
-  return fire(
-    "InitiateCheckout",
-    { value, currency, content_ids: [planId], content_type: "product", num_items: 1 },
-    `checkout-${orderId}`,
-  );
+/** InitiateCheckout + AddPaymentInfo for a new order; the server sends both with the same ids. */
+export function trackCheckout(orderId: string, value: number, currency: string, planId: string, provider?: string) {
+  const data = { value, currency, content_ids: [planId], content_type: "product", num_items: 1 };
+  return Promise.all([
+    fire("InitiateCheckout", data, `checkout-${orderId}`),
+    fire("AddPaymentInfo", provider ? { ...data, payment_method: provider } : data, `payinfo-${orderId}`),
+  ]);
 }
 
 /** Only call once the API says the order is paid. Fired once per order per browser. */

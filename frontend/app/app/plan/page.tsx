@@ -209,7 +209,7 @@ export default function PlanPage() {
       try {
         const checkout = await startCheckout(kind, choice, provider);
         await Promise.race([
-          trackCheckout(checkout.order_id, checkout.amount, currencyRef.current, choice.plan_id ?? "topup"),
+          trackCheckout(checkout.order_id, checkout.amount, currencyRef.current, choice.plan_id ?? "topup", checkout.provider),
           new Promise((r) => setTimeout(r, 800)),
         ]);
         window.location.assign(checkout.checkout_url);
