@@ -3,6 +3,7 @@
 import { Loader2, Megaphone, Save, Settings2, Tags } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import DangerZoneCard from "@/components/admin/DangerZoneCard";
 import PhoneAlertsCard from "@/components/admin/PhoneAlertsCard";
 import TokenPlansCard from "@/components/admin/TokenPlansCard";
 import NeonCard from "@/components/NeonCard";
@@ -277,6 +278,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
         </div>
       </NeonCard>
     </div>
+
+    <DangerZoneCard onDone={onPlansChanged} />
     </div>
   );
 }
