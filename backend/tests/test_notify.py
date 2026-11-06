@@ -40,7 +40,7 @@ def alerts(monkeypatch):
     monkeypatch.setattr(settings, "notify_telegram_bot_token", SecretStr("123:bot-token-placeholder"))
     monkeypatch.setattr(settings, "notify_telegram_chat_id", "42")
     monkeypatch.setattr(settings, "notify_events", [])
-    monkeypatch.setattr(notify, "_dispatch", lambda title, lines, priority: sent.append((title, lines, priority)))
+    monkeypatch.setattr(notify, "_dispatch", lambda title, lines, priority, buttons=None: sent.append((title, lines, priority)))
     yield sent
     notify.reset()
 
