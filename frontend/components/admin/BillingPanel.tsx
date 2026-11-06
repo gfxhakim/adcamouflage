@@ -320,6 +320,17 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
                         {providerName ? <span className="chip !text-[10px]">{providerName}</span> : null}
+                        {order.meta_purchase ? (
+                          <span
+                            className={clsx(
+                              "chip !text-[10px]",
+                              order.meta_purchase === "failed" && "!border-red-300 dark:!border-red-500/40 !text-red-700 dark:!text-red-300",
+                            )}
+                            title="Purchase sent to Meta for ad reporting"
+                          >
+                            Meta: {order.meta_purchase}
+                          </span>
+                        ) : null}
                         <span
                           className={clsx(
                             "chip !text-[10px]",

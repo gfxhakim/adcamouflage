@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { CONSENT_EVENT, loadConfig, readConsent, startPixel, trackPage, writeConsent } from "@/lib/meta";
+import { CONSENT_EVENT, loadConfig, readConsent, rememberAdClick, startPixel, trackPage, writeConsent } from "@/lib/meta";
 
 /**
  * Cookie banner + Meta Pixel page events. Shown only once Meta is set up on
@@ -30,6 +30,11 @@ export default function MetaPixel() {
       window.removeEventListener(CONSENT_EVENT, reopen);
     };
   }, [tracked]);
+
+  // Keep an ad click id from the landing URL until tracking is allowed.
+  useEffect(() => {
+    rememberAdClick();
+  }, [pathname]);
 
   // PageView on every page, ViewContent for the plan page and the landing pricing.
   useEffect(() => {

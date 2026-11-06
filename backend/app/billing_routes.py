@@ -244,6 +244,15 @@ def checkout(
 
     existing = _open_order(db, user, payload.kind, plan.id, amount, provider)
     if existing is not None:
+        try:
+            # The same pending order again: keep its Meta data current (the
+            # buyer may have accepted cookies or arrived from an ad since).
+            fresh = meta_capi.refresh_checkout(request, existing)
+            if fresh is not None:
+                existing.tracking = fresh
+                db.commit()
+        except Exception:  # noqa: BLE001 - tracking must never block a checkout
+            logger.exception("Meta tracking refresh for order %s failed", existing.id)
         return CheckoutOut(
             order_id=existing.id,
             checkout_url=existing.checkout_url or "",

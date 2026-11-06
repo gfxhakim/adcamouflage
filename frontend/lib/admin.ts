@@ -293,6 +293,8 @@ export interface AdminOrder {
   provider: PaymentProviderId;
   created_at: string;
   paid_at: string | null;
+  /** Meta Purchase for a paid order: "sent" | "failed" | "no consent" | "sending" | "no data" | "" */
+  meta_purchase?: string;
 }
 
 export interface AdminSubscription {
