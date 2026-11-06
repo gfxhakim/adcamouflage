@@ -18,6 +18,7 @@ from .accounts import hash_password, is_admin, require_admin, validate_email, va
 from .activity import log_activity
 from .app_settings import announcement, currency, get_setting, registration_open, set_setting
 from .config import settings
+from . import meta_capi
 from .db import ActivityEvent, BatchRecord, Order, TokenLedger, User, get_db
 from .plans import (
     PLAN_IDS,
@@ -224,6 +225,9 @@ class AdminOrder(BaseModel):
     provider: str  # btcpay | volet
     created_at: datetime
     paid_at: datetime | None
+    # How the Meta Purchase for a paid order went: sent / failed / no consent
+    # / sending; empty when Meta is not set up or the order is not a sale.
+    meta_purchase: str = ""
 
 
 class UserBilling(BaseModel):
@@ -798,6 +802,7 @@ def _user_billing(db: Session, user: User) -> UserBilling:
                 provider=o.provider,
                 created_at=o.created_at,
                 paid_at=o.paid_at,
+                meta_purchase=meta_capi.purchase_status(o),
             )
             for o in orders
         ],
