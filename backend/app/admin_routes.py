@@ -332,6 +332,56 @@ class UserExpiry(BaseModel):
     plan_expires_at: datetime
 
 
+class MoneyPoint(BaseModel):
+    day: date
+    value: float
+
+
+class SalesTotals(BaseModel):
+    signups: int
+    checkouts: int
+    approved: int
+    revenue: float
+    # Approved payments over checkouts started in the same range (0..1).
+    conversion: float
+    average_order: float
+    subscriptions: int
+    topups: int
+
+
+class SalesByPlan(BaseModel):
+    id: str
+    label: str
+    approved: int
+    revenue: float
+
+
+class SaleRow(BaseModel):
+    id: str
+    paid_at: datetime
+    user_id: int
+    email: str
+    kind: str
+    plan_label: str
+    amount: float
+    provider: str
+
+
+class Sales(BaseModel):
+    start: date
+    end: date
+    days: int
+    currency: str
+    totals: SalesTotals
+    previous: SalesTotals
+    signups: list[Point]
+    checkouts: list[Point]
+    approved: list[Point]
+    revenue: list[MoneyPoint]
+    by_plan: list[SalesByPlan]
+    recent: list[SaleRow]
+
+
 class Analytics(BaseModel):
     days: int
     currency: str
@@ -1043,6 +1093,137 @@ def analytics(days: int = Query(default=30, ge=7, le=180), db: Session = Depends
         expiring_soon=_expiring(db, plans_now, upcoming=True),
         expired=_expiring(db, plans_now, upcoming=False),
         presets=dict(presets.most_common()),
+    )
+
+
+# --------------------------------------------------------------------------
+# sales
+# --------------------------------------------------------------------------
+
+SALES_MAX_DAYS = 366
+
+
+def _sales_window(db: Session, first: date, last: date):
+    """Raw rows for [first, last] (whole UTC days), bucketed in Python like the other charts."""
+
+    lo = datetime(first.year, first.month, first.day, tzinfo=timezone.utc)
+    hi = datetime(last.year, last.month, last.day, tzinfo=timezone.utc) + timedelta(days=1)
+    signups = [
+        _day(created)
+        for (created,) in db.execute(
+            select(User.created_at).where(User.created_at >= lo, User.created_at < hi)
+        ).all()
+    ]
+    checkouts = [
+        _day(created)
+        for (created,) in db.execute(
+            select(Order.created_at).where(Order.created_at >= lo, Order.created_at < hi)
+        ).all()
+    ]
+    # Approved = paid by the provider or approved by an admin. Free admin
+    # grants are $0 "paid" orders: they are not sales, so they are left out.
+    paid = db.execute(
+        select(Order)
+        .where(Order.status == "paid", Order.amount_usd > 0, Order.paid_at >= lo, Order.paid_at < hi)
+        .order_by(Order.paid_at.desc())
+    ).scalars().all()
+    return signups, checkouts, paid
+
+
+def _sales_totals(signups: list, checkouts: list, paid: list[Order]) -> SalesTotals:
+    revenue = round(sum(float(o.amount_usd) for o in paid), 2)
+    return SalesTotals(
+        signups=len(signups),
+        checkouts=len(checkouts),
+        approved=len(paid),
+        revenue=revenue,
+        conversion=round(len(paid) / len(checkouts), 4) if checkouts else 0.0,
+        average_order=round(revenue / len(paid), 2) if paid else 0.0,
+        subscriptions=sum(1 for o in paid if o.kind == "subscription"),
+        topups=sum(1 for o in paid if o.kind == "topup"),
+    )
+
+
+@router.get("/sales", response_model=Sales)
+def sales(
+    start: date | None = Query(default=None, description="First day (UTC), inclusive"),
+    end: date | None = Query(default=None, description="Last day (UTC), inclusive"),
+    db: Session = Depends(get_db),
+) -> Sales:
+    today = _now().date()
+    last = min(end or today, today)
+    first = start or (last - timedelta(days=29))
+    if first > last:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "The start date must be on or before the end date.")
+    if (last - first).days + 1 > SALES_MAX_DAYS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Pick a range of {SALES_MAX_DAYS} days or less.")
+    days = (last - first).days + 1
+
+    signups, checkouts, paid = _sales_window(db, first, last)
+    prev_last = first - timedelta(days=1)
+    previous = _sales_totals(*_sales_window(db, prev_last - timedelta(days=days - 1), prev_last))
+
+    approved_by_day: Counter[date] = Counter()
+    revenue_by_day: dict[date, float] = defaultdict(float)
+    for order in paid:
+        day = _day(order.paid_at)  # type: ignore[arg-type]
+        approved_by_day[day] += 1
+        revenue_by_day[day] += float(order.amount_usd)
+
+    token_plans = get_token_plans(db)
+    plan_rows: dict[str, list[float]] = {}
+    for order in paid:
+        key = "topup" if order.kind == "topup" else order.plan_id
+        row = plan_rows.setdefault(key, [0, 0.0])
+        row[0] += 1
+        row[1] += float(order.amount_usd)
+
+    def label_for(plan_id: str) -> str:
+        if plan_id == "topup":
+            return "Token top-ups"
+        plan = token_plans.get(plan_id)
+        return plan.label if plan else plan_id.title()
+
+    order_ids = [pid for pid in token_plans if pid in plan_rows]
+    order_ids += sorted(pid for pid in plan_rows if pid not in token_plans)
+    by_plan = [
+        SalesByPlan(id=pid, label=label_for(pid), approved=int(plan_rows[pid][0]), revenue=round(plan_rows[pid][1], 2))
+        for pid in order_ids
+    ]
+
+    emails = dict(
+        db.execute(select(User.id, User.email).where(User.id.in_({o.user_id for o in paid[:25]}))).all()
+    ) if paid else {}
+    recent = [
+        SaleRow(
+            id=o.id,
+            paid_at=aware(o.paid_at),  # type: ignore[arg-type]
+            user_id=o.user_id,
+            email=emails.get(o.user_id, "deleted account"),
+            kind=o.kind,
+            plan_label=label_for(o.plan_id) if o.kind == "subscription" else f"Top-up ({label_for(o.plan_id)})",
+            amount=round(float(o.amount_usd), 2),
+            provider=o.provider or "",
+        )
+        for o in paid[:25]
+    ]
+
+    return Sales(
+        start=first,
+        end=last,
+        days=days,
+        currency=currency(db),
+        totals=_sales_totals(signups, checkouts, paid),
+        previous=previous,
+        signups=_series(first, days, Counter(signups)),
+        checkouts=_series(first, days, Counter(checkouts)),
+        approved=_series(first, days, approved_by_day),
+        revenue=[
+            MoneyPoint(day=first + timedelta(days=i), value=round(revenue_by_day.get(first + timedelta(days=i), 0.0), 2))
+            for i in range(days)
+        ],
+        by_plan=by_plan,
+        recent=recent,
     )
 
 

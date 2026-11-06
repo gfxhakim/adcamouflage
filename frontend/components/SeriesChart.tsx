@@ -14,6 +14,8 @@ interface SeriesChartProps {
   /** What the headline number is: the sum over the period, or the latest value. */
   summary?: "total" | "peak";
   height?: number;
+  /** Formats the numbers shown in text (e.g. money). Defaults to the plain value. */
+  format?: (value: number) => string;
 }
 
 function dayLabel(day: string): string {
@@ -28,7 +30,7 @@ function dayLabel(day: string): string {
  * One series per day as thin bars. Hovering (or tapping) a day shows its exact
  * value; the hit area is the whole column, wider than the bar itself.
  */
-export function SeriesChart({ points, unit, summary = "total", height = 112 }: SeriesChartProps) {
+export function SeriesChart({ points, unit, summary = "total", height = 112, format = (v) => String(v) }: SeriesChartProps) {
   const [hover, setHover] = useState<number | null>(null);
   const peak = Math.max(1, ...points.map((p) => p.value));
   const headline =
@@ -40,12 +42,12 @@ export function SeriesChart({ points, unit, summary = "total", height = 112 }: S
       <p className="mb-3 min-h-[1.25rem] text-xs text-ink-muted dark:text-slate-300">
         {active ? (
           <>
-            <span className="font-semibold tabular-nums text-black dark:text-slate-100">{active.value}</span> {unit} on{" "}
+            <span className="font-semibold tabular-nums text-black dark:text-slate-100">{format(active.value)}</span> {unit} on{" "}
             {dayLabel(active.day)}
           </>
         ) : (
           <>
-            <span className="font-semibold tabular-nums text-black dark:text-slate-100">{headline}</span>{" "}
+            <span className="font-semibold tabular-nums text-black dark:text-slate-100">{format(headline)}</span>{" "}
             {summary === "total" ? `${unit} in ${points.length} days` : `${unit} on the busiest day`}
           </>
         )}
@@ -68,7 +70,7 @@ export function SeriesChart({ points, unit, summary = "total", height = 112 }: S
             onMouseEnter={() => setHover(index)}
             onFocus={() => setHover(index)}
             onClick={() => setHover(index)}
-            aria-label={`${dayLabel(point.day)}: ${point.value} ${unit}`}
+            aria-label={`${dayLabel(point.day)}: ${format(point.value)} ${unit}`}
           >
             <span
               className={
@@ -83,8 +85,8 @@ export function SeriesChart({ points, unit, summary = "total", height = 112 }: S
 
       <div className="mt-1.5 flex justify-between text-[10px] text-ink-faint dark:text-slate-500">
         <span>{points[0] ? dayLabel(points[0].day) : ""}</span>
-        <span>peak {peak === 1 && headline === 0 ? 0 : peak}</span>
-        <span>today</span>
+        <span>peak {format(peak === 1 && headline === 0 ? 0 : peak)}</span>
+        <span>{points.length ? dayLabel(points[points.length - 1].day) : ""}</span>
       </div>
     </div>
   );
