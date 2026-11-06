@@ -80,8 +80,11 @@ def test_preview_then_purge_keeps_admins(boss):
     assert done.json()["users"] == preview["users"]
 
     with get_session_factory()() as db:
-        emails = set(db.scalars(select(User.email)).all())
-        assert emails == {admin_email, flagged}
+        left = db.scalars(select(User)).all()
+        emails = {u.email for u in left}
+        assert {admin_email, flagged} <= emails
+        # Only admins remain (other test modules leave admins of their own).
+        assert all(u.is_admin or u.email == admin_email for u in left)
         for model in (TokenLedger, Order, SupportThread):
             assert db.scalar(select(func.count()).select_from(model).where(model.user_id.in_(ids))) == 0
         assert db.scalar(select(func.count()).select_from(TeamMember).where(TeamMember.owner_id.in_(ids))) == 0
