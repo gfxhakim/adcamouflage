@@ -48,6 +48,7 @@ export default function GroupEmailCard() {
   // what
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [button, setButton] = useState("");
   const [preview, setPreview] = useState<{ html: string; for: string } | null>(null);
 
   // send
@@ -298,6 +299,7 @@ export default function GroupEmailCard() {
             onClick={() => {
               setSubject(d.subject);
               setBody(d.body);
+              setButton(d.button);
               setPreview(null);
             }}
           >
@@ -319,6 +321,20 @@ export default function GroupEmailCard() {
             onChange={(e) => setBody(e.target.value)}
           />
         </label>
+        <label className={label}>
+          Button text
+          <input
+            className="field mt-1 sm:!w-72"
+            maxLength={60}
+            placeholder="e.g. Choose a plan"
+            value={button}
+            onChange={(e) => setButton(e.target.value)}
+          />
+          <span className={`${faint} mt-1 block font-normal`}>
+            The first line of the message that is only a link (like {"{plan_url}"}) becomes a button with this text. Leave
+            empty to keep it a plain link.
+          </span>
+        </label>
         <p className={faint}>
           You can use:{" "}
           {Object.entries(data.placeholders).map(([key, help], i) => (
@@ -327,7 +343,7 @@ export default function GroupEmailCard() {
               <code className="rounded bg-black/5 px-1 dark:bg-white/10">{`{${key}}`}</code>
             </span>
           ))}
-          . Each person gets their own values. The unsubscribe line is added for you.
+          . Each person gets their own values. The subject is the big headline, and your logo, colours and the unsubscribe line are added for you.
         </p>
       </div>
 
@@ -338,7 +354,7 @@ export default function GroupEmailCard() {
           disabled={!hasMessage || busy !== null}
           onClick={() =>
             void run("preview", async () => {
-              const r = await previewGroupEmail({ subject, body, user_id: picked[0]?.id });
+              const r = await previewGroupEmail({ subject, body, button, user_id: picked[0]?.id });
               setPreview({ html: r.html, for: `${r.subject} (as ${r.for} sees it)` });
             })
           }
@@ -352,7 +368,7 @@ export default function GroupEmailCard() {
           disabled={!hasMessage || data.transport === "" || busy !== null}
           onClick={() =>
             void run("test", async () => {
-              const { sent_to } = await testGroupEmail({ subject, body });
+              const { sent_to } = await testGroupEmail({ subject, body, button });
               setNote({ ok: true, text: `Test sent to ${sent_to}.` });
             })
           }
@@ -364,7 +380,7 @@ export default function GroupEmailCard() {
       {preview ? (
         <div className="mt-3 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
           <p className="border-b border-black/10 px-3 py-2 text-xs text-ink-faint dark:border-white/10 dark:text-slate-400">{preview.for}</p>
-          <iframe title="Email preview" className="h-[420px] w-full bg-white" sandbox="" srcDoc={preview.html} />
+          <iframe title="Email preview" className="h-[640px] w-full bg-white" sandbox="" srcDoc={preview.html} />
         </div>
       ) : null}
 
@@ -410,6 +426,7 @@ export default function GroupEmailCard() {
                   const r = await sendGroupEmail({
                     subject,
                     body,
+                    button,
                     user_ids: picked.map((p) => p.id),
                     audience: audience(),
                     confirm: confirmWord.trim(),

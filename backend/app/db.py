@@ -290,6 +290,7 @@ class EmailCampaign(Base):
     audience: Mapped[str] = mapped_column(Text, default="", nullable=False)
     subject: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    button: Mapped[str] = mapped_column(String(60), default="", server_default="", nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="sending", nullable=False, index=True)
     total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -452,6 +453,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "tracking", "TEXT"),
     # Unsubscribed from group emails.
     ("users", "email_opt_out_at", "TIMESTAMP WITH TIME ZONE"),
+    ("email_campaigns", "button", "VARCHAR(60) NOT NULL DEFAULT ''"),
 ]
 
 

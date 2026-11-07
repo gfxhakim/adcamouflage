@@ -28,6 +28,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import html as html_lib
 import logging
 import threading
 import time
@@ -268,19 +269,30 @@ PLACEHOLDERS: dict[str, str] = {
 }
 
 
-def compose(user_id: int, subject: str, body: str, values: dict[str, Any]) -> tuple[str, str, str, dict[str, str]]:
-    """(subject, text, html, headers) for one person, with the unsubscribe footer."""
+def compose(
+    user_id: int,
+    subject: str,
+    body: str,
+    values: dict[str, Any],
+    *,
+    button: str = "",
+    style: dict[str, Any] | None = None,
+) -> tuple[str, str, str, dict[str, str]]:
+    """(subject, text, html, headers) for one person, with the unsubscribe footer.
+
+    Uses the same branded layout as the account emails: the saved logo and
+    colours (``style``), the subject as the headline, and the first line that
+    is only a link drawn as a button labelled ``button``.
+    """
 
     page, one_click = unsubscribe_links(user_id)
     subject = " ".join(mailer.fill(subject, values).split())[: mailer.SUBJECT_MAX]
     filled = mailer.fill(body, values)
-    footer = (
-        f"You are receiving this because you have a {mailer.BRAND} account. "
-        f'<a href="{page}" style="color:#6b7280">Unsubscribe</a> from these updates.'
-    )
+    footer = f'<a href="{html_lib.escape(page)}" style="color:#8a8d91">Unsubscribe</a> from these updates.'
+    design = {"headline": subject, "button": " ".join(mailer.fill(button, values).split())}
     text_body = f"{filled}\n\n--\nYou are receiving this because you have a {mailer.BRAND} account.\nUnsubscribe: {page}"
     headers = {"List-Unsubscribe": f"<{one_click}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
-    return subject, text_body, mailer.to_html(filled, footer=footer), headers
+    return subject, text_body, mailer.to_html(filled, footer=footer, design=design, style=style), headers
 
 
 # --------------------------------------------------------------------------
@@ -366,6 +378,7 @@ def process(
         campaigns = db.execute(
             select(EmailCampaign).where(EmailCampaign.status == "sending").order_by(EmailCampaign.id)
         ).scalars().all()
+        style = mailer.get_style(db)
         first = True
         for campaign in campaigns:
             while allowance > 0 and time.monotonic() - started < max_seconds:
@@ -399,7 +412,12 @@ def process(
                 first = False
                 try:
                     subject, text_body, html, headers = compose(
-                        user.id, campaign.subject, campaign.body, person_values(db, user)
+                        user.id,
+                        campaign.subject,
+                        campaign.body,
+                        person_values(db, user),
+                        button=campaign.button,
+                        style=style,
                     )
                     ok = bool(send(user.email, subject, html, text_body, headers=headers))
                 except Exception:  # noqa: BLE001 - one bad send must not stop the rest
@@ -464,6 +482,7 @@ SIGN_OFF = mailer.SIGN_OFF
 DRAFTS: list[dict[str, Any]] = [
     {
         "id": "choose_plan",
+        "button": "Choose a plan",
         "label": "Pick a plan",
         "groups": ["never_paid", "checkout_unpaid"],
         "subject": "Your {brand} account is ready",
@@ -477,6 +496,7 @@ DRAFTS: list[dict[str, Any]] = [
     },
     {
         "id": "come_back",
+        "button": "Renew my plan",
         "label": "Come back (plan ended)",
         "groups": ["expired", "grace"],
         "subject": "Your {plan} plan has ended",
@@ -489,6 +509,7 @@ DRAFTS: list[dict[str, Any]] = [
     },
     {
         "id": "renew_soon",
+        "button": "Renew now",
         "label": "Renew soon",
         "groups": ["ending_7d", "cancelled"],
         "subject": "Your {plan} plan ends on {end_date}",
@@ -501,6 +522,7 @@ DRAFTS: list[dict[str, Any]] = [
     },
     {
         "id": "low_tokens",
+        "button": "Top up",
         "label": "Running low on tokens",
         "groups": ["low_tokens"],
         "subject": "You have {tokens} tokens left",
@@ -513,6 +535,7 @@ DRAFTS: list[dict[str, Any]] = [
     },
     {
         "id": "first_render",
+        "button": "Open the workspace",
         "label": "Make your first render",
         "groups": ["no_renders"],
         "subject": "Ready for your first render?",
@@ -526,6 +549,7 @@ DRAFTS: list[dict[str, Any]] = [
     },
     {
         "id": "update",
+        "button": "Open the workspace",
         "label": "Product update",
         "groups": ["all"],
         "subject": "What's new at {brand}",
@@ -558,6 +582,8 @@ def drafts() -> list[dict[str, Any]]:
 class MessageIn(BaseModel):
     subject: str = Field(min_length=1, max_length=mailer.SUBJECT_MAX)
     body: str = Field(min_length=1, max_length=mailer.BODY_MAX)
+    # Label of the button drawn from the first line that is only a link.
+    button: str = Field(default="", max_length=60)
 
 
 class PreviewIn(MessageIn):
@@ -650,7 +676,9 @@ def save_rules(payload: RulesIn, admin: User = Depends(require_admin), db: Sessi
 def preview(payload: PreviewIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     user = db.get(User, payload.user_id) if payload.user_id else None
     user = user or admin
-    subject, text_body, html, _headers = compose(user.id, payload.subject, payload.body, person_values(db, user))
+    subject, text_body, html, _headers = compose(
+        user.id, payload.subject, payload.body, person_values(db, user), button=payload.button, style=mailer.get_style(db)
+    )
     return {"subject": subject, "text": text_body, "html": html, "for": user.email}
 
 
@@ -658,7 +686,9 @@ def preview(payload: PreviewIn, admin: User = Depends(require_admin), db: Sessio
 def send_test(payload: MessageIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     if not mailer.configured():
         raise HTTPException(status_code=409, detail="Email is not set up on the server yet.")
-    subject, text_body, html, headers = compose(admin.id, payload.subject, payload.body, person_values(db, admin))
+    subject, text_body, html, headers = compose(
+        admin.id, payload.subject, payload.body, person_values(db, admin), button=payload.button, style=mailer.get_style(db)
+    )
     if not mailer.send_email(admin.email, "[Test] " + subject, html, text_body, headers=headers):
         raise HTTPException(status_code=502, detail="The mail server did not accept the message. Check the api logs.")
     return {"sent_to": admin.email}
@@ -688,6 +718,7 @@ def send_group(payload: SendIn, admin: User = Depends(require_admin), db: Sessio
         audience=payload.audience.strip()[:500] or f"{len(reachable)} people",
         subject=payload.subject.strip(),
         body=payload.body.replace("\r\n", "\n"),
+        button=payload.button.strip(),
         status="sending",
         total=len(reachable),
     )

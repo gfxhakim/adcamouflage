@@ -224,3 +224,10 @@ def test_send_requires_public_url(outbox, admin, monkeypatch):
 def test_rules_saved(outbox, admin):
     r = admin.put("/api/v1/admin/emails/groups/rules", json={"daily_limit": 280, "seconds_between": 5})
     assert r.json()["rules"] == {"daily_limit": 280, "seconds_between": 5}
+
+
+def test_branded_layout_with_button(outbox, admin):
+    message = {"subject": "Pick a plan", "body": "Hi {name},\n\n{plan_url}\n\nThanks", "button": "Choose a plan"}
+    html = admin.post("/api/v1/admin/emails/groups/preview", json=message).json()["html"]
+    assert "Choose a plan" in html and 'href="https://shop.example.test/app/plan"' in html
+    assert "Unsubscribe</a>" in html and "<h1" in html

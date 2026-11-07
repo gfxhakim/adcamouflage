@@ -73,6 +73,7 @@ PLACEHOLDERS: dict[str, str] = {
     "tokens": "Tokens added by this payment",
     "end_date": "Date the current period ends",
     "grace_days": "Days after the end that rolled-over tokens are kept",
+    "days_left": "Days until the plan ends (renewal reminder)",
     "app_url": "Link to the workspace",
     "plan_url": "Link to the customer's plan page",
 }
@@ -80,6 +81,11 @@ PLACEHOLDERS: dict[str, str] = {
 DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
     "welcome": {
         "label": "Welcome",
+        "kicker": "Account ready",
+        "stat": "Welcome",
+        "stat_sub": "Your account is set up",
+        "headline": "",
+        "button": "Choose a plan",
         "when": "Right after someone signs up.",
         "enabled": True,
         "subject": f"Welcome to {BRAND}",
@@ -93,6 +99,11 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "activated": {
         "label": "Plan activated",
+        "kicker": "Payment confirmed",
+        "stat": "{tokens}",
+        "stat_sub": "tokens added · until {end_date}",
+        "headline": "",
+        "button": "Open workspace",
         "when": "When a plan payment is confirmed or approved (Volet, BTCPay, Admin or Telegram).",
         "enabled": True,
         "subject": "Your {plan} plan is active",
@@ -107,6 +118,11 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "ending": {
         "label": "Renewal reminder",
+        "kicker": "Renewal reminder",
+        "stat": "{days_left} days",
+        "stat_sub": "left on your {plan} plan",
+        "headline": "",
+        "button": "Renew plan",
         "when": "A few days before a plan period ends.",
         "enabled": True,
         "days_before": ENDING_SOON_DAYS,
@@ -121,6 +137,11 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "ended": {
         "label": "Plan ended",
+        "kicker": "Plan ended",
+        "stat": "{grace_days} days",
+        "stat_sub": "to renew and keep your tokens",
+        "headline": "",
+        "button": "Renew plan",
         "when": "Within a day after a plan period ends without a renewal.",
         "enabled": True,
         "subject": "Your {plan} plan has ended",
@@ -136,6 +157,60 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
 KINDS = tuple(DEFAULT_TEMPLATES)
 SUBJECT_MAX = 200
 BODY_MAX = 5000
+# Per-email design text, all editable in Admin. Blank hides that part
+# (headline blank = use the subject; button blank = keep the link as text).
+DESIGN_FIELDS = ("kicker", "stat", "stat_sub", "headline", "button")
+DESIGN_MAX = 200
+
+# The look shared by every email (Admin > Settings > Customer emails > Design).
+# A blank logo uses the BluCloacking shield from the site's /brand folder.
+DEFAULT_STYLE: dict[str, Any] = {
+    "logo_url": "",
+    "logo_size": 96,
+    "header_color": "#0866ff",
+    "header_text_color": "#ffffff",
+    "page_color": "#eef2f9",
+    "card_color": "#ffffff",
+    "text_color": "#1f232a",
+    "button_color": "#0b0d12",
+    "button_text_color": "#ffffff",
+    "footer_text": f"You get this email because you have a {BRAND} account.",
+    "show_footer_logo": True,
+}
+COLOR_FIELDS = ("header_color", "header_text_color", "page_color", "card_color", "text_color", "button_color", "button_text_color")
+_HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+_SAFE_URL = re.compile(r"^(?:https://|/)[^\s\"'<>()\\]*$")
+# The shield with a soft white glow baked in (email apps drop CSS shadows).
+LOGO_DEFAULT_PATH = "/brand/blucloacking-mark-email.png"
+WORDMARK_PATH = "/brand/blucloacking-wordmark.png"
+
+
+def clean_style(raw: Any) -> dict[str, Any]:
+    """Saved style over the defaults, with anything unsafe dropped."""
+
+    out = dict(DEFAULT_STYLE)
+    if not isinstance(raw, dict):
+        return out
+    for field in COLOR_FIELDS:
+        value = raw.get(field)
+        if isinstance(value, str) and _HEX.match(value.strip()):
+            out[field] = value.strip()
+    logo = raw.get("logo_url")
+    if isinstance(logo, str) and (not logo.strip() or _SAFE_URL.match(logo.strip())):
+        out["logo_url"] = logo.strip()
+    size = raw.get("logo_size")
+    if isinstance(size, int) and not isinstance(size, bool):
+        out["logo_size"] = max(24, min(160, size))
+    footer = raw.get("footer_text")
+    if isinstance(footer, str):
+        out["footer_text"] = footer[:500]
+    if isinstance(raw.get("show_footer_logo"), bool):
+        out["show_footer_logo"] = raw["show_footer_logo"]
+    return out
+
+
+def get_style(db: Session) -> dict[str, Any]:
+    return clean_style(get_setting(db, "email_style", {}) or {})
 
 
 def get_templates(db: Session) -> dict[str, dict[str, Any]]:
@@ -152,6 +227,11 @@ def get_templates(db: Session) -> dict[str, dict[str, Any]]:
             for field in ("subject", "body"):
                 value = mine.get(field)
                 if isinstance(value, str) and value.strip():
+                    merged[field] = value
+            # Design text may be saved blank on purpose: blank hides that part.
+            for field in DESIGN_FIELDS:
+                value = mine.get(field)
+                if isinstance(value, str):
                     merged[field] = value
             if "days_before" in default and isinstance(mine.get("days_before"), int):
                 merged["days_before"] = max(1, min(14, mine["days_before"]))
@@ -175,33 +255,165 @@ def fill(template: str, values: dict[str, Any]) -> str:
 _LINK = re.compile(r"(https?://[^\s<]+)")
 
 
-def to_html(body: str, footer: str = "") -> str:
-    """Plain text -> a simple branded HTML message. Links become clickable.
+SANS = "Geist,'Helvetica Neue',Helvetica,Arial,sans-serif"
+MONO = "'Geist Mono',Menlo,Consolas,monospace"
+_URL_LINE = re.compile(r"^https?://\S+$")
 
-    ``footer`` is extra HTML shown in small print under the message (group
-    emails put their unsubscribe link there).
+
+def _abs(url: str) -> str:
+    """Site-relative paths (``/brand/...``, uploaded media) need the full site URL in an email."""
+
+    if url.startswith("/"):
+        base = _base_url()
+        return f"{base}{url}" if base else url
+    return url
+
+
+def _paragraphs(blocks: list[str], color: str) -> str:
+    out = []
+    for block in blocks:
+        safe = html_lib.escape(block)
+        safe = _LINK.sub(lambda m: f'<a href="{m.group(1)}" style="color:#0866ff">{m.group(1)}</a>', safe)
+        out.append(
+            f'<p style="margin:0 0 16px;font-family:{SANS};font-size:15px;line-height:1.6;color:{color}">'
+            f'{safe.replace(chr(10), "<br>")}</p>'
+        )
+    return "".join(out)
+
+
+def _split_at_button(body: str, has_button: bool) -> tuple[list[str], str | None, list[str]]:
+    """Text before the button, the button link, text after it.
+
+    The first line that is only a link becomes the button. Without a button
+    label every link stays in the text.
     """
 
-    paragraphs = []
+    before: list[str] = []
+    after: list[str] = []
+    link: str | None = None
     for block in re.split(r"\n\s*\n", body.strip()):
-        safe = html_lib.escape(block)
-        safe = _LINK.sub(lambda m: f'<a href="{m.group(1)}" style="color:#1d4ed8">{m.group(1)}</a>', safe)
-        paragraphs.append(f'<p style="margin:0 0 16px">{safe.replace(chr(10), "<br>")}</p>')
-    return (
-        '<div style="background:#f5f6f8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">'
-        '<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;'
-        'padding:28px 28px 12px;color:#0b0d12;font-size:15px;line-height:1.55">'
-        f'<div style="font-weight:700;font-size:18px;margin-bottom:20px;color:#1d4ed8">{BRAND}</div>'
-        + "".join(paragraphs)
-        + "</div>"
-        + (
-            '<div style="max-width:560px;margin:12px auto 0;color:#6b7280;font-size:12px;'
-            f'line-height:1.5;text-align:center">{footer}</div>'
-            if footer
-            else ""
+        if not block.strip():
+            continue
+        if link is None and has_button:
+            lines = block.split("\n")
+            for i, line in enumerate(lines):
+                if _URL_LINE.match(line.strip()):
+                    link = line.strip()
+                    head = "\n".join(lines[:i]).strip()
+                    tail = "\n".join(lines[i + 1 :]).strip()
+                    if head:
+                        before.append(head)
+                    if tail:
+                        after.append(tail)
+                    break
+            else:
+                before.append(block)
+            continue
+        (after if link else before).append(block)
+    return before, link, after
+
+
+def to_html(
+    body: str,
+    footer: str = "",
+    *,
+    design: dict[str, Any] | None = None,
+    style: dict[str, Any] | None = None,
+) -> str:
+    """Plain text -> the branded HTML email (blue header, white card).
+
+    ``design`` holds the filled-in per-email parts (kicker, stat, stat_sub,
+    headline, button); without it the email is just the header logo and the
+    text. ``style`` is the shared look from :func:`get_style`. ``footer`` is
+    extra trusted HTML from the app (for example an unsubscribe link) shown
+    under the footer text. Customer and admin text is always escaped.
+    """
+
+    st = clean_style(style) if style is not None else dict(DEFAULT_STYLE)
+    d = {k: str(v) for k, v in (design or {}).items() if v is not None}
+    esc = html_lib.escape
+    hdr, hdr_text = st["header_color"], st["header_text_color"]
+    text_color = st["text_color"]
+    button = d.get("button", "").strip()
+    before, link, after = _split_at_button(body, bool(button))
+
+    logo = _abs(st["logo_url"] or LOGO_DEFAULT_PATH)
+    size = int(st["logo_size"])
+    header = [
+        f'<img src="{esc(logo)}" width="{size}" alt="{BRAND}" style="display:block;border:0;width:{size}px;'
+        f'height:auto;max-width:100%;margin:0 auto">'
+    ]
+    if d.get("kicker", "").strip():
+        header.append(
+            f'<div style="font-family:{MONO};font-size:11px;letter-spacing:2px;text-transform:uppercase;'
+            f'color:{hdr_text};opacity:.8;padding-top:14px">{esc(d["kicker"])}</div>'
         )
-        + "</div>"
+    if d.get("stat", "").strip():
+        header.append(
+            f'<div style="font-family:{SANS};font-weight:800;font-size:54px;line-height:1.05;letter-spacing:-1.5px;'
+            f'color:{hdr_text};padding-top:10px">{esc(d["stat"])}</div>'
+        )
+    if d.get("stat_sub", "").strip():
+        header.append(
+            f'<div style="font-family:{SANS};font-size:14px;color:{hdr_text};opacity:.85;padding-top:6px">'
+            f'{esc(d["stat_sub"])}</div>'
+        )
+    pad = "30px 32px 34px" if len(header) > 1 else "24px 32px"
+
+    content = []
+    if d.get("headline", "").strip():
+        content.append(
+            f'<h1 style="margin:0 0 16px;font-family:{SANS};font-weight:700;font-size:21px;line-height:1.3;'
+            f'color:{text_color}">{esc(d["headline"])}</h1>'
+        )
+    content.append(_paragraphs(before, text_color))
+    if link:
+        content.append(
+            '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px"><tr>'
+            f'<td style="border-radius:12px;background:{st["button_color"]}">'
+            f'<a href="{esc(link)}" style="display:inline-block;padding:13px 26px;font-family:{SANS};font-size:15px;'
+            f'font-weight:600;color:{st["button_text_color"]};text-decoration:none;border-radius:12px">'
+            f"{esc(button)} &rarr;</a></td></tr></table>"
+        )
+    content.append(_paragraphs(after, text_color))
+
+    foot = []
+    if st["show_footer_logo"]:
+        foot.append(
+            f'<img src="{esc(_abs(WORDMARK_PATH))}" width="96" alt="{BRAND}" '
+            'style="display:block;border:0;width:96px;height:auto;margin:0 auto 8px">'
+        )
+    if st["footer_text"].strip():
+        foot.append(
+            f'<div style="font-family:{SANS};font-size:12px;line-height:1.5;color:#8a8d91">'
+            f'{esc(st["footer_text"]).replace(chr(10), "<br>")}</div>'
+        )
+    if footer:
+        foot.append(f'<div style="font-family:{SANS};font-size:12px;line-height:1.5;color:#8a8d91;padding-top:6px">{footer}</div>')
+
+    return (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>'
+        f'<body style="margin:0;padding:0;background:{st["page_color"]}">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{st["page_color"]}">'
+        '<tr><td align="center" style="padding:28px 12px">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px">'
+        f'<tr><td align="center" style="background:{hdr};border-radius:20px 20px 0 0;padding:{pad}">{"".join(header)}</td></tr>'
+        f'<tr><td style="background:{st["card_color"]};border-radius:0 0 20px 20px;padding:30px 32px 16px;'
+        f'border:1px solid #e3e7ef;border-top:0">{"".join(content)}</td></tr>'
+        f'<tr><td align="center" style="padding:20px 8px">{"".join(foot)}</td></tr>'
+        "</table></td></tr></table></body></html>"
     )
+
+
+def design_for(template: dict[str, Any], values: dict[str, Any], subject: str) -> dict[str, str]:
+    """The template's design parts with ``{placeholders}`` filled in."""
+
+    parts = {field: " ".join(fill(str(template.get(field, "")), values).split()) for field in DESIGN_FIELDS}
+    if not parts["headline"]:
+        parts["headline"] = subject
+    return parts
 
 
 def _base_url() -> str:
@@ -227,7 +439,8 @@ def render(db: Session, kind: str, values: dict[str, Any]) -> tuple[str, str, st
         return None
     subject = " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
     body = fill(template["body"], values)
-    return subject, body, to_html(body)
+    html = to_html(body, design=design_for(template, values, subject), style=get_style(db))
+    return subject, body, html
 
 
 # --------------------------------------------------------------------------
@@ -505,6 +718,7 @@ def due_reminders(db: Session, now: datetime | None = None) -> list[tuple[User, 
             "plan": plan.label if plan else (user.sub_plan or "plan"),
             "end_date": f"{end:%d %B %Y}",
             "grace_days": grace,
+            "days_left": max(1, -(-int((end - now).total_seconds()) // 86400)) if end > now else 0,
             "tokens": "",
         }
         rendered = render(db, code, values)
@@ -578,14 +792,63 @@ class EmailTemplateIn(BaseModel):
     subject: str = Field(default="", max_length=SUBJECT_MAX)
     body: str = Field(default="", max_length=BODY_MAX)
     days_before: int | None = Field(default=None, ge=1, le=14)
+    # Design text; None = leave as it is, "" = hide that part.
+    kicker: str | None = Field(default=None, max_length=DESIGN_MAX)
+    stat: str | None = Field(default=None, max_length=DESIGN_MAX)
+    stat_sub: str | None = Field(default=None, max_length=DESIGN_MAX)
+    headline: str | None = Field(default=None, max_length=DESIGN_MAX)
+    button: str | None = Field(default=None, max_length=DESIGN_MAX)
+
+
+class EmailStyleIn(BaseModel):
+    logo_url: str = Field(default="", max_length=1000)
+    logo_size: int = Field(default=96, ge=24, le=160)
+    header_color: str = Field(default="#0866ff", max_length=7)
+    header_text_color: str = Field(default="#ffffff", max_length=7)
+    page_color: str = Field(default="#eef2f9", max_length=7)
+    card_color: str = Field(default="#ffffff", max_length=7)
+    text_color: str = Field(default="#1f232a", max_length=7)
+    button_color: str = Field(default="#0b0d12", max_length=7)
+    button_text_color: str = Field(default="#ffffff", max_length=7)
+    footer_text: str = Field(default="", max_length=500)
+    show_footer_logo: bool = True
 
 
 class EmailSettingsIn(BaseModel):
     templates: dict[str, EmailTemplateIn]
+    style: EmailStyleIn | None = None
 
 
 class EmailTestIn(BaseModel):
     kind: str
+
+
+class EmailPreviewIn(BaseModel):
+    kind: str
+    template: EmailTemplateIn
+    style: EmailStyleIn
+
+
+def _check_style(style: EmailStyleIn) -> dict[str, Any]:
+    raw = style.model_dump()
+    for field in COLOR_FIELDS:
+        if not _HEX.match(raw[field].strip()):
+            raise HTTPException(status_code=422, detail=f"{field.replace('_', ' ').capitalize()} must be a colour like #0866ff.")
+    logo = raw["logo_url"].strip()
+    if logo and not _SAFE_URL.match(logo):
+        raise HTTPException(status_code=422, detail="The logo must be an https:// link or an uploaded image.")
+    return clean_style(raw)
+
+
+def _sample_values(user: User, kind: str, days_before: int) -> dict[str, Any]:
+    return {
+        **base_values(user),
+        "plan": "Pro",
+        "tokens": "4,500",
+        "end_date": f"{datetime.now(timezone.utc) + timedelta(days=days_before if kind == 'ending' else 30):%d %B %Y}",
+        "grace_days": 7,
+        "days_left": days_before,
+    }
 
 
 router = APIRouter(prefix="/api/v1/admin/emails", tags=["emails"], dependencies=[Depends(require_admin)])
@@ -599,6 +862,8 @@ def _status(db: Session) -> dict[str, Any]:
         "placeholders": PLACEHOLDERS,
         "templates": get_templates(db),
         "defaults": DEFAULT_TEMPLATES,
+        "style": get_style(db),
+        "style_defaults": DEFAULT_STYLE,
     }
 
 
@@ -622,10 +887,20 @@ def save_email_settings(payload: EmailSettingsIn, db: Session = Depends(get_db))
             value = getattr(template, field).replace("\r\n", "\n")
             if value.strip() and value.strip() != default[field].strip():
                 entry[field] = value
+        for field in DESIGN_FIELDS:
+            value = getattr(template, field)
+            if value is None:
+                previous = saved.get(kind, {}) if isinstance(saved.get(kind), dict) else {}
+                if isinstance(previous.get(field), str):
+                    entry[field] = previous[field]
+            elif value.strip() != str(default.get(field, "")).strip():
+                entry[field] = value.strip()
         if "days_before" in default and template.days_before is not None:
             entry["days_before"] = template.days_before
         saved[kind] = entry
     set_setting(db, "email_templates", saved)
+    if payload.style is not None:
+        set_setting(db, "email_style", _check_style(payload.style))
     db.commit()
     return _status(db)
 
@@ -637,16 +912,34 @@ def send_test_email(payload: EmailTestIn, admin: User = Depends(require_admin), 
     if not configured():
         raise HTTPException(status_code=409, detail="Email is not set up on the server yet.")
     template = get_templates(db)[payload.kind]
-    values = {
-        **base_values(admin),
-        "plan": "Pro",
-        "tokens": "4,500",
-        "end_date": f"{datetime.now(timezone.utc) + timedelta(days=30):%d %B %Y}",
-        "grace_days": 7,
-    }
-    subject = "[Test] " + " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
+    values = _sample_values(admin, payload.kind, int(template.get("days_before") or ENDING_SOON_DAYS))
+    clean_subject = " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
+    subject = "[Test] " + clean_subject
     body = fill(template["body"], values)
-    ok = send_email(admin.email, subject, to_html(body), body)
+    html = to_html(body, design=design_for(template, values, clean_subject), style=get_style(db))
+    ok = send_email(admin.email, subject, html, body)
     if not ok:
         raise HTTPException(status_code=502, detail="The mail server did not accept the message. Check the api logs.")
     return {"sent_to": admin.email}
+
+
+@router.post("/preview")
+def preview_email(payload: EmailPreviewIn, admin: User = Depends(require_admin)) -> dict[str, Any]:
+    """Render unsaved edits with sample values, for the live preview in Admin."""
+
+    if payload.kind not in KINDS:
+        raise HTTPException(status_code=422, detail="Unknown email.")
+    default = DEFAULT_TEMPLATES[payload.kind]
+    t = payload.template
+    template: dict[str, Any] = {
+        "subject": t.subject if t.subject.strip() else default["subject"],
+        "body": t.body if t.body.strip() else default["body"],
+    }
+    for field in DESIGN_FIELDS:
+        value = getattr(t, field)
+        template[field] = default.get(field, "") if value is None else value
+    values = _sample_values(admin, payload.kind, t.days_before or int(default.get("days_before") or ENDING_SOON_DAYS))
+    subject = " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
+    body = fill(template["body"], values)
+    html = to_html(body, design=design_for(template, values, subject), style=_check_style(payload.style))
+    return {"subject": subject, "html": html, "text": body}
