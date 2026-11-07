@@ -215,6 +215,31 @@ export const getPlans = () => call<PlanInfo[]>("/plans");
 export const getActivity = (limit = 50, kind = "") =>
   call<ActivityEvent[]>(`/activity?limit=${limit}&kind=${encodeURIComponent(kind)}`);
 export const getAnalytics = (days: number) => call<Analytics>(`/analytics?days=${days}`);
+export interface PaymentNotice {
+  id: number;
+  created_at: string;
+  sender: string;
+  order_id: string;
+  order_ref: string | null;
+  email: string | null;
+  user_id: number | null;
+  transfer_id: string;
+  status: string;
+  amount: string;
+  currency: string;
+  outcome: "activated" | "already_paid" | "waiting" | "canceled" | "set_aside" | "unknown_order" | "bad_sender" | "bad_hash";
+  detail: string;
+}
+
+export interface AutoPayments {
+  volet_ready: boolean;
+  status_url: string;
+  sender_check: boolean;
+  fee_allowance_pct: number;
+  notices: PaymentNotice[];
+}
+
+export const getPaymentNotices = (limit = 30) => call<AutoPayments>(`/payment-notices?limit=${limit}`);
 export const getSales = (start: string, end: string) =>
   call<Sales>(`/sales?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
 export const getSettings = () => call<AppSettings>("/settings");

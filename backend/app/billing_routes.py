@@ -22,7 +22,7 @@ from typing import Any, Mapping
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from . import btcpay, meta_capi, notify, volet
@@ -30,7 +30,7 @@ from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
 from .config import settings
-from .db import Order, User, get_db
+from .db import Order, PaymentNotice, User, get_db
 from .plans import aware
 from .tokens import (
     get_token_plans,
@@ -434,31 +434,118 @@ def _sender_address(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
-def _notification_mismatch(db: Session, order: Order, fields: Mapping[str, str]) -> str | None:
-    """Why a correctly signed notification must still not settle this order, or None.
+def _amount_ok(order: Order, amount: float) -> tuple[bool, str]:
+    """Whether the amount Volet reports pays for ``order``, and a note when it was not exact.
+
+    Volet may take its processing fee out of the payment, so the amount it
+    reports can sit a little below the price (a $37.50 payment credited as
+    $37.25). Up to ``ADCAM_VOLET_FEE_ALLOWANCE_PCT`` percent below the price
+    still pays; paying more always does.
+    """
+
+    if math.isnan(amount) or amount <= 0:
+        return False, ""
+    price = float(order.amount_usd)
+    if abs(amount - price) < 0.005:
+        return True, ""
+    if amount > price:
+        return True, f"Volet reported ${amount:.2f} for a ${price:.2f} order (paid more than the price)"
+    floor = price * (1 - max(0.0, float(settings.volet_fee_allowance_pct)) / 100)
+    if amount + 0.005 >= floor:
+        return True, f"Volet reported ${amount:.2f} for a ${price:.2f} order (within the fee allowance)"
+    return False, ""
+
+
+def _notification_mismatch(db: Session, order: Order, fields: Mapping[str, str]) -> tuple[str | None, str]:
+    """Why a correctly signed notification must still not settle this order (None if it may), and a note.
 
     The hash proves Volet sent it, not that it is about what the customer was
-    quoted: a notification for another gateway, or for a different amount or
-    currency, is set aside and left for the owner to look at.
+    quoted: a notification for another gateway, in another currency, or for
+    clearly less than the price is set aside and left for the owner to look
+    at. The note says when the amount was accepted without being exact.
     """
 
     if order.provider != volet.PROVIDER:
-        return "it is not a Volet order"
+        return "it is not a Volet order", ""
     if (fields.get("ac_sci_name") or "") != volet.sci_name():
-        return "the gateway name differs"
+        return "the gateway name differs", ""
     try:
         amount = float(fields.get("ac_amount") or "")
     except ValueError:
         amount = math.nan
     same_currency = (fields.get("ac_merchant_currency") or "").upper() == currency(db).upper()
-    if not same_currency or not (abs(amount - order.amount_usd) < 0.005):
-        return "amount or currency differs"
-    return None
+    paid_enough, note = _amount_ok(order, amount)
+    if not same_currency or not paid_enough:
+        return "amount or currency differs", ""
+    return None, note
+
+
+# The newest notification records kept for Admin > Sales; older ones are deleted.
+NOTICE_KEEP = 500
+
+
+def _record_notice(
+    db: Session, sender: str, fields: Mapping[str, str], outcome: str, detail: str = ""
+) -> None:
+    """Keep one line about a Volet notification for Admin > Sales. Never raises."""
+
+    def _field(name: str, limit: int) -> str:
+        return str(fields.get(name) or "").strip()[:limit]
+
+    try:
+        db.add(
+            PaymentNotice(
+                provider=volet.PROVIDER,
+                sender=(sender or "")[:64],
+                order_id=_field("ac_order_id", 64),
+                transfer_id=_field("ac_transfer", 128),
+                status=_field("ac_transaction_status", 16).upper(),
+                amount=_field("ac_amount", 32),
+                currency=_field("ac_merchant_currency", 8).upper(),
+                outcome=outcome,
+                detail=detail[:500],
+            )
+        )
+        db.commit()
+        cutoff = db.execute(
+            select(PaymentNotice.id).order_by(PaymentNotice.id.desc()).offset(NOTICE_KEEP).limit(1)
+        ).scalar_one_or_none()
+        if cutoff is not None:
+            db.execute(delete(PaymentNotice).where(PaymentNotice.id <= cutoff))
+            db.commit()
+    except Exception:  # noqa: BLE001 - the record is a convenience, never a reason to fail
+        db.rollback()
+        logger.exception("Could not record a Volet notification")
+
+
+def _refusal_alert(db: Session, sender: str, fields: Mapping[str, str], why: str, hint: str) -> None:
+    """Tell the owner's phone that a payment message was refused, with Approve buttons if it names a pending order."""
+
+    order_id = str(fields.get("ac_order_id") or "")[:64]
+    order = db.get(Order, order_id) if order_id else None
+    owner = db.get(User, order.user_id) if order is not None else None
+    lines = [
+        f"Why: {why}",
+        f"From address: {sender or 'unknown'}",
+        f"Status in the message: {str(fields.get('ac_transaction_status') or '?')[:16]}, "
+        f"amount {str(fields.get('ac_amount') or '?')[:32]} {str(fields.get('ac_merchant_currency') or '')[:8]}",
+    ]
+    if order is not None:
+        lines.append(f"Order: {notify.order_ref(order)} ({order.status}), customer {owner.email if owner else 'unknown'}")
+    lines.append(hint)
+    notify.alert(
+        "review",
+        "⚠️ Volet payment message refused",
+        lines,
+        key=f"volet-refused:{why}:{order_id}",
+        priority="high",
+        buttons=notify._approve_buttons(order) if order is not None and order.status == "pending" else None,
+    )
 
 
 @router.api_route("/volet/status", methods=["GET", "POST"], response_class=PlainTextResponse)
 async def volet_status(request: Request, db: Session = Depends(get_db)) -> PlainTextResponse:
-    """Receive Volet's status notification. Hashed with the SCI password over the listed fields.
+    """Receive Volet's status notification and activate the plan it pays for. Hashed with the SCI password.
 
     Two checks of who sent it: the hash, which proves the fields were made
     with the SCI password, and the sender's address against the ones Volet
@@ -468,8 +555,9 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
     reply, and a non-2xx would only make Volet retry something that was
     looked at and set aside on purpose. A repeated COMPLETED is a no-op
     through ``settle_order``'s atomic claim. Every notification leaves a log
-    line, with the order id once there is one, so the deploy log tells the
-    owner what arrived and what was done with it.
+    line and a row in ``payment_notices`` (shown in Admin > Sales), so the
+    owner can see what arrived and what was done with it; a refused one
+    that looks genuine also goes to the phone alerts.
     """
 
     if not volet.configured():
@@ -478,27 +566,61 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="That payment method is not set up."
         )
     sender = _sender_address(request)
-    if not volet.sender_allowed(sender):
-        logger.warning("Volet notification from %s refused: not one of Volet's addresses", sender or "(unknown)")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Notifications are accepted from Volet's addresses only."
-        )
     fields = await _notification_fields(request)
     # Volet's order ids are the app's own (32 hex characters); the slice keeps a stray value out of the log.
     order_id = (fields.get("ac_order_id") or "")[:64]
+    if not volet.sender_allowed(sender):
+        logger.warning("Volet notification from %s refused: not one of Volet's addresses", sender or "(unknown)")
+        signed = volet.verify_status(fields)
+        _record_notice(
+            db,
+            sender,
+            fields,
+            "bad_sender",
+            "Sent from an address that is not on ADCAM_VOLET_NOTIFY_IPS"
+            + (" (signed with the right password)" if signed else ""),
+        )
+        if signed:
+            # Correctly signed but from an unknown address: either Volet has
+            # started sending from a new one, or a buyer is replaying a
+            # notification. Never activate on it; let the owner check Volet.
+            _refusal_alert(
+                db,
+                sender,
+                fields,
+                "sent from an address that is not on Volet's list, but signed with your password",
+                "Check the payment in your Volet account. If it is real, press Approve. "
+                "If Volet keeps sending from this address, add it to ADCAM_VOLET_NOTIFY_IPS on Railway.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Notifications are accepted from Volet's addresses only."
+        )
     if not volet.verify_status(fields):
         logger.warning("Volet notification for order %s refused: bad hash", order_id or "(none)")
+        _record_notice(db, sender, fields, "bad_hash", "The signature does not match the Hosted Checkout password")
+        # It came from Volet's own address, so this is almost always a
+        # password on Railway that differs from the one on the Hosted Checkout.
+        _refusal_alert(
+            db,
+            sender,
+            fields,
+            "the signature does not match",
+            "ADCAM_VOLET_SCI_SECRET on Railway must be the exact Hosted Checkout password in Volet. "
+            "Check the payment in Volet; if it is real, press Approve.",
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bad notification hash.")
 
     order = db.get(Order, order_id) if order_id else None
     if order is None:
         logger.info("Volet notification for an unknown order %s", order_id)
+        _record_notice(db, sender, fields, "unknown_order", "No order with this id")
         return PlainTextResponse("OK")
 
-    reason = _notification_mismatch(db, order, fields)
+    reason, note = _notification_mismatch(db, order, fields)
     if reason:
         logger.warning("Volet notification for order %s ignored: %s", order.id, reason)
         log_activity(db, order.user_id, "payment", f"Volet notification for order {order.id} ignored: {reason}")
+        _record_notice(db, sender, fields, "set_aside", reason)
         owner = db.get(User, order.user_id)
         notify.needs_review(
             order,
@@ -515,10 +637,18 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         # trace of which Volet transaction it was.
         order.provider_ref = (fields.get("ac_transfer") or "")[:128] or None
         db.commit()
-        settle_order(db, order, source="Volet")
+        if note:
+            log_activity(db, order.user_id, "payment", note)
+        if settle_order(db, order, source="Volet"):
+            _record_notice(db, sender, fields, "activated", note or "Plan activated automatically")
+        else:
+            _record_notice(db, sender, fields, "already_paid", f"Order was already {order.status}; nothing added")
     elif state == volet.CANCELED:
         void_order(db, order, "expired")
-    # PENDING and PROCESS mean the money is still on its way: nothing to do yet.
+        _record_notice(db, sender, fields, "canceled", "Payment canceled in Volet")
+    else:
+        # PENDING and PROCESS mean the money is still on its way: nothing to do yet.
+        _record_notice(db, sender, fields, "waiting", "Payment not finished yet")
     return PlainTextResponse("OK")
 
 

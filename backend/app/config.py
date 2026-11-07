@@ -132,6 +132,14 @@ class Settings(BaseSettings):
         default_factory=lambda: ["50.7.115.5", "51.255.40.139", "13.53.55.89", "13.61.247.159"]
     )
 
+    # How far below the order price the amount Volet reports may be and still
+    # activate the plan automatically, in percent of the price. Volet can take
+    # its processing fee out of the payment (a $37.50 USDT payment credited as
+    # $37.25), which would otherwise leave every order waiting for a manual
+    # approval. 0 = the amount must match exactly. Anything further below the
+    # price is set aside for review, as before.
+    volet_fee_allowance_pct: float = Field(default=2.0, ge=0, le=10)
+
     # --- Meta Pixel + Conversions API ----------------------------------------
     # Both empty = no tracking at all. The Pixel id is public (the browser
     # loads it); the CAPI access token is a secret, set only on Railway.

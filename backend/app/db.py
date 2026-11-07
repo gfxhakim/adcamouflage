@@ -237,6 +237,34 @@ class Order(Base):
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PaymentNotice(Base):
+    """One payment message a provider sent to this API, and what was done with it.
+
+    Kept so Admin > Sales can show whether Volet's status notifications are
+    arriving and why one did not activate a plan, without reading the deploy
+    log. Every field is copied from the message (trimmed), so a row for a
+    refused message is the sender's claim, not a fact. Only the newest rows
+    are kept (see ``billing_routes.NOTICE_KEEP``).
+    """
+
+    __tablename__ = "payment_notices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), default="volet", nullable=False)
+    sender: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    order_id: Mapped[str] = mapped_column(String(64), default="", nullable=False, index=True)
+    transfer_id: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    amount: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), default="", nullable=False)
+    # activated | already_paid | waiting | canceled | set_aside | unknown_order | bad_sender | bad_hash
+    outcome: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+
+
 class ActivityEvent(Base):
     """One line in the admin activity feed: a sign-up, sign-in, batch or change."""
 

@@ -519,7 +519,8 @@ def test_notification_for_a_different_amount_is_set_aside(volet_env):
     email = address("amount")
     client = _signed_in(email)
     order_id = _checkout(client, "starter")["order_id"]
-    response = _volet().post(STATUS_PATH, data=_notification(order_id, amount="38.50"))
+    # Clearly less than the $37.50 price (more than the 2% fee allowance below it).
+    response = _volet().post(STATUS_PATH, data=_notification(order_id, amount="36.00"))
     assert response.status_code == 200 and response.text == "OK"
     assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "pending"
     assert _balances(email) == (0, 0)
@@ -732,3 +733,114 @@ def test_orders_list_carries_the_provider_and_reuses_the_open_order(volet_env, a
     user_id = client.get("/api/v1/auth/me").json()["id"]
     billing = admin.get(f"/api/v1/admin/users/{user_id}/billing").json()
     assert [o["provider"] for o in billing["orders"]] == ["volet", "volet"]
+
+
+# --------------------------------------------------------------------------
+# automatic activation: fee allowance, notification log, refusal alerts
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def alerts(monkeypatch):
+    """Every phone alert raised, as (event, title, lines, buttons)."""
+
+    from app import notify
+
+    sent: list[tuple[str, str, list[str], object]] = []
+
+    def record(event, title, lines, *, key=None, priority="default", buttons=None):
+        sent.append((event, title, [line for line in lines if line], buttons))
+        return True
+
+    monkeypatch.setattr(notify, "alert", record)
+    return sent
+
+
+def _notices(order_id: str) -> list[tuple[str, str]]:
+    from app.db import PaymentNotice
+
+    with _session() as db:
+        rows = db.execute(
+            select(PaymentNotice).where(PaymentNotice.order_id == order_id).order_by(PaymentNotice.id)
+        ).scalars()
+        return [(row.outcome, row.status) for row in rows]
+
+
+def test_volets_fee_taken_from_the_payment_still_activates(volet_env, alerts):
+    """The real case: a $37.50 USDT payment that Volet credits as $37.25."""
+
+    email = address("fee")
+    client = _signed_in(email)
+    order_id = _checkout(client, "starter")["order_id"]
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="37.25")).text == "OK"
+    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "paid"
+    assert _balances(email) == (1500, 0)
+    assert "Volet reported $37.25 for a $37.50 order (within the fee allowance)" in _activity(email)
+    assert _notices(order_id) == [("activated", "COMPLETED")]
+    paid = [a for a in alerts if a[0] == "paid"]
+    assert len(paid) == 1 and "Plan activated automatically, nothing to approve." in paid[0][2]
+    assert not [a for a in alerts if a[0] == "review"]
+
+    # Sent again: credited once, recorded as already paid, no second PAID alert.
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="37.25")).text == "OK"
+    assert _balances(email) == (1500, 0)
+    assert _notices(order_id)[-1] == ("already_paid", "COMPLETED")
+    assert len([a for a in alerts if a[0] == "paid"]) == 1
+
+
+def test_fee_allowance_is_a_setting(volet_env, monkeypatch, alerts):
+    monkeypatch.setattr(settings, "volet_fee_allowance_pct", 0.0)
+    email = address("exact")
+    client = _signed_in(email)
+    order_id = _checkout(client, "starter")["order_id"]
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="37.25")).text == "OK"
+    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "pending"
+    assert _notices(order_id) == [("set_aside", "COMPLETED")]
+    review = [a for a in alerts if a[0] == "review"]
+    assert review and "Volet notification ignored: amount or currency differs" in " ".join(review[0][2])
+    # At 2% a $37.50 order accepts down to $36.75, not below.
+    monkeypatch.setattr(settings, "volet_fee_allowance_pct", 2.0)
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="36.74")).text == "OK"
+    assert _balances(email) == (0, 0)
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="36.75")).text == "OK"
+    assert _balances(email) == (1500, 0)
+
+
+def test_refused_messages_are_recorded_and_alerted_only_when_they_look_genuine(volet_env, alerts):
+    email = address("refused")
+    client = _signed_in(email)
+    order_id = _checkout(client, "starter")["order_id"]
+    stranger = {"x-forwarded-for": "203.0.113.9"}
+    alerts.clear()  # the checkout alert
+
+    # Unknown address, wrong password: noise, recorded but no alert.
+    assert TestClient(app).post(STATUS_PATH, data=_notification(order_id, secret="x"), headers=stranger).status_code == 403
+    assert not alerts
+    # Unknown address, right password: recorded, alerted with the order, never activated.
+    assert TestClient(app).post(STATUS_PATH, data=_notification(order_id), headers=stranger).status_code == 403
+    assert len(alerts) == 1 and alerts[0][1] == "⚠️ Volet payment message refused"
+    assert any("203.0.113.9" in line for line in alerts[0][2])
+    assert any(email in line for line in alerts[0][2])
+    # Volet's address, wrong password: the Railway secret is wrong; alerted.
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, secret="x")).status_code == 401
+    assert len(alerts) == 2 and any("ADCAM_VOLET_SCI_SECRET" in line for line in alerts[1][2])
+    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "pending"
+    assert _balances(email) == (0, 0)
+    assert [o for o, _ in _notices(order_id)] == ["bad_sender", "bad_sender", "bad_hash"]
+
+
+def test_admin_sees_the_latest_volet_messages(volet_env, admin, alerts):
+    email = address("listed")
+    client = _signed_in(email)
+    order_id = _checkout(client, "starter")["order_id"]
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, state="PENDING")).text == "OK"
+    assert _volet().post(STATUS_PATH, data=_notification(order_id)).text == "OK"
+
+    assert client.get("/api/v1/admin/payment-notices").status_code in (403, 404)
+    body = admin.get("/api/v1/admin/payment-notices").json()
+    assert body["volet_ready"] is True and body["sender_check"] is True
+    assert body["status_url"] == f"{PUBLIC_URL}/api/v1/billing/volet/status"
+    assert body["fee_allowance_pct"] == 2.0
+    mine = [n for n in body["notices"] if n["order_id"] == order_id]
+    assert [n["outcome"] for n in mine] == ["activated", "waiting"]
+    assert mine[0]["email"] == email and mine[0]["sender"] == VOLET_IP and mine[0]["amount"] == "37.50"

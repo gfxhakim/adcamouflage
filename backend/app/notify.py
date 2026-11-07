@@ -302,8 +302,13 @@ def checkout_started(
     )
 
 
+AUTOMATIC_SOURCES = {"volet", "btcpay"}
+
+
 def paid(order: Any, email: str, plan_label: str, currency: str, source: str, name: str | None = None) -> bool:
     what = f"{plan_label} subscription" if order.kind == "subscription" else f"Top-up on {plan_label}"
+    # Volet / BTCPay confirmations activate the plan with nobody pressing anything.
+    automatic = source.strip().lower() in AUTOMATIC_SOURCES
     return alert(
         "paid",
         f"✅ PAID {_money(order.amount_usd, currency)}: {what}",
@@ -311,6 +316,7 @@ def paid(order: Any, email: str, plan_label: str, currency: str, source: str, na
             f"Customer: {_customer(email, name)}",
             f"Tokens: {order.tokens:,}",
             f"Confirmed by: {source}",
+            "Plan activated automatically, nothing to approve." if automatic else "",
             f"Order: {order_ref(order)}",
         ],
         key=f"order:{order.id}",
