@@ -466,6 +466,98 @@ export const saveEmailSettings = (templates: Record<string, Pick<EmailTemplate, 
 export const sendTestEmail = (kind: EmailKind) =>
   call<{ sent_to: string }>("/emails/test", { method: "POST", body: JSON.stringify({ kind }) });
 
+// --- group emails (send to a group) ----------------------------------------------
+
+export interface EmailGroup {
+  id: string;
+  label: string;
+  hint: string;
+  count: number;
+}
+
+export interface EmailPerson {
+  id: number;
+  email: string;
+  name: string;
+  plan: string | null;
+  tokens: number;
+  created_at: string | null;
+  unsubscribed: boolean;
+  groups: string[];
+}
+
+export interface EmailDraft {
+  id: string;
+  label: string;
+  groups: string[];
+  subject: string;
+  body: string;
+}
+
+export interface GroupEmailCampaign {
+  id: number;
+  subject: string;
+  audience: string;
+  admin_email: string;
+  status: "sending" | "done" | "cancelled";
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  pending: number;
+  created_at: string | null;
+  finished_at: string | null;
+}
+
+export interface GroupEmailRules {
+  daily_limit: number;
+  seconds_between: number;
+}
+
+export interface GroupEmailStatus {
+  transport: string;
+  public_url_set: boolean;
+  groups: EmailGroup[];
+  people: EmailPerson[];
+  placeholders: Record<string, string>;
+  drafts: EmailDraft[];
+  rules: GroupEmailRules;
+  sent_today: number;
+  left_today: number;
+  campaigns: GroupEmailCampaign[];
+}
+
+export interface GroupEmailRecipient {
+  email: string;
+  status: "pending" | "sending" | "sent" | "failed" | "skipped";
+  error: string;
+  sent_at: string | null;
+}
+
+type GroupMessage = { subject: string; body: string };
+
+export const getGroupEmails = () => call<GroupEmailStatus>("/emails/groups");
+export const saveGroupEmailRules = (rules: GroupEmailRules) =>
+  call<GroupEmailStatus>("/emails/groups/rules", { method: "PUT", body: JSON.stringify(rules) });
+export const previewGroupEmail = (message: GroupMessage & { user_id?: number }) =>
+  call<{ subject: string; text: string; html: string; for: string }>("/emails/groups/preview", {
+    method: "POST",
+    body: JSON.stringify(message),
+  });
+export const testGroupEmail = (message: GroupMessage) =>
+  call<{ sent_to: string }>("/emails/groups/test", { method: "POST", body: JSON.stringify(message) });
+export const sendGroupEmail = (message: GroupMessage & { user_ids: number[]; audience: string; confirm: string }) =>
+  call<{ campaign: GroupEmailCampaign; left_out_unsubscribed: number }>("/emails/groups/send", {
+    method: "POST",
+    body: JSON.stringify(message),
+  });
+export const getGroupEmail = (id: number) =>
+  call<{ campaign: GroupEmailCampaign; body: string; recipients: GroupEmailRecipient[] }>(`/emails/groups/${id}`);
+export const stopGroupEmail = (id: number) =>
+  call<GroupEmailCampaign>(`/emails/groups/${id}/cancel`, { method: "POST" });
+export const retryGroupEmail = (id: number) =>
+  call<GroupEmailCampaign>(`/emails/groups/${id}/retry`, { method: "POST" });
+
 // --- danger zone: delete every non-admin account ------------------------------
 
 export interface PurgeSummary {

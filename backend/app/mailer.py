@@ -175,8 +175,12 @@ def fill(template: str, values: dict[str, Any]) -> str:
 _LINK = re.compile(r"(https?://[^\s<]+)")
 
 
-def to_html(body: str) -> str:
-    """Plain text -> a simple branded HTML message. Links become clickable."""
+def to_html(body: str, footer: str = "") -> str:
+    """Plain text -> a simple branded HTML message. Links become clickable.
+
+    ``footer`` is extra HTML shown in small print under the message (group
+    emails put their unsubscribe link there).
+    """
 
     paragraphs = []
     for block in re.split(r"\n\s*\n", body.strip()):
@@ -189,7 +193,14 @@ def to_html(body: str) -> str:
         'padding:28px 28px 12px;color:#0b0d12;font-size:15px;line-height:1.55">'
         f'<div style="font-weight:700;font-size:18px;margin-bottom:20px;color:#1d4ed8">{BRAND}</div>'
         + "".join(paragraphs)
-        + "</div></div>"
+        + "</div>"
+        + (
+            '<div style="max-width:560px;margin:12px auto 0;color:#6b7280;font-size:12px;'
+            f'line-height:1.5;text-align:center">{footer}</div>'
+            if footer
+            else ""
+        )
+        + "</div>"
     )
 
 
@@ -258,7 +269,7 @@ def _html_to_text(html: str) -> str:
     return html_lib.unescape(re.sub(r"<[^>]+>", "", stripped)).strip()
 
 
-def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
+def _send_smtp(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     message = EmailMessage()
     message["From"] = settings.email_from
     message["To"] = to
@@ -267,6 +278,8 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
         message["Reply-To"] = settings.email_reply_to.strip()
     domain = parseaddr(settings.email_from)[1].rpartition("@")[2] or None
     message["Message-ID"] = make_msgid(domain=domain)
+    for name, value in (headers or {}).items():
+        message[name] = value
     message.set_content(text_body)
     message.add_alternative(html, subtype="html")
 
@@ -293,7 +306,7 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
     return True
 
 
-def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
+def _send_resend(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     payload: dict[str, Any] = {
         "from": settings.email_from,
         "to": [to],
@@ -303,6 +316,8 @@ def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
     }
     if settings.email_reply_to.strip():
         payload["reply_to"] = settings.email_reply_to.strip()
+    if headers:
+        payload["headers"] = dict(headers)
     try:
         response = httpx.post(
             RESEND_URL,
@@ -319,16 +334,25 @@ def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
     return True
 
 
-def send_email(to: str, subject: str, html: str, text_body: str | None = None) -> bool:
-    """Send one message. Returns False, without raising, when it cannot."""
+def send_email(
+    to: str,
+    subject: str,
+    html: str,
+    text_body: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> bool:
+    """Send one message. Returns False, without raising, when it cannot.
+
+    ``headers`` are extra message headers (group emails add List-Unsubscribe).
+    """
 
     how = transport()
     if not how or not to:
         return False
     text_body = text_body if text_body is not None else _html_to_text(html)
     if how == "smtp":
-        return _send_smtp(to, subject, html, text_body)
-    return _send_resend(to, subject, html, text_body)
+        return _send_smtp(to, subject, html, text_body, headers) if headers else _send_smtp(to, subject, html, text_body)
+    return _send_resend(to, subject, html, text_body, headers) if headers else _send_resend(to, subject, html, text_body)
 
 
 def _background(fn: Callable[[], None]) -> None:

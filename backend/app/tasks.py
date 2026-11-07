@@ -184,6 +184,19 @@ def send_billing_reminders() -> dict[str, int]:
     return result
 
 
+@celery_app.task(name="app.tasks.send_group_emails")
+def send_group_emails() -> dict[str, int]:
+    """Every two minutes (and right after an admin sends): send queued group emails, throttled."""
+
+    from .broadcast import process
+
+    with get_session_factory()() as db:
+        result = process(db)
+    if any(result.values()):
+        logger.info("group emails: %s sent, %s failed, %s skipped", result["sent"], result["failed"], result["skipped"])
+    return result
+
+
 @celery_app.task(name="app.tasks.open_waiting_support_tickets")
 def open_waiting_support_tickets() -> dict[str, int]:
     """Every few minutes: customers stuck in the support bot for 30 min get a ticket in Admin."""

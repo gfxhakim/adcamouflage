@@ -29,6 +29,8 @@ from .config import settings
 from .db import User, get_db, get_session_factory, init_db
 from .live_activity import router as live_activity_router
 from .mailer import router as email_router
+from .broadcast import public_router as group_email_public_router
+from .broadcast import router as group_email_router
 from .meta_capi import router as meta_router
 from .notify import router as notify_router
 from .telegram_approve import router as telegram_approve_router
@@ -123,6 +125,8 @@ app.include_router(live_activity_router)
 app.include_router(meta_router)
 app.include_router(notify_router)
 app.include_router(email_router)
+app.include_router(group_email_router)
+app.include_router(group_email_public_router)
 app.include_router(telegram_approve_router)
 app.include_router(support_user_router)
 app.include_router(support_admin_router)

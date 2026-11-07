@@ -69,3 +69,21 @@ say why (wrong password, port blocked, domain not verified).
   with the period end it was for, so it is not sent again for that period.
   A database lock stops two runs from overlapping. A send the mail server
   refuses is not recorded, so it is retried on the next run.
+
+## Send to a group
+
+Admin > Settings > Customer emails > **Send to a group** sends one email to the
+customers you pick (by group like "Never paid", "Active on Pro", "Plan ended",
+"Low on tokens", or one by one).
+
+- Each person gets their own `{name}`, `{plan}`, `{tokens}`, `{end_date}` and links.
+- It needs `ADCAM_PUBLIC_URL` on the api service, because every group email has an
+  unsubscribe link (and one-click unsubscribe headers for Gmail/Outlook).
+  People who unsubscribe never get group emails again; account emails
+  (welcome, plan activated, reminders) still reach them.
+- Sending is throttled: one email every few seconds, up to a daily limit
+  (default 250, editable in the card). Brevo's free plan allows about 300 a day
+  in total, account emails included. Whatever is over the limit goes out the
+  next day automatically (the worker checks every 2 minutes).
+- You type SEND to confirm. Every send, stop and retry is in the admin audit log.
+- Nobody is sent the same group email twice, even after a restart.
