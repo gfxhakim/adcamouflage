@@ -199,3 +199,51 @@ def test_html_escapes_customer_text():
     html = mailer.to_html("Hi <script>x</script>\n\nSee https://a.example/b")
     assert "<script>" not in html and "&lt;script&gt;" in html
     assert '<a href="https://a.example/b"' in html
+
+
+def test_smtp_failures_explain_why():
+    host, port = "smtp.example.test", 587
+    auth = mailer.smtp_reason(mailer.smtplib.SMTPAuthenticationError(535, b"5.7.8 bad credentials"), host, port)
+    assert "refused the login" in auth and "535" in auth
+    sender = mailer.smtp_reason(mailer.smtplib.SMTPSenderRefused(550, b"sender not valid", "x@y"), host, port)
+    assert "From address" in sender and "sender not valid" in sender
+    blocked = mailer.smtp_reason(TimeoutError("timed out"), host, port)
+    assert "Could not reach smtp.example.test:587" in blocked and "ADCAM_BREVO_API_KEY" in blocked
+    data = mailer.smtp_reason(mailer.smtplib.SMTPDataError(554, b"rejected"), host, port)
+    assert "refused the message" in data and "554 rejected" in data
+
+
+def test_brevo_api_is_used_first_and_explains_errors(monkeypatch):
+    calls: list[dict] = []
+
+    class FakeResponse:
+        def __init__(self, status, text=""):
+            self.status_code, self.text = status, text
+
+    replies = [FakeResponse(201, '{"messageId":"<1@x>"}')]
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "json": json})
+        return replies.pop(0)
+
+    monkeypatch.setattr(mailer.httpx, "post", fake_post)
+    monkeypatch.setattr(settings, "brevo_api_key", SecretStr("placeholder"))
+    monkeypatch.setattr(settings, "smtp_host", "smtp.example.test")
+    monkeypatch.setattr(settings, "email_from", "Brand <billing@example.test>")
+    monkeypatch.setattr(settings, "email_reply_to", "")
+    assert mailer.transport() == "brevo"
+
+    assert mailer.send_email_reason("to@example.test", "Hi", "<p>Hello</p>") is None
+    sent = calls[0]
+    assert sent["url"] == mailer.BREVO_URL and sent["headers"]["api-key"] == "placeholder"
+    assert sent["json"]["sender"] == {"email": "billing@example.test", "name": "Brand"}
+    assert sent["json"]["to"] == [{"email": "to@example.test"}] and sent["json"]["textContent"] == "Hello"
+
+    replies.append(FakeResponse(401, '{"code":"unauthorized","message":"We have detected you are using an unrecognised IP address 1.2.3.4"}'))
+    assert "Authorised IPs" in mailer.send_email_reason("to@example.test", "Hi", "<p>x</p>")
+    replies.append(FakeResponse(401, '{"code":"unauthorized","message":"Key not found"}'))
+    assert "API key" in mailer.send_email_reason("to@example.test", "Hi", "<p>x</p>")
+    replies.append(FakeResponse(400, '{"code":"invalid_parameter","message":"Sender is not valid"}'))
+    assert "Senders" in mailer.send_email_reason("to@example.test", "Hi", "<p>x</p>")
+    replies.append(FakeResponse(500, "oops"))
+    assert mailer.send_email("to@example.test", "Hi", "<p>x</p>") is False

@@ -48,6 +48,7 @@ from .plans import aware
 logger = logging.getLogger(__name__)
 
 RESEND_URL = "https://api.resend.com/emails"
+BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 TIMEOUT_SECONDS = 15.0
 
 REMINDER_KIND = "reminder"
@@ -232,13 +233,19 @@ def _api_key() -> str:
     return _secret(settings.resend_api_key)
 
 
+def _brevo_key() -> str:
+    return _secret(settings.brevo_api_key)
+
+
 def smtp_ready() -> bool:
     return bool(settings.smtp_host.strip())
 
 
 def transport() -> str:
-    """``smtp``, ``resend`` or ``""`` when email is not set up."""
+    """``brevo``, ``smtp``, ``resend`` or ``""`` when email is not set up."""
 
+    if _brevo_key():
+        return "brevo"
     if smtp_ready():
         return "smtp"
     if _api_key():
@@ -258,7 +265,7 @@ def _html_to_text(html: str) -> str:
     return html_lib.unescape(re.sub(r"<[^>]+>", "", stripped)).strip()
 
 
-def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
+def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool | str:
     message = EmailMessage()
     message["From"] = settings.email_from
     message["To"] = to
@@ -287,13 +294,55 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
             if user:
                 server.login(user, password)
             server.send_message(message)
-    except (smtplib.SMTPException, OSError):
+    except (smtplib.SMTPException, OSError) as exc:
         logger.warning("email to %s could not be sent over SMTP", to, exc_info=True)
-        return False
+        return smtp_reason(exc, host, port)
     return True
 
 
-def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
+def _server_text(exc: Exception) -> str:
+    raw = getattr(exc, "smtp_error", b"")
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", "replace")
+    code = getattr(exc, "smtp_code", "")
+    said = " ".join(str(raw or "").split())[:200]
+    return f" The server said: {code} {said}".rstrip() + "." if said else ""
+
+
+def _sender_address() -> str:
+    return parseaddr(settings.email_from)[1] or settings.email_from
+
+
+def smtp_reason(exc: Exception, host: str, port: int) -> str:
+    """A plain-words reason for an SMTP failure, safe to show an admin.
+
+    Never includes the password: only the exception type and the mail
+    server's own reply text.
+    """
+
+    said = _server_text(exc)
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return (
+            "The mail server refused the login. Check ADCAM_SMTP_USERNAME (the SMTP login) and "
+            "ADCAM_SMTP_PASSWORD (the SMTP key, not your account password)." + said
+        )
+    if isinstance(exc, smtplib.SMTPSenderRefused):
+        return f"The mail server refused the From address {_sender_address()}. Add and verify it as a sender with your mail provider." + said
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        return "The mail server refused the recipient address."
+    if isinstance(exc, smtplib.SMTPNotSupportedError):
+        return "The mail server does not support STARTTLS on this port. Try ADCAM_SMTP_SECURITY=ssl with port 465." + said
+    if isinstance(exc, ssl.SSLError):
+        return "Secure connection failed. Use port 587 with ADCAM_SMTP_SECURITY=starttls, or port 465 with ssl."
+    if isinstance(exc, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected)) or not isinstance(exc, smtplib.SMTPException):
+        return (
+            f"Could not reach {host}:{port}. Railway blocks outgoing mail ports on Free, Trial and Hobby plans; "
+            "use Brevo's web API instead (set ADCAM_BREVO_API_KEY), or try port 2525."
+        )
+    return "The mail server refused the message." + said
+
+
+def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool | str:
     payload: dict[str, Any] = {
         "from": settings.email_from,
         "to": [to],
@@ -312,23 +361,75 @@ def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
         )
     except httpx.HTTPError:
         logger.warning("email to %s could not be sent", to, exc_info=True)
-        return False
+        return "Could not reach Resend."
     if response.status_code >= 400:
         logger.warning("email to %s refused by Resend: %s %s", to, response.status_code, response.text[:200])
-        return False
+        return f"Resend refused the message ({response.status_code}): {' '.join(response.text.split())[:200]}"
     return True
+
+
+def _send_brevo(to: str, subject: str, html: str, text_body: str) -> bool | str:
+    name, address = parseaddr(settings.email_from)
+    sender: dict[str, str] = {"email": address or settings.email_from}
+    if name:
+        sender["name"] = name
+    payload: dict[str, Any] = {
+        "sender": sender,
+        "to": [{"email": to}],
+        "subject": subject,
+        "htmlContent": html,
+        "textContent": text_body,
+    }
+    reply_to = parseaddr(settings.email_reply_to.strip())[1]
+    if reply_to:
+        payload["replyTo"] = {"email": reply_to}
+    try:
+        response = httpx.post(
+            BREVO_URL,
+            headers={"api-key": _brevo_key(), "accept": "application/json", "content-type": "application/json"},
+            json=payload,
+            timeout=TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError:
+        logger.warning("email to %s could not be sent through Brevo", to, exc_info=True)
+        return "Could not reach Brevo (api.brevo.com)."
+    if response.status_code < 400:
+        return True
+    said = " ".join(response.text.split())[:200]
+    logger.warning("email to %s refused by Brevo: %s %s", to, response.status_code, said)
+    lowered = said.lower()
+    if "ip" in lowered and ("unrecognised" in lowered or "unrecognized" in lowered or "authorised" in lowered or "authorized" in lowered):
+        return (
+            "Brevo blocked the server's IP address. In Brevo open Security > Authorised IPs and turn off "
+            "IP blocking (Railway's IP changes). Brevo said: " + said
+        )
+    if response.status_code == 401:
+        return "Brevo refused the API key. Check ADCAM_BREVO_API_KEY (an API key from SMTP & API > API keys, not the SMTP key). Brevo said: " + said
+    if "sender" in lowered:
+        return f"Brevo refused the From address {_sender_address()}. Add and verify it under Senders. Brevo said: " + said
+    return f"Brevo refused the message ({response.status_code}). Brevo said: " + said
+
+
+def send_email_reason(to: str, subject: str, html: str, text_body: str | None = None) -> str | None:
+    """Send one message. Returns None when it went out, else a plain-words reason. Never raises."""
+
+    how = transport()
+    if not how:
+        return "Email is not set up on the server yet."
+    if not to:
+        return "No recipient address."
+    text_body = text_body if text_body is not None else _html_to_text(html)
+    sender = {"brevo": _send_brevo, "smtp": _send_smtp}.get(how, _send_resend)
+    result = sender(to, subject, html, text_body)
+    if result is True:
+        return None
+    return result if isinstance(result, str) and result else "The mail server did not accept the message."
 
 
 def send_email(to: str, subject: str, html: str, text_body: str | None = None) -> bool:
     """Send one message. Returns False, without raising, when it cannot."""
 
-    how = transport()
-    if not how or not to:
-        return False
-    text_body = text_body if text_body is not None else _html_to_text(html)
-    if how == "smtp":
-        return _send_smtp(to, subject, html, text_body)
-    return _send_resend(to, subject, html, text_body)
+    return send_email_reason(to, subject, html, text_body) is None
 
 
 def _background(fn: Callable[[], None]) -> None:
@@ -622,7 +723,7 @@ def send_test_email(payload: EmailTestIn, admin: User = Depends(require_admin), 
     }
     subject = "[Test] " + " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
     body = fill(template["body"], values)
-    ok = send_email(admin.email, subject, to_html(body), body)
-    if not ok:
-        raise HTTPException(status_code=502, detail="The mail server did not accept the message. Check the api logs.")
+    reason = send_email_reason(admin.email, subject, to_html(body), body)
+    if reason:
+        raise HTTPException(status_code=502, detail=reason)
     return {"sent_to": admin.email}
