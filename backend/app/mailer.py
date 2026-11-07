@@ -482,7 +482,7 @@ def _html_to_text(html: str) -> str:
     return html_lib.unescape(re.sub(r"<[^>]+>", "", stripped)).strip()
 
 
-def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
+def _send_smtp(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     message = EmailMessage()
     message["From"] = settings.email_from
     message["To"] = to
@@ -491,6 +491,8 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
         message["Reply-To"] = settings.email_reply_to.strip()
     domain = parseaddr(settings.email_from)[1].rpartition("@")[2] or None
     message["Message-ID"] = make_msgid(domain=domain)
+    for name, value in (headers or {}).items():
+        message[name] = value
     message.set_content(text_body)
     message.add_alternative(html, subtype="html")
 
@@ -517,7 +519,7 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str) -> bool:
     return True
 
 
-def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
+def _send_resend(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     payload: dict[str, Any] = {
         "from": settings.email_from,
         "to": [to],
@@ -527,6 +529,8 @@ def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
     }
     if settings.email_reply_to.strip():
         payload["reply_to"] = settings.email_reply_to.strip()
+    if headers:
+        payload["headers"] = dict(headers)
     try:
         response = httpx.post(
             RESEND_URL,
@@ -543,16 +547,25 @@ def _send_resend(to: str, subject: str, html: str, text_body: str) -> bool:
     return True
 
 
-def send_email(to: str, subject: str, html: str, text_body: str | None = None) -> bool:
-    """Send one message. Returns False, without raising, when it cannot."""
+def send_email(
+    to: str,
+    subject: str,
+    html: str,
+    text_body: str | None = None,
+    headers: dict[str, str] | None = None,
+) -> bool:
+    """Send one message. Returns False, without raising, when it cannot.
+
+    ``headers`` are extra message headers (group emails add List-Unsubscribe).
+    """
 
     how = transport()
     if not how or not to:
         return False
     text_body = text_body if text_body is not None else _html_to_text(html)
     if how == "smtp":
-        return _send_smtp(to, subject, html, text_body)
-    return _send_resend(to, subject, html, text_body)
+        return _send_smtp(to, subject, html, text_body, headers) if headers else _send_smtp(to, subject, html, text_body)
+    return _send_resend(to, subject, html, text_body, headers) if headers else _send_resend(to, subject, html, text_body)
 
 
 def _background(fn: Callable[[], None]) -> None:

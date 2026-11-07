@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
     event,
     func,
@@ -91,6 +92,11 @@ class User(Base):
     # Snapshot of the plan's tokens_per_generation at purchase, used to price
     # every batch for the rest of the period even if the admin reprices plans.
     sub_tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Set when the user unsubscribes from group emails (Admin > Customer
+    # emails > Send to a group). Account emails (welcome, receipts,
+    # reminders) still go out.
+    email_opt_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     batches: Mapped[list["BatchRecord"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
@@ -268,6 +274,53 @@ class AdminAudit(Base):
     )
 
 
+class EmailCampaign(Base):
+    """One group email an admin sent: who it went to and how far sending got.
+
+    ``status`` is sending -> done, or cancelled when the admin stops it. The
+    per-person rows in ``email_recipients`` are the source of truth; the
+    counts here are refreshed as sending moves on.
+    """
+
+    __tablename__ = "email_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    admin_email: Mapped[str] = mapped_column(String(320), default="", nullable=False)
+    audience: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    button: Mapped[str] = mapped_column(String(60), default="", server_default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="sending", nullable=False, index=True)
+    total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EmailRecipient(Base):
+    """One person in a group email. (campaign, user) is unique, so nobody gets it twice."""
+
+    __tablename__ = "email_recipients"
+    __table_args__ = (UniqueConstraint("campaign_id", "user_id", name="uq_email_recipient"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[int] = mapped_column(
+        ForeignKey("email_campaigns.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    # No foreign key: the row stays when the account is deleted.
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # pending | sending | sent | failed | skipped
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    error: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+
 class SupportThread(Base):
     """A conversation between a signed-in user, the BluCloaking AI bot, and a live admin agent."""
 
@@ -398,6 +451,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "provider_ref", "VARCHAR(128)"),
     # Meta ad attribution captured at checkout (consent, _fbp/_fbc, ip, agent).
     ("orders", "tracking", "TEXT"),
+    # Unsubscribed from group emails.
+    ("users", "email_opt_out_at", "TIMESTAMP WITH TIME ZONE"),
+    ("email_campaigns", "button", "VARCHAR(60) NOT NULL DEFAULT ''"),
 ]
 
 

@@ -41,6 +41,12 @@ celery_app.conf.update(
             # Each reminder is marked once sent, so running often is safe.
             "schedule": 3600.0,
         },
+        "send-group-emails": {
+            "task": "app.tasks.send_group_emails",
+            # Each run sends for at most ~100s, one email at a time, and stops
+            # at the daily cap; the next run carries on where it left off.
+            "schedule": 120.0,
+        },
         "open-waiting-support-tickets": {
             "task": "app.tasks.open_waiting_support_tickets",
             "schedule": 120.0,
