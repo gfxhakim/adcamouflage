@@ -16,6 +16,23 @@ Every email can be switched off, and its subject and message edited, in
 **Admin > Settings > Customer emails**. "Send test to me" mails the saved
 version to your own admin address with sample values.
 
+## Design and editing
+
+Every email uses the BluCloacking design: a blue header with the shield logo
+(white glow), a small top line, one big text (tokens added, days left), then a
+white card with the headline, your message and one button. In
+**Admin > Settings > Customer emails** you can change, per email: subject,
+the three header lines, headline, message and button text (leave a header
+line or the button empty to hide it). The **Logo & colours** tab changes the
+logo (upload or link), its size, every colour and the footer for all emails.
+A live preview shows unsaved edits.
+
+The first line in a message that is only a link (for example `{plan_url}`)
+becomes the button. Emails still carry a plain-text version.
+
+Logo and uploaded images load from `ADCAM_PUBLIC_URL`, so set it on the api
+service or the logo will not show.
+
 Nothing is sent until a mail server is set up. Until then sign-ups and
 payments work exactly as before.
 

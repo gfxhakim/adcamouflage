@@ -42,6 +42,7 @@ def outbox(monkeypatch):
     yield sent
     with _session() as db:
         mailer.set_setting(db, "email_templates", {})
+        mailer.set_setting(db, "email_style", {})
         db.commit()
 
 
@@ -199,3 +200,71 @@ def test_html_escapes_customer_text():
     html = mailer.to_html("Hi <script>x</script>\n\nSee https://a.example/b")
     assert "<script>" not in html and "&lt;script&gt;" in html
     assert '<a href="https://a.example/b"' in html
+
+
+def test_branded_design_button_and_logo(outbox):
+    with _session() as db:
+        subject, body, html = mailer.render(
+            db, "activated", {"plan": "Pro", "name": "Sam", "tokens": "4,500", "end_date": "1 Jan", "app_url": "https://shop.example.test/app"}
+        )
+    # The link line became the button; the plain-text part still has it.
+    assert 'href="https://shop.example.test/app"' in html and "Open workspace &rarr;" in html
+    assert "https://shop.example.test/app" in body
+    # Big number, kicker and headline from the design text.
+    assert ">4,500<" in html and "Payment confirmed" in html and ">Your Pro plan is active<" in html
+    assert 'src="https://shop.example.test/brand/blucloacking-mark-email.png"' in html
+
+
+def test_admin_edits_design_and_style(outbox, admin):
+    response = admin.put(
+        "/api/v1/admin/emails",
+        json={
+            "templates": {"welcome": {"enabled": True, "subject": "", "body": "", "kicker": "", "stat": "Hey {name}", "button": "Go"}},
+            "style": {
+                "logo_url": "/api/v1/site-media/abc.png",
+                "logo_size": 70,
+                "header_color": "#111111",
+                "header_text_color": "#ffffff",
+                "page_color": "#eeeeee",
+                "card_color": "#ffffff",
+                "text_color": "#222222",
+                "button_color": "#ff0000",
+                "button_text_color": "#ffffff",
+                "footer_text": "Bye <b>",
+                "show_footer_logo": False,
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["templates"]["welcome"]["kicker"] == ""  # blank hides it
+    assert data["style"]["header_color"] == "#111111"
+    email = address("mail-design")
+    _signed_in(email)
+    html = _mine(outbox, email)[0]["html"]
+    assert "Account ready" not in html and "Hey there" in html and "Go &rarr;" in html
+    assert "background:#111111" in html and "background:#ff0000" in html
+    assert 'src="https://shop.example.test/api/v1/site-media/abc.png"' in html
+    assert "Bye &lt;b&gt;" in html and "blucloacking-wordmark" not in html
+
+    bad = {"templates": {}, "style": {**data["style"], "header_color": "red;x:y"}}
+    assert admin.put("/api/v1/admin/emails", json=bad).status_code == 422
+    bad = {"templates": {}, "style": {**data["style"], "logo_url": "javascript:alert(1)"}}
+    assert admin.put("/api/v1/admin/emails", json=bad).status_code == 422
+
+
+def test_admin_preview(outbox, admin):
+    style = admin.get("/api/v1/admin/emails").json()["style_defaults"]
+    response = admin.post(
+        "/api/v1/admin/emails/preview",
+        json={"kind": "ending", "template": {"subject": "Ends {end_date}", "body": "Hi\n\n{plan_url}", "days_before": 4}, "style": style},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["subject"].startswith("Ends ") and ">4 days<" in data["html"] and "Renew plan &rarr;" in data["html"]
+
+
+def test_to_html_footer_param_for_group_sends():
+    html = mailer.to_html("Hello\n\nhttps://a.example/x", footer='<a href="https://a.example/u">Unsubscribe</a>')
+    assert '<a href="https://a.example/u">Unsubscribe</a>' in html
+    assert '<a href="https://a.example/x"' in html  # no button label: link stays in the text

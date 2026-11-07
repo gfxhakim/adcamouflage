@@ -448,7 +448,33 @@ export interface EmailTemplate {
   body: string;
   /** Renewal reminder only: how many days before the period ends. */
   days_before?: number;
+  /** Design text. Blank hides that part (headline blank = the subject). */
+  kicker: string;
+  stat: string;
+  stat_sub: string;
+  headline: string;
+  button: string;
 }
+
+/** The look shared by every customer email. */
+export interface EmailStyle {
+  logo_url: string;
+  logo_size: number;
+  header_color: string;
+  header_text_color: string;
+  page_color: string;
+  card_color: string;
+  text_color: string;
+  button_color: string;
+  button_text_color: string;
+  footer_text: string;
+  show_footer_logo: boolean;
+}
+
+export type EmailTemplateInput = Pick<
+  EmailTemplate,
+  "enabled" | "subject" | "body" | "days_before" | "kicker" | "stat" | "stat_sub" | "headline" | "button"
+>;
 
 export interface EmailSettings {
   /** "smtp", "resend" or "" when email is not set up on the server. */
@@ -458,11 +484,18 @@ export interface EmailSettings {
   placeholders: Record<string, string>;
   templates: Record<EmailKind, EmailTemplate>;
   defaults: Record<EmailKind, EmailTemplate>;
+  style: EmailStyle;
+  style_defaults: EmailStyle;
 }
 
 export const getEmailSettings = () => call<EmailSettings>("/emails");
-export const saveEmailSettings = (templates: Record<string, Pick<EmailTemplate, "enabled" | "subject" | "body" | "days_before">>) =>
-  call<EmailSettings>("/emails", { method: "PUT", body: JSON.stringify({ templates }) });
+export const saveEmailSettings = (templates: Record<string, EmailTemplateInput>, style?: EmailStyle) =>
+  call<EmailSettings>("/emails", { method: "PUT", body: JSON.stringify({ templates, style }) });
+export const previewEmail = (kind: EmailKind, template: EmailTemplateInput, style: EmailStyle) =>
+  call<{ subject: string; html: string; text: string }>("/emails/preview", {
+    method: "POST",
+    body: JSON.stringify({ kind, template, style }),
+  });
 export const sendTestEmail = (kind: EmailKind) =>
   call<{ sent_to: string }>("/emails/test", { method: "POST", body: JSON.stringify({ kind }) });
 
