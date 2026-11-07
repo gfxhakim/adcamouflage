@@ -53,11 +53,26 @@ Never paste these values in a chat or a commit.
 Already using Resend? `ADCAM_RESEND_API_KEY` still works instead of SMTP. If
 both are set, SMTP is used.
 
+### Brevo: turn off IP blocking
+
+Brevo blocks logins from IP addresses it has not seen before and emails you
+"Verify a new IP". Railway's IP changes between deploys, so in that email
+click **Stop the review of IP addresses** (or Brevo > Security > Authorised
+IPs > turn blocking off). Otherwise sending fails again after a redeploy.
+
+### Railway plan blocks mail ports?
+
+Railway blocks outgoing SMTP on some plans. If the test says it "could not
+reach" the mail server, use Brevo's web API instead: create an API key in
+Brevo > SMTP & API > API keys and set `ADCAM_BREVO_API_KEY` on the api
+service. It goes over HTTPS and wins over SMTP when both are set.
+
 ## 3. Check it
 
-Open Admin > Settings > Customer emails. The badge should say **On: SMTP**.
-Press **Send test to me** on each email. If it fails, the api service logs
-say why (wrong password, port blocked, domain not verified).
+Open Admin > Settings > Customer emails. The badge should say **On: SMTP**
+(or **On: Brevo API**). Press **Send test to me** on each email. If it fails,
+the message under the button says why (wrong login, sender not verified,
+IP blocked, port blocked).
 
 ## How duplicates are avoided
 

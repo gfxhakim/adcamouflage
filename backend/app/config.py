@@ -168,9 +168,12 @@ class Settings(BaseSettings):
     notify_telegram_webhook_secret: SecretStr | None = None
 
     # --- customer email ---------------------------------------------------
-    # Optional. Any SMTP server works (Gmail/Google Workspace, Zoho, Brevo,
-    # Mailgun, Amazon SES, ...); SMTP wins when both it and Resend are set.
-    # With neither, welcome / plan activated / reminder emails are skipped.
+    # Optional. Brevo's web API (``brevo_api_key``) goes over HTTPS, so it
+    # works on Railway plans that block outgoing mail ports. Otherwise any
+    # SMTP server works (Gmail/Google Workspace, Zoho, Brevo, Mailgun, Amazon
+    # SES, ...), then Resend. Order when several are set: Brevo API, SMTP,
+    # Resend. With none, welcome / plan activated / reminder emails are skipped.
+    brevo_api_key: SecretStr | None = None
     smtp_host: str = ""
     smtp_port: int = 587
     # starttls (port 587, the usual), ssl (port 465) or none (local relay only).

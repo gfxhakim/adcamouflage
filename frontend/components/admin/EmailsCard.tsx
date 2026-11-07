@@ -99,7 +99,7 @@ export default function EmailsCard() {
               : "ml-auto rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-semibold text-ink-faint dark:bg-white/10 dark:text-slate-400"
           }
         >
-          {ready ? `On: ${data.transport === "smtp" ? "SMTP" : "Resend"}` : "Off"}
+          {ready ? `On: ${data.transport === "smtp" ? "SMTP" : data.transport === "brevo" ? "Brevo API" : "Resend"}` : "Off"}
         </span>
       </div>
       <p className="mb-4 text-xs text-ink-faint dark:text-slate-500">
