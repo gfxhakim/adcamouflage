@@ -341,6 +341,39 @@ export function fetchOrder(orderId: string) {
   return get<Order>(`/api/v1/billing/orders/${encodeURIComponent(orderId)}`);
 }
 
+/** A direct USDT order: where to send, the exact amount, and whether it arrived. */
+export interface UsdtPayment {
+  order_id: string;
+  status: OrderStatus;
+  kind: OrderKind;
+  plan_label: string;
+  tokens: number;
+  price: number;
+  address: string;
+  pay_amount: string;
+  network: string;
+  expires_at: string;
+  txid: string | null;
+}
+
+export interface TxidCheck {
+  result: "paid" | "used" | "not_found" | "review";
+  message: string;
+  status: OrderStatus;
+}
+
+export function fetchUsdtPayment(orderId: string) {
+  return get<UsdtPayment>(`/api/v1/billing/orders/${encodeURIComponent(orderId)}/usdt`);
+}
+
+export function usdtQrUrl(orderId: string) {
+  return `${API_BASE}/api/v1/billing/orders/${encodeURIComponent(orderId)}/usdt/qr.svg`;
+}
+
+export function sendUsdtTxid(orderId: string, txid: string) {
+  return post<TxidCheck>(`/api/v1/billing/orders/${encodeURIComponent(orderId)}/usdt/txid`, { txid });
+}
+
 export function fetchOrders() {
   return get<Order[]>("/api/v1/billing/orders");
 }

@@ -302,7 +302,7 @@ def checkout_started(
     )
 
 
-AUTOMATIC_SOURCES = {"volet", "btcpay"}
+AUTOMATIC_SOURCES = {"volet", "btcpay", "usdt (trc-20)"}
 
 
 def paid(order: Any, email: str, plan_label: str, currency: str, source: str, name: str | None = None) -> bool:

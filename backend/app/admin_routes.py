@@ -1767,6 +1767,7 @@ def activity(
 
 class PaymentNoticeOut(BaseModel):
     id: int
+    provider: str
     created_at: datetime
     sender: str
     order_id: str
@@ -1782,6 +1783,8 @@ class PaymentNoticeOut(BaseModel):
 
 
 class AutoPayments(BaseModel):
+    usdt_ready: bool
+    usdt_address: str
     volet_ready: bool
     status_url: str
     sender_check: bool
@@ -1811,6 +1814,7 @@ def payment_notices(limit: int = Query(default=30, ge=1, le=200), db: Session = 
         out.append(
             PaymentNoticeOut(
                 id=row.id,
+                provider=row.provider,
                 created_at=row.created_at,
                 sender=row.sender,
                 order_id=row.order_id,
@@ -1827,6 +1831,8 @@ def payment_notices(limit: int = Query(default=30, ge=1, le=200), db: Session = 
         )
     base = settings.public_url.strip().rstrip("/")
     return AutoPayments(
+        usdt_ready=settings.usdt_configured,
+        usdt_address=settings.usdt_trc20_address.strip() if settings.usdt_configured else "",
         volet_ready=settings.volet_configured,
         status_url=f"{base}/api/v1/billing/volet/status" if base else "",
         sender_check=any(entry.strip() for entry in settings.volet_notify_ips),

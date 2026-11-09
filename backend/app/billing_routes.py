@@ -16,16 +16,17 @@ import html
 import json
 import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from . import btcpay, meta_capi, notify, volet
+from . import btcpay, meta_capi, notify, usdt, volet
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
@@ -51,8 +52,10 @@ ORDER_KINDS = ("subscription", "topup")
 # Payment providers in the order the plan page offers them; whichever are
 # set up appear, and the first one is the default.
 BTCPAY = "btcpay"
-PROVIDERS = (BTCPAY, volet.PROVIDER)
-PROVIDER_LABELS = {BTCPAY: "Crypto wallet (BTCPay)", volet.PROVIDER: "Volet"}
+# Direct USDT comes first when it is set up: it is the one that activates by
+# itself when customers pay to the owner's wallet address.
+PROVIDERS = (usdt.PROVIDER, BTCPAY, volet.PROVIDER)
+PROVIDER_LABELS = {usdt.PROVIDER: "USDT (TRC-20)", BTCPAY: "Crypto wallet (BTCPay)", volet.PROVIDER: "Volet"}
 # BTCPay event types the webhook knows about; anything else is acknowledged and ignored.
 SETTLED_EVENT = "InvoiceSettled"
 VOID_EVENTS = {"InvoiceExpired": "expired", "InvoiceInvalid": "invalid"}
@@ -79,7 +82,7 @@ class CheckoutIn(BaseModel):
     plan_id: str | None = Field(default=None, max_length=32)
     amount: float | None = Field(default=None, gt=0, le=100_000)
     # Left out means the first provider that is set up.
-    provider: str | None = Field(default=None, pattern="^(btcpay|volet)$")
+    provider: str | None = Field(default=None, pattern="^(btcpay|volet|usdt)$")
 
 
 class CheckoutOut(BaseModel):
@@ -111,7 +114,7 @@ class SubscriptionState(BaseModel):
 def available_providers() -> list[str]:
     """The providers the owner has set up, in the order the plan page offers them."""
 
-    ready = {BTCPAY: btcpay.configured, volet.PROVIDER: volet.configured}
+    ready = {BTCPAY: btcpay.configured, volet.PROVIDER: volet.configured, usdt.PROVIDER: usdt.configured}
     return [provider for provider in PROVIDERS if ready[provider]()]
 
 
@@ -155,7 +158,12 @@ def _open_order(db: Session, user: User, kind: str, plan_id: str, amount: float,
     # A BTCPay order is only usable once its invoice exists and a Volet order
     # once its pay page is linked. Both are set right after the row is made,
     # so this skips an order an outage left half-made.
-    ready = Order.btcpay_invoice_id.is_not(None) if provider == BTCPAY else Order.checkout_url.is_not(None)
+    if provider == BTCPAY:
+        ready = Order.btcpay_invoice_id.is_not(None)
+    elif provider == usdt.PROVIDER:
+        ready = Order.checkout_url.is_not(None) & Order.pay_amount.is_not(None)
+    else:
+        ready = Order.checkout_url.is_not(None)
     since = datetime.now(timezone.utc) - REUSE_WINDOW
     return db.execute(
         select(Order)
@@ -283,6 +291,18 @@ def checkout(
     notify.checkout_started(
         order, user.email, plan.label, provider_label(provider), currency(db), reused=False, name=user.display_name
     )
+    if provider == usdt.PROVIDER:
+        try:
+            order.pay_amount = usdt.assign_pay_amount(db, amount)
+        except usdt.TronError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        # The app's own page shows the address and the exact amount, and
+        # flips to "activated" once the transfer is seen on the blockchain.
+        order.checkout_url = f"/app/pay/{order.id}"
+        db.commit()
+        logger.info("USDT checkout started for order %s (%s USDT)", order.id, order.pay_amount)
+        log_activity(db, user.id, "checkout", f"Started USDT checkout for {what} (send {order.pay_amount} USDT)")
+        return CheckoutOut(order_id=order.id, checkout_url=order.checkout_url, amount=amount, tokens=tokens, provider=provider)
     if provider == volet.PROVIDER:
         # The signed form is built when the customer opens the pay page, so
         # nothing has to be asked of Volet here.
@@ -761,7 +781,121 @@ def order_status(order_id: str, user: User = Depends(current_user), db: Session 
     if order is None or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found.")
     _settle_from_btcpay(db, order)
+    if order.provider == usdt.PROVIDER and order.status == "pending":
+        usdt.scan(db)
+        db.refresh(order)
     return _order_out(order)
+
+
+# --------------------------------------------------------------------------
+# direct USDT (TRC-20): pay page data, QR code, transaction id
+# --------------------------------------------------------------------------
+
+
+class UsdtPayment(BaseModel):
+    order_id: str
+    status: str
+    kind: str
+    plan_label: str
+    tokens: int
+    price: float
+    address: str
+    pay_amount: str
+    network: str
+    expires_at: datetime
+    txid: str | None
+
+
+class TxidIn(BaseModel):
+    txid: str = Field(pattern="^(0x)?[0-9a-fA-F]{64}$")
+
+
+class TxidOut(BaseModel):
+    result: str
+    message: str
+    status: str
+
+
+TXID_MESSAGES = {
+    "paid": "Payment confirmed. Your plan is active.",
+    "used": "That transaction already paid another order.",
+    "not_found": "We can't see that transaction to our address yet. It can take a minute or two after your wallet "
+    "shows it as confirmed; we keep checking by ourselves.",
+    "review": "We found your payment, but the amount is not the exact one for this order. "
+    "We've asked the team to confirm it; you'll get an email when the plan is active.",
+}
+# Transaction-id checks per account in TXID_WINDOW (each one reads TronGrid).
+TXID_LIMIT = 10
+TXID_WINDOW = 600.0
+_txid_hits: dict[int, list[float]] = {}
+
+
+def _usdt_order(db: Session, order_id: str, user: User) -> Order:
+    order = db.get(Order, order_id)
+    if order is None or order.user_id != user.id or order.provider != usdt.PROVIDER or not order.pay_amount:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return order
+
+
+@router.get("/orders/{order_id}/usdt", response_model=UsdtPayment)
+def usdt_payment(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> UsdtPayment:
+    """What the pay page shows: where to send, exactly how much, and whether it arrived."""
+
+    order = _usdt_order(db, order_id, user)
+    if order.status == "pending":
+        usdt.scan(db)
+        db.refresh(order)
+    plan = get_token_plans(db).get(order.plan_id)
+    created = aware(order.created_at) or datetime.now(timezone.utc)
+    return UsdtPayment(
+        order_id=order.id,
+        status=order.status,
+        kind=order.kind,
+        plan_label=plan.label if plan else order.plan_id,
+        tokens=order.tokens,
+        price=order.amount_usd,
+        address=usdt.address(),
+        pay_amount=order.pay_amount or "",
+        network="TRON (TRC-20)",
+        expires_at=created + usdt.window(),
+        txid=order.provider_ref if order.status == "paid" else None,
+    )
+
+
+@router.get("/orders/{order_id}/usdt/qr.svg")
+def usdt_qr(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> Response:
+    """A QR code of the receiving address (only the address, which every wallet app reads)."""
+
+    import io
+
+    import segno
+
+    _usdt_order(db, order_id, user)
+    if not usdt.configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="That payment method is not set up.")
+    buffer = io.BytesIO()
+    segno.make(usdt.address(), error="m").save(buffer, kind="svg", scale=6, border=2, dark="#000", light="#fff")
+    return Response(buffer.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.post("/orders/{order_id}/usdt/txid", response_model=TxidOut)
+def usdt_txid(
+    order_id: str, payload: TxidIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> TxidOut:
+    """The buyer gives the transaction id of their payment, for when it was not matched by itself."""
+
+    order = _usdt_order(db, order_id, user)
+    now = time.monotonic()
+    hits = [t for t in _txid_hits.get(user.id, []) if now - t < TXID_WINDOW]
+    if len(hits) >= TXID_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many checks. Wait a few minutes; we keep checking by ourselves.")
+    hits.append(now)
+    _txid_hits[user.id] = hits
+    txid = payload.txid.lower().removeprefix("0x")
+    result = usdt.check_txid(db, order, txid)
+    db.refresh(order)
+    log_activity(db, user.id, "payment", f"Gave USDT transaction {txid[:12]}... for order {order.id}: {result}")
+    return TxidOut(result=result, message=TXID_MESSAGES[result], status=order.status)
 
 
 # --------------------------------------------------------------------------

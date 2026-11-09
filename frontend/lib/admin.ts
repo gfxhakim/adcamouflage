@@ -217,6 +217,7 @@ export const getActivity = (limit = 50, kind = "") =>
 export const getAnalytics = (days: number) => call<Analytics>(`/analytics?days=${days}`);
 export interface PaymentNotice {
   id: number;
+  provider: "volet" | "usdt";
   created_at: string;
   sender: string;
   order_id: string;
@@ -227,11 +228,13 @@ export interface PaymentNotice {
   status: string;
   amount: string;
   currency: string;
-  outcome: "activated" | "already_paid" | "waiting" | "canceled" | "set_aside" | "unknown_order" | "bad_sender" | "bad_hash";
+  outcome: "activated" | "already_paid" | "waiting" | "canceled" | "set_aside" | "unknown_order" | "bad_sender" | "bad_hash" | "unmatched";
   detail: string;
 }
 
 export interface AutoPayments {
+  usdt_ready: boolean;
+  usdt_address: string;
   volet_ready: boolean;
   status_url: string;
   sender_check: boolean;

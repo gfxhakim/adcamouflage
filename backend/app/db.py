@@ -224,6 +224,10 @@ class Order(Base):
     # The provider's own id for the payment when it is not a BTCPay invoice
     # (Volet's transaction id, ``ac_transfer``, from the status notification).
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Direct USDT orders only: the exact amount to send, the price plus cents
+    # no other open order uses (e.g. "37.53"), which is how a blockchain
+    # transfer is matched to this order (see app/usdt.py).
+    pay_amount: Mapped[str | None] = mapped_column(String(24), nullable=True)
     # JSON: the buyer's Meta attribution data from checkout, so the Purchase
     # sent when the payment is confirmed can be matched to the ad click.
     tracking: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -477,6 +481,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Second payment provider (Volet). Every order before it was a BTCPay one.
     ("orders", "provider", "VARCHAR(16) NOT NULL DEFAULT 'btcpay'"),
     ("orders", "provider_ref", "VARCHAR(128)"),
+    ("orders", "pay_amount", "VARCHAR(24)"),
     # Meta ad attribution captured at checkout (consent, _fbp/_fbc, ip, agent).
     ("orders", "tracking", "TEXT"),
     # Unsubscribed from group emails.

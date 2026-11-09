@@ -140,6 +140,19 @@ class Settings(BaseSettings):
     # price is set aside for review, as before.
     volet_fee_allowance_pct: float = Field(default=2.0, ge=0, le=10)
 
+    # --- billing (direct USDT TRC-20 to the owner's own address) -------------
+    # The address customers send USDT to (e.g. the owner's Volet USDT TRC-20
+    # deposit address). Public, not a secret. Empty = this way to pay is off.
+    # Each order gets its own exact amount (price + a few cents) and the app
+    # reads incoming transfers from TronGrid to activate the plan; see app/usdt.py.
+    usdt_trc20_address: str = ""
+    usdt_trc20_contract: str = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"  # Tether USD on TRON
+    trongrid_url: str = "https://api.trongrid.io"
+    # Optional free key from trongrid.io: raises TronGrid's rate limit.
+    trongrid_api_key: SecretStr | None = None
+    # How long after checkout a payment still counts for the order.
+    usdt_pay_window_hours: int = Field(default=24, ge=1, le=168)
+
     # --- Meta Pixel + Conversions API ----------------------------------------
     # Both empty = no tracking at all. The Pixel id is public (the browser
     # loads it); the CAPI access token is a secret, set only on Railway.
@@ -289,6 +302,11 @@ class Settings(BaseSettings):
         return bool(self.btcpay_url.strip() and self.btcpay_store_id.strip() and key.strip())
 
     @property
+    def usdt_configured(self) -> bool:
+        value = self.usdt_trc20_address.strip()
+        return len(value) == 34 and value.startswith("T") and value.isalnum()
+
+    @property
     def volet_configured(self) -> bool:
         """True once a Volet form can be signed: account email, gateway name and password all set."""
 
@@ -299,7 +317,7 @@ class Settings(BaseSettings):
     def billing_configured(self) -> bool:
         """True when at least one payment provider is set up, so a checkout can be offered."""
 
-        return self.btcpay_configured or self.volet_configured
+        return self.btcpay_configured or self.volet_configured or self.usdt_configured
 
     @property
     def btcpay_base_url(self) -> str:
