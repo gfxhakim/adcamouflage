@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { BadgeCheck, Loader2, ShoppingCart, UserPlus, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import AutoPaymentsCard from "@/components/admin/AutoPaymentsCard";
 import NeonCard from "@/components/NeonCard";
 import SeriesChart from "@/components/SeriesChart";
 import StatTile from "@/components/StatTile";
@@ -349,6 +350,8 @@ export function SalesTab({ refreshKey, onSelectUser }: SalesTabProps) {
           </ul>
         )}
       </Panel>
+
+      <AutoPaymentsCard refreshKey={refreshKey} onSelectUser={onSelectUser} />
     </div>
   );
 }

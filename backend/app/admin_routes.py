@@ -21,7 +21,7 @@ from .app_settings import announcement, currency, get_setting, registration_open
 from .config import settings
 from . import meta_capi
 from . import purge as purge_mod
-from .db import ActivityEvent, AdminAudit, BatchRecord, Order, TokenLedger, User, get_db
+from .db import ActivityEvent, AdminAudit, BatchRecord, Order, PaymentNotice, TokenLedger, User, get_db
 from .plans import (
     PLAN_IDS,
     Plan,
@@ -1758,3 +1758,84 @@ def activity(
     db: Session = Depends(get_db),
 ) -> list[Activity]:
     return _activity(db, limit, kind=kind)
+
+
+# --------------------------------------------------------------------------
+# automatic payments (Volet status notifications)
+# --------------------------------------------------------------------------
+
+
+class PaymentNoticeOut(BaseModel):
+    id: int
+    provider: str
+    created_at: datetime
+    sender: str
+    order_id: str
+    order_ref: str | None
+    email: str | None
+    user_id: int | None
+    transfer_id: str
+    status: str
+    amount: str
+    currency: str
+    outcome: str
+    detail: str
+
+
+class AutoPayments(BaseModel):
+    usdt_ready: bool
+    usdt_address: str
+    volet_ready: bool
+    status_url: str
+    sender_check: bool
+    fee_allowance_pct: float
+    notices: list[PaymentNoticeOut]
+
+
+@router.get("/payment-notices", response_model=AutoPayments)
+def payment_notices(limit: int = Query(default=30, ge=1, le=200), db: Session = Depends(get_db)) -> AutoPayments:
+    """Whether Volet can activate plans by itself, and the latest messages it sent."""
+
+    from . import notify
+
+    rows = db.execute(select(PaymentNotice).order_by(PaymentNotice.id.desc()).limit(limit)).scalars().all()
+    orders = {
+        o.id: o
+        for o in db.execute(select(Order).where(Order.id.in_({r.order_id for r in rows if r.order_id}))).scalars()
+    } if rows else {}
+    users = {
+        u.id: u
+        for u in db.execute(select(User).where(User.id.in_({o.user_id for o in orders.values()}))).scalars()
+    } if orders else {}
+    out = []
+    for row in rows:
+        order = orders.get(row.order_id)
+        user = users.get(order.user_id) if order is not None else None
+        out.append(
+            PaymentNoticeOut(
+                id=row.id,
+                provider=row.provider,
+                created_at=row.created_at,
+                sender=row.sender,
+                order_id=row.order_id,
+                order_ref=notify.order_ref(order) if order is not None else None,
+                email=user.email if user else None,
+                user_id=user.id if user else None,
+                transfer_id=row.transfer_id,
+                status=row.status,
+                amount=row.amount,
+                currency=row.currency,
+                outcome=row.outcome,
+                detail=row.detail,
+            )
+        )
+    base = settings.public_url.strip().rstrip("/")
+    return AutoPayments(
+        usdt_ready=settings.usdt_configured,
+        usdt_address=settings.usdt_trc20_address.strip() if settings.usdt_configured else "",
+        volet_ready=settings.volet_configured,
+        status_url=f"{base}/api/v1/billing/volet/status" if base else "",
+        sender_check=any(entry.strip() for entry in settings.volet_notify_ips),
+        fee_allowance_pct=float(settings.volet_fee_allowance_pct),
+        notices=out,
+    )

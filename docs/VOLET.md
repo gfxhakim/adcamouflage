@@ -554,3 +554,30 @@ Two habits worth keeping:
 The app-side behaviour described here (addresses, variables, messages,
 what is credited and when) comes from this repository's billing code and
 tests, not from Volet.
+
+## Automatic activation: checking it works
+
+A plan activates by itself when Volet's status notification arrives and checks
+out; nobody has to press Approve. To see it working:
+
+- **Admin > Sales > Automatic activation (Volet)** lists every message Volet
+  sent, newest first, with what the app did: *Plan activated*, *Payment in
+  progress*, *Needs your approval*, *Refused: unknown address* or *Refused:
+  wrong password*. The green line at the top shows the exact Status URL that
+  must be saved on the Hosted Checkout in Volet.
+- **Fee allowance.** Volet can take its fee out of the payment (a $37.50 USDT
+  payment credited as $37.25). The app still activates when the amount is at
+  most `ADCAM_VOLET_FEE_ALLOWANCE_PCT` percent below the price (default `2`;
+  `0` = exact amount only). Anything lower goes to the phone alert with
+  Approve / Reject buttons, as before.
+- **Phone alerts.** Each automatic activation sends the usual PAID alert with
+  "Plan activated automatically, nothing to approve." A message Volet signed
+  correctly but sent from an address not on `ADCAM_VOLET_NOTIFY_IPS`, or a
+  message from Volet's address with a wrong signature (the password on
+  Railway differs from the Hosted Checkout password), sends a "Volet payment
+  message refused" alert with Approve buttons. Neither ever activates by
+  itself.
+- If a customer paid and **nothing** appears in the list, Volet never called
+  the app: check the Status URL and method (POST) on the Hosted Checkout.
+- Money sent to your Volet account outside the checkout (a direct transfer)
+  carries no order id, so it cannot be matched; approve those by hand.
