@@ -174,19 +174,42 @@ def _open_order(db: Session, user: User, kind: str, plan_id: str, amount: float,
     ).scalar_one_or_none()
 
 
-def _public_base(request: Request) -> str:
-    """The site origin to send the customer back to: the configured one, else what the browser says."""
+def _bare_host(url: str) -> str:
+    host = url.split("://", 1)[-1].split("/", 1)[0].lower()
+    return host[4:] if host.startswith("www.") else host
 
-    base = settings.public_url.strip().rstrip("/")
-    if not base:
-        origin = request.headers.get("origin") or ""
-        referer = request.headers.get("referer") or ""
-        if origin:
-            base = origin.rstrip("/")
-        elif referer.startswith("http"):
-            scheme, _, rest = referer.partition("://")
-            base = f"{scheme}://{rest.split('/', 1)[0]}"
-    return base
+
+def _browser_base(request: Request) -> str:
+    """The origin of the page the customer is on, from Origin or else Referer."""
+
+    origin = (request.headers.get("origin") or "").strip()
+    if origin.startswith("http"):
+        return origin.rstrip("/")
+    referer = (request.headers.get("referer") or "").strip()
+    if referer.startswith("http"):
+        scheme, _, rest = referer.partition("://")
+        return f"{scheme}://{rest.split('/', 1)[0]}"
+    return ""
+
+
+def _public_base(request: Request) -> str:
+    """The site origin to send the customer back to after paying.
+
+    The session cookie belongs to the exact host the customer signed in on,
+    so www.example.com and example.com do not share it. Sending someone who
+    paid on www back to the bare domain (or the other way round) lands them
+    signed out, looking as if their account is gone. So when the browser is
+    on the configured site under its www or bare twin, send them back to
+    that same host; any other origin falls back to the configured one.
+    """
+
+    configured = settings.public_url.strip().rstrip("/")
+    browser = _browser_base(request)
+    if not configured:
+        return browser
+    if browser and _bare_host(browser) == _bare_host(configured) and browser.split("://", 1)[0] == "https":
+        return browser
+    return configured
 
 
 def _redirect_url(request: Request, order_id: str) -> str:
@@ -391,7 +414,7 @@ def pay_order(
             currency=currency(db),
             success_url=f"{base}/app/plan?order={order.id}",
             fail_url=f"{base}/app/plan?order={order.id}&cancelled=1",
-            status_url=f"{base}/api/v1/billing/volet/status",
+            status_url=f"{settings.public_url.strip().rstrip('/') or base}/api/v1/billing/volet/status",
             comment=f"{settings.app_name}: {what}",
         )
     except volet.VoletError as exc:
