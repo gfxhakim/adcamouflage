@@ -224,6 +224,10 @@ class Order(Base):
     # The provider's own id for the payment when it is not a BTCPay invoice
     # (Volet's transaction id, ``ac_transfer``, from the status notification).
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Direct USDT orders only: the exact amount to send, the price plus cents
+    # no other open order uses (e.g. "37.53"), which is how a blockchain
+    # transfer is matched to this order (see app/usdt.py).
+    pay_amount: Mapped[str | None] = mapped_column(String(24), nullable=True)
     # JSON: the buyer's Meta attribution data from checkout, so the Purchase
     # sent when the payment is confirmed can be matched to the ad click.
     tracking: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -235,6 +239,34 @@ class Order(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # When the order poll last asked BTCPay about this invoice (throttles the poll).
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PaymentNotice(Base):
+    """One payment message a provider sent to this API, and what was done with it.
+
+    Kept so Admin > Sales can show whether Volet's status notifications are
+    arriving and why one did not activate a plan, without reading the deploy
+    log. Every field is copied from the message (trimmed), so a row for a
+    refused message is the sender's claim, not a fact. Only the newest rows
+    are kept (see ``billing_routes.NOTICE_KEEP``).
+    """
+
+    __tablename__ = "payment_notices"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(16), default="volet", nullable=False)
+    sender: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    order_id: Mapped[str] = mapped_column(String(64), default="", nullable=False, index=True)
+    transfer_id: Mapped[str] = mapped_column(String(128), default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    amount: Mapped[str] = mapped_column(String(32), default="", nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), default="", nullable=False)
+    # activated | already_paid | waiting | canceled | set_aside | unknown_order | bad_sender | bad_hash
+    outcome: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    detail: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
+    )
 
 
 class ActivityEvent(Base):
@@ -449,6 +481,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Second payment provider (Volet). Every order before it was a BTCPay one.
     ("orders", "provider", "VARCHAR(16) NOT NULL DEFAULT 'btcpay'"),
     ("orders", "provider_ref", "VARCHAR(128)"),
+    ("orders", "pay_amount", "VARCHAR(24)"),
     # Meta ad attribution captured at checkout (consent, _fbp/_fbc, ip, agent).
     ("orders", "tracking", "TEXT"),
     # Unsubscribed from group emails.

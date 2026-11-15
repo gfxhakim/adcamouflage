@@ -16,21 +16,22 @@ import html
 import json
 import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from . import btcpay, meta_capi, notify, volet
+from . import btcpay, meta_capi, notify, usdt, volet
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
 from .config import settings
-from .db import Order, User, get_db
+from .db import Order, PaymentNotice, User, get_db
 from .plans import aware
 from .tokens import (
     get_token_plans,
@@ -51,8 +52,10 @@ ORDER_KINDS = ("subscription", "topup")
 # Payment providers in the order the plan page offers them; whichever are
 # set up appear, and the first one is the default.
 BTCPAY = "btcpay"
-PROVIDERS = (BTCPAY, volet.PROVIDER)
-PROVIDER_LABELS = {BTCPAY: "Crypto wallet (BTCPay)", volet.PROVIDER: "Volet"}
+# Direct USDT comes first when it is set up: it is the one that activates by
+# itself when customers pay to the owner's wallet address.
+PROVIDERS = (usdt.PROVIDER, BTCPAY, volet.PROVIDER)
+PROVIDER_LABELS = {usdt.PROVIDER: "USDT (TRC-20)", BTCPAY: "Crypto wallet (BTCPay)", volet.PROVIDER: "Volet"}
 # BTCPay event types the webhook knows about; anything else is acknowledged and ignored.
 SETTLED_EVENT = "InvoiceSettled"
 VOID_EVENTS = {"InvoiceExpired": "expired", "InvoiceInvalid": "invalid"}
@@ -79,7 +82,7 @@ class CheckoutIn(BaseModel):
     plan_id: str | None = Field(default=None, max_length=32)
     amount: float | None = Field(default=None, gt=0, le=100_000)
     # Left out means the first provider that is set up.
-    provider: str | None = Field(default=None, pattern="^(btcpay|volet)$")
+    provider: str | None = Field(default=None, pattern="^(btcpay|volet|usdt)$")
 
 
 class CheckoutOut(BaseModel):
@@ -111,7 +114,7 @@ class SubscriptionState(BaseModel):
 def available_providers() -> list[str]:
     """The providers the owner has set up, in the order the plan page offers them."""
 
-    ready = {BTCPAY: btcpay.configured, volet.PROVIDER: volet.configured}
+    ready = {BTCPAY: btcpay.configured, volet.PROVIDER: volet.configured, usdt.PROVIDER: usdt.configured}
     return [provider for provider in PROVIDERS if ready[provider]()]
 
 
@@ -155,7 +158,12 @@ def _open_order(db: Session, user: User, kind: str, plan_id: str, amount: float,
     # A BTCPay order is only usable once its invoice exists and a Volet order
     # once its pay page is linked. Both are set right after the row is made,
     # so this skips an order an outage left half-made.
-    ready = Order.btcpay_invoice_id.is_not(None) if provider == BTCPAY else Order.checkout_url.is_not(None)
+    if provider == BTCPAY:
+        ready = Order.btcpay_invoice_id.is_not(None)
+    elif provider == usdt.PROVIDER:
+        ready = Order.checkout_url.is_not(None) & Order.pay_amount.is_not(None)
+    else:
+        ready = Order.checkout_url.is_not(None)
     since = datetime.now(timezone.utc) - REUSE_WINDOW
     return db.execute(
         select(Order)
@@ -283,6 +291,18 @@ def checkout(
     notify.checkout_started(
         order, user.email, plan.label, provider_label(provider), currency(db), reused=False, name=user.display_name
     )
+    if provider == usdt.PROVIDER:
+        try:
+            order.pay_amount = usdt.assign_pay_amount(db, amount)
+        except usdt.TronError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+        # The app's own page shows the address and the exact amount, and
+        # flips to "activated" once the transfer is seen on the blockchain.
+        order.checkout_url = f"/app/pay/{order.id}"
+        db.commit()
+        logger.info("USDT checkout started for order %s (%s USDT)", order.id, order.pay_amount)
+        log_activity(db, user.id, "checkout", f"Started USDT checkout for {what} (send {order.pay_amount} USDT)")
+        return CheckoutOut(order_id=order.id, checkout_url=order.checkout_url, amount=amount, tokens=tokens, provider=provider)
     if provider == volet.PROVIDER:
         # The signed form is built when the customer opens the pay page, so
         # nothing has to be asked of Volet here.
@@ -434,31 +454,118 @@ def _sender_address(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
-def _notification_mismatch(db: Session, order: Order, fields: Mapping[str, str]) -> str | None:
-    """Why a correctly signed notification must still not settle this order, or None.
+def _amount_ok(order: Order, amount: float) -> tuple[bool, str]:
+    """Whether the amount Volet reports pays for ``order``, and a note when it was not exact.
+
+    Volet may take its processing fee out of the payment, so the amount it
+    reports can sit a little below the price (a $37.50 payment credited as
+    $37.25). Up to ``ADCAM_VOLET_FEE_ALLOWANCE_PCT`` percent below the price
+    still pays; paying more always does.
+    """
+
+    if math.isnan(amount) or amount <= 0:
+        return False, ""
+    price = float(order.amount_usd)
+    if abs(amount - price) < 0.005:
+        return True, ""
+    if amount > price:
+        return True, f"Volet reported ${amount:.2f} for a ${price:.2f} order (paid more than the price)"
+    floor = price * (1 - max(0.0, float(settings.volet_fee_allowance_pct)) / 100)
+    if amount + 0.005 >= floor:
+        return True, f"Volet reported ${amount:.2f} for a ${price:.2f} order (within the fee allowance)"
+    return False, ""
+
+
+def _notification_mismatch(db: Session, order: Order, fields: Mapping[str, str]) -> tuple[str | None, str]:
+    """Why a correctly signed notification must still not settle this order (None if it may), and a note.
 
     The hash proves Volet sent it, not that it is about what the customer was
-    quoted: a notification for another gateway, or for a different amount or
-    currency, is set aside and left for the owner to look at.
+    quoted: a notification for another gateway, in another currency, or for
+    clearly less than the price is set aside and left for the owner to look
+    at. The note says when the amount was accepted without being exact.
     """
 
     if order.provider != volet.PROVIDER:
-        return "it is not a Volet order"
+        return "it is not a Volet order", ""
     if (fields.get("ac_sci_name") or "") != volet.sci_name():
-        return "the gateway name differs"
+        return "the gateway name differs", ""
     try:
         amount = float(fields.get("ac_amount") or "")
     except ValueError:
         amount = math.nan
     same_currency = (fields.get("ac_merchant_currency") or "").upper() == currency(db).upper()
-    if not same_currency or not (abs(amount - order.amount_usd) < 0.005):
-        return "amount or currency differs"
-    return None
+    paid_enough, note = _amount_ok(order, amount)
+    if not same_currency or not paid_enough:
+        return "amount or currency differs", ""
+    return None, note
+
+
+# The newest notification records kept for Admin > Sales; older ones are deleted.
+NOTICE_KEEP = 500
+
+
+def _record_notice(
+    db: Session, sender: str, fields: Mapping[str, str], outcome: str, detail: str = ""
+) -> None:
+    """Keep one line about a Volet notification for Admin > Sales. Never raises."""
+
+    def _field(name: str, limit: int) -> str:
+        return str(fields.get(name) or "").strip()[:limit]
+
+    try:
+        db.add(
+            PaymentNotice(
+                provider=volet.PROVIDER,
+                sender=(sender or "")[:64],
+                order_id=_field("ac_order_id", 64),
+                transfer_id=_field("ac_transfer", 128),
+                status=_field("ac_transaction_status", 16).upper(),
+                amount=_field("ac_amount", 32),
+                currency=_field("ac_merchant_currency", 8).upper(),
+                outcome=outcome,
+                detail=detail[:500],
+            )
+        )
+        db.commit()
+        cutoff = db.execute(
+            select(PaymentNotice.id).order_by(PaymentNotice.id.desc()).offset(NOTICE_KEEP).limit(1)
+        ).scalar_one_or_none()
+        if cutoff is not None:
+            db.execute(delete(PaymentNotice).where(PaymentNotice.id <= cutoff))
+            db.commit()
+    except Exception:  # noqa: BLE001 - the record is a convenience, never a reason to fail
+        db.rollback()
+        logger.exception("Could not record a Volet notification")
+
+
+def _refusal_alert(db: Session, sender: str, fields: Mapping[str, str], why: str, hint: str) -> None:
+    """Tell the owner's phone that a payment message was refused, with Approve buttons if it names a pending order."""
+
+    order_id = str(fields.get("ac_order_id") or "")[:64]
+    order = db.get(Order, order_id) if order_id else None
+    owner = db.get(User, order.user_id) if order is not None else None
+    lines = [
+        f"Why: {why}",
+        f"From address: {sender or 'unknown'}",
+        f"Status in the message: {str(fields.get('ac_transaction_status') or '?')[:16]}, "
+        f"amount {str(fields.get('ac_amount') or '?')[:32]} {str(fields.get('ac_merchant_currency') or '')[:8]}",
+    ]
+    if order is not None:
+        lines.append(f"Order: {notify.order_ref(order)} ({order.status}), customer {owner.email if owner else 'unknown'}")
+    lines.append(hint)
+    notify.alert(
+        "review",
+        "⚠️ Volet payment message refused",
+        lines,
+        key=f"volet-refused:{why}:{order_id}",
+        priority="high",
+        buttons=notify._approve_buttons(order) if order is not None and order.status == "pending" else None,
+    )
 
 
 @router.api_route("/volet/status", methods=["GET", "POST"], response_class=PlainTextResponse)
 async def volet_status(request: Request, db: Session = Depends(get_db)) -> PlainTextResponse:
-    """Receive Volet's status notification. Hashed with the SCI password over the listed fields.
+    """Receive Volet's status notification and activate the plan it pays for. Hashed with the SCI password.
 
     Two checks of who sent it: the hash, which proves the fields were made
     with the SCI password, and the sender's address against the ones Volet
@@ -468,8 +575,9 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
     reply, and a non-2xx would only make Volet retry something that was
     looked at and set aside on purpose. A repeated COMPLETED is a no-op
     through ``settle_order``'s atomic claim. Every notification leaves a log
-    line, with the order id once there is one, so the deploy log tells the
-    owner what arrived and what was done with it.
+    line and a row in ``payment_notices`` (shown in Admin > Sales), so the
+    owner can see what arrived and what was done with it; a refused one
+    that looks genuine also goes to the phone alerts.
     """
 
     if not volet.configured():
@@ -478,27 +586,61 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="That payment method is not set up."
         )
     sender = _sender_address(request)
-    if not volet.sender_allowed(sender):
-        logger.warning("Volet notification from %s refused: not one of Volet's addresses", sender or "(unknown)")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Notifications are accepted from Volet's addresses only."
-        )
     fields = await _notification_fields(request)
     # Volet's order ids are the app's own (32 hex characters); the slice keeps a stray value out of the log.
     order_id = (fields.get("ac_order_id") or "")[:64]
+    if not volet.sender_allowed(sender):
+        logger.warning("Volet notification from %s refused: not one of Volet's addresses", sender or "(unknown)")
+        signed = volet.verify_status(fields)
+        _record_notice(
+            db,
+            sender,
+            fields,
+            "bad_sender",
+            "Sent from an address that is not on ADCAM_VOLET_NOTIFY_IPS"
+            + (" (signed with the right password)" if signed else ""),
+        )
+        if signed:
+            # Correctly signed but from an unknown address: either Volet has
+            # started sending from a new one, or a buyer is replaying a
+            # notification. Never activate on it; let the owner check Volet.
+            _refusal_alert(
+                db,
+                sender,
+                fields,
+                "sent from an address that is not on Volet's list, but signed with your password",
+                "Check the payment in your Volet account. If it is real, press Approve. "
+                "If Volet keeps sending from this address, add it to ADCAM_VOLET_NOTIFY_IPS on Railway.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Notifications are accepted from Volet's addresses only."
+        )
     if not volet.verify_status(fields):
         logger.warning("Volet notification for order %s refused: bad hash", order_id or "(none)")
+        _record_notice(db, sender, fields, "bad_hash", "The signature does not match the Hosted Checkout password")
+        # It came from Volet's own address, so this is almost always a
+        # password on Railway that differs from the one on the Hosted Checkout.
+        _refusal_alert(
+            db,
+            sender,
+            fields,
+            "the signature does not match",
+            "ADCAM_VOLET_SCI_SECRET on Railway must be the exact Hosted Checkout password in Volet. "
+            "Check the payment in Volet; if it is real, press Approve.",
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bad notification hash.")
 
     order = db.get(Order, order_id) if order_id else None
     if order is None:
         logger.info("Volet notification for an unknown order %s", order_id)
+        _record_notice(db, sender, fields, "unknown_order", "No order with this id")
         return PlainTextResponse("OK")
 
-    reason = _notification_mismatch(db, order, fields)
+    reason, note = _notification_mismatch(db, order, fields)
     if reason:
         logger.warning("Volet notification for order %s ignored: %s", order.id, reason)
         log_activity(db, order.user_id, "payment", f"Volet notification for order {order.id} ignored: {reason}")
+        _record_notice(db, sender, fields, "set_aside", reason)
         owner = db.get(User, order.user_id)
         notify.needs_review(
             order,
@@ -515,10 +657,18 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         # trace of which Volet transaction it was.
         order.provider_ref = (fields.get("ac_transfer") or "")[:128] or None
         db.commit()
-        settle_order(db, order, source="Volet")
+        if note:
+            log_activity(db, order.user_id, "payment", note)
+        if settle_order(db, order, source="Volet"):
+            _record_notice(db, sender, fields, "activated", note or "Plan activated automatically")
+        else:
+            _record_notice(db, sender, fields, "already_paid", f"Order was already {order.status}; nothing added")
     elif state == volet.CANCELED:
         void_order(db, order, "expired")
-    # PENDING and PROCESS mean the money is still on its way: nothing to do yet.
+        _record_notice(db, sender, fields, "canceled", "Payment canceled in Volet")
+    else:
+        # PENDING and PROCESS mean the money is still on its way: nothing to do yet.
+        _record_notice(db, sender, fields, "waiting", "Payment not finished yet")
     return PlainTextResponse("OK")
 
 
@@ -631,7 +781,121 @@ def order_status(order_id: str, user: User = Depends(current_user), db: Session 
     if order is None or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found.")
     _settle_from_btcpay(db, order)
+    if order.provider == usdt.PROVIDER and order.status == "pending":
+        usdt.scan(db)
+        db.refresh(order)
     return _order_out(order)
+
+
+# --------------------------------------------------------------------------
+# direct USDT (TRC-20): pay page data, QR code, transaction id
+# --------------------------------------------------------------------------
+
+
+class UsdtPayment(BaseModel):
+    order_id: str
+    status: str
+    kind: str
+    plan_label: str
+    tokens: int
+    price: float
+    address: str
+    pay_amount: str
+    network: str
+    expires_at: datetime
+    txid: str | None
+
+
+class TxidIn(BaseModel):
+    txid: str = Field(pattern="^(0x)?[0-9a-fA-F]{64}$")
+
+
+class TxidOut(BaseModel):
+    result: str
+    message: str
+    status: str
+
+
+TXID_MESSAGES = {
+    "paid": "Payment confirmed. Your plan is active.",
+    "used": "That transaction already paid another order.",
+    "not_found": "We can't see that transaction to our address yet. It can take a minute or two after your wallet "
+    "shows it as confirmed; we keep checking by ourselves.",
+    "review": "We found your payment, but the amount is not the exact one for this order. "
+    "We've asked the team to confirm it; you'll get an email when the plan is active.",
+}
+# Transaction-id checks per account in TXID_WINDOW (each one reads TronGrid).
+TXID_LIMIT = 10
+TXID_WINDOW = 600.0
+_txid_hits: dict[int, list[float]] = {}
+
+
+def _usdt_order(db: Session, order_id: str, user: User) -> Order:
+    order = db.get(Order, order_id)
+    if order is None or order.user_id != user.id or order.provider != usdt.PROVIDER or not order.pay_amount:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    return order
+
+
+@router.get("/orders/{order_id}/usdt", response_model=UsdtPayment)
+def usdt_payment(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> UsdtPayment:
+    """What the pay page shows: where to send, exactly how much, and whether it arrived."""
+
+    order = _usdt_order(db, order_id, user)
+    if order.status == "pending":
+        usdt.scan(db)
+        db.refresh(order)
+    plan = get_token_plans(db).get(order.plan_id)
+    created = aware(order.created_at) or datetime.now(timezone.utc)
+    return UsdtPayment(
+        order_id=order.id,
+        status=order.status,
+        kind=order.kind,
+        plan_label=plan.label if plan else order.plan_id,
+        tokens=order.tokens,
+        price=order.amount_usd,
+        address=usdt.address(),
+        pay_amount=order.pay_amount or "",
+        network="TRON (TRC-20)",
+        expires_at=created + usdt.window(),
+        txid=order.provider_ref if order.status == "paid" else None,
+    )
+
+
+@router.get("/orders/{order_id}/usdt/qr.svg")
+def usdt_qr(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> Response:
+    """A QR code of the receiving address (only the address, which every wallet app reads)."""
+
+    import io
+
+    import segno
+
+    _usdt_order(db, order_id, user)
+    if not usdt.configured():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="That payment method is not set up.")
+    buffer = io.BytesIO()
+    segno.make(usdt.address(), error="m").save(buffer, kind="svg", scale=6, border=2, dark="#000", light="#fff")
+    return Response(buffer.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.post("/orders/{order_id}/usdt/txid", response_model=TxidOut)
+def usdt_txid(
+    order_id: str, payload: TxidIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> TxidOut:
+    """The buyer gives the transaction id of their payment, for when it was not matched by itself."""
+
+    order = _usdt_order(db, order_id, user)
+    now = time.monotonic()
+    hits = [t for t in _txid_hits.get(user.id, []) if now - t < TXID_WINDOW]
+    if len(hits) >= TXID_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many checks. Wait a few minutes; we keep checking by ourselves.")
+    hits.append(now)
+    _txid_hits[user.id] = hits
+    txid = payload.txid.lower().removeprefix("0x")
+    result = usdt.check_txid(db, order, txid)
+    db.refresh(order)
+    log_activity(db, user.id, "payment", f"Gave USDT transaction {txid[:12]}... for order {order.id}: {result}")
+    return TxidOut(result=result, message=TXID_MESSAGES[result], status=order.status)
 
 
 # --------------------------------------------------------------------------

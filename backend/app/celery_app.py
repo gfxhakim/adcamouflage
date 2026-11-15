@@ -47,6 +47,12 @@ celery_app.conf.update(
             # at the daily cap; the next run carries on where it left off.
             "schedule": 120.0,
         },
+        "scan-usdt-payments": {
+            "task": "app.tasks.scan_usdt_payments",
+            # Customers wait on the pay page; it also triggers a scan (at most
+            # every 15 s) while it is open, so this is the fallback.
+            "schedule": 60.0,
+        },
         "open-waiting-support-tickets": {
             "task": "app.tasks.open_waiting_support_tickets",
             "schedule": 120.0,

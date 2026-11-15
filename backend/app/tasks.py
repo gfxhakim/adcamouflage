@@ -197,6 +197,18 @@ def send_group_emails() -> dict[str, int]:
     return result
 
 
+@celery_app.task(name="app.tasks.scan_usdt_payments")
+def scan_usdt_payments() -> int:
+    """Every minute: activate open USDT orders whose exact amount arrived on the TRON blockchain."""
+
+    from . import usdt
+
+    if not usdt.configured():
+        return 0
+    with get_session_factory()() as db:
+        return usdt.scan(db, force=True)
+
+
 @celery_app.task(name="app.tasks.open_waiting_support_tickets")
 def open_waiting_support_tickets() -> dict[str, int]:
     """Every few minutes: customers stuck in the support bot for 30 min get a ticket in Admin."""
