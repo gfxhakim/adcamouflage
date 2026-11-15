@@ -9,9 +9,9 @@ import RenderProof from "@/components/RenderProof";
 import type { MediaValue } from "@/lib/siteContent";
 
 const PROOF_BULLETS = [
-  "Disrupts automated OCR and computer-vision scanners from reading on-screen hooks and aggressive visual elements without blurring the creative.",
-  "Micro-modulates background frequencies and vocal harmonics to throw off speech-to-text bots while keeping voiceovers crystal clear.",
-  "Generates multiple unique variants in one upload for multi-account scale.",
+  "Preserves crisp typography, product details, and natural skin tones across every rendered variation.",
+  "Applies studio-grade EQ, subtle spatial ambiance, and vocal clarity mastering so voiceovers sound clear on every device.",
+  "Generates up to 10 independent variations in a single upload for rapid creative testing and multi-campaign workflows.",
 ];
 
 const DEFAULT_SHOWCASE: MediaValue = {
@@ -77,7 +77,7 @@ function ShowcaseMedia() {
       </span>
       <p className="text-sm font-semibold text-white">Add a Showcase Image or Video</p>
       <p className="max-w-md text-xs leading-relaxed text-white/55">
-        Click here (with &ldquo;Click to edit&rdquo; enabled) or open <b>Content &gt; Deep evasion &amp; media showcase &gt; Showcase media</b> in the Admin Panel to upload an image or video and customize its size, aspect ratio, fit, frame, and playback.
+        Click here (with &ldquo;Click to edit&rdquo; enabled) or open <b>Content &gt; Creative studio &amp; media showcase &gt; Showcase media</b> in the Admin Panel to upload an image or video and customize its size, aspect ratio, fit, frame, and playback.
       </p>
     </div>
   );
@@ -87,14 +87,14 @@ export function BeforeAfter() {
   const cms = useCms();
   const bullets = cms.list("proof.bullets", PROOF_BULLETS, "Bullet points", PROOF_BULLETS);
   return (
-    <CmsSection k="proof" label="Deep evasion & media showcase" id="proof" className="scroll-mt-24 bg-black py-20 text-white sm:py-28">
+    <CmsSection k="proof" label="Creative studio & media showcase" id="proof" className="scroll-mt-24 bg-black py-20 text-white sm:py-28">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-end">
           <div>
-            <CmsHeadline k="proof.headline" dark text="Built for the Buyer. | [Invisible to the Bot.]" className="text-4xl sm:text-5xl lg:text-6xl" />
+            <CmsHeadline k="proof.headline" dark text="Built for Creative Teams. | [Engineered for Quality.]" className="text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <T k="proof.lede" long as="p" className="text-sm leading-relaxed text-white/65">
-            Basic metadata cleaners stopped working years ago. Modern ad networks scan pixel structures and transcribe audio tracks in real time. AdCamouflage neutralizes both.
+            Manual re-editing takes hours per variation. BluEditor combines color science, subtle framing polish, and audio mastering into a single cloud workflow.
           </T>
         </div>
 
@@ -104,9 +104,9 @@ export function BeforeAfter() {
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:items-center">
           <Reveal>
-            <T k="proof.kicker" as="p" className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/50">platform protection</T>
+            <T k="proof.kicker" as="p" className="font-mono text-[11px] uppercase tracking-[0.14em] text-white/50">studio quality</T>
             <T k="proof.subhead" as="h3" className="mt-3 max-w-lg text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-              Optical pattern breaking and audio transcription shielding built in.
+              Visual grading, framing refinement, and audio mastering built in.
             </T>
             <ul className="mt-5 space-y-3 text-sm leading-relaxed text-white/75">
               {bullets.map(({ item, key, id }) => (

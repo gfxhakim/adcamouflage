@@ -58,7 +58,7 @@ export function Funnel() {
         className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:px-8"
       >
         <div>
-          <Headline text="Your Workflow Today vs. Your Workflow With AdCamouflage" className="text-4xl sm:text-5xl lg:text-6xl" />
+          <Headline text="Your Workflow Today vs. Your Workflow With BluEditor" className="text-4xl sm:text-5xl lg:text-6xl" />
 
           <ol className="mt-10 space-y-1">
             {STEPS.map((s, i) => {

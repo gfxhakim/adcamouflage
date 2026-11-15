@@ -10,10 +10,10 @@ export function siteUrl(): string {
   return (process.env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "");
 }
 
-export const SITE_NAME = "BluCloacking";
+export const SITE_NAME = "BluEditor";
 
 // Honest, keyword-focused description used for search results and link previews.
-export const SITE_TITLE = "BluCloacking — Video ad creative editor for Meta, TikTok & YouTube";
+export const SITE_TITLE = "BluEditor — Creative Variation & Batch Video Studio for Meta, TikTok & YouTube";
 export const SITE_DESCRIPTION =
   "Upload a finished video or image ad and get platform-ready versions in minutes: reframe for Reels, TikTok and YouTube Shorts, add brand overlays, pick a cover frame and export in high quality. Plans from $37.50 a month.";
 

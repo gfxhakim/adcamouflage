@@ -229,7 +229,7 @@ export function HelpDrawer({ open, currentStep, onClose, onJumpStep, onReplayTou
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder='Search: "rejected ad", "tokens", "logo flash"…'
+              placeholder='Search: "variations", "tokens", "logo overlay"…'
               className="w-full rounded-xl border border-white/10 bg-[#11151e] py-2.5 pl-10 pr-4 text-xs text-slate-100 placeholder:text-slate-500 focus:border-meta-500 focus:outline-none"
             />
           </div>

@@ -334,7 +334,7 @@ export default function EmailsCard() {
                     Upload logo
                   </button>
                   <button type="button" className="btn-ghost !text-xs" onClick={() => patchStyle({ logo_url: "" })}>
-                    Use the BluCloacking shield
+                    Use the BluEditor shield
                   </button>
                 </div>
               </div>
@@ -343,7 +343,7 @@ export default function EmailsCard() {
                 <input
                   className="field mt-1"
                   maxLength={1000}
-                  placeholder="Empty = the BluCloacking shield with white glow"
+                  placeholder="Empty = the BluEditor shield with white glow"
                   value={style.logo_url}
                   onChange={(e) => patchStyle({ logo_url: e.target.value })}
                 />
@@ -397,7 +397,7 @@ export default function EmailsCard() {
                   checked={style.show_footer_logo}
                   onChange={(e) => patchStyle({ show_footer_logo: e.target.checked })}
                 />
-                Show the BluCloacking name under the email
+                Show the BluEditor name under the email
               </label>
               <button type="button" className="btn-ghost !text-xs" onClick={() => setStyle(structuredClone(data.style_defaults))}>
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden />

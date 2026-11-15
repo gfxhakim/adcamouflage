@@ -73,7 +73,7 @@ const WORDS: Record<string, string> = {
   kicker: "Small label",
   faq: "FAQ",
   why: "How it works",
-  proof: "Deep evasion & media showcase",
+  proof: "Creative studio & media showcase",
   nav: "Menu",
   ui: "Labels",
 };
@@ -985,7 +985,7 @@ function ReviewsPanel({
     setOpenId(id);
   };
   const loadPresets = () => {
-    if (reviews.length > 0 && !window.confirm("Replace current reviews list with the 10 realistic Blu Camouflage reviews?")) return;
+    if (reviews.length > 0 && !window.confirm("Replace current reviews list with the 10 default BluEditor reviews?")) return;
     onChange(DEFAULT_REVIEWS.map((r) => ({ ...r })));
   };
   // Pictures already used on other reviews, to pick again with one click.
@@ -1006,7 +1006,7 @@ function ReviewsPanel({
         className="btn-ghost w-full justify-center !border-meta-500/40 !bg-meta-500/10 !py-2 text-xs !text-meta-200 hover:!bg-meta-500/20"
         onClick={loadPresets}
       >
-        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Load 10 realistic Blu Camouflage reviews
+        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Load 10 default BluEditor reviews
       </button>
 
       {reviews.map((review, i) => {

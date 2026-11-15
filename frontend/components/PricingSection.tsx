@@ -33,9 +33,9 @@ const BLURBS: Record<string, string> = {
 };
 
 const INCLUDED = [
-  "Full Probe, Mutate & Scrub Engine",
+  "Full 23-Layer Studio Variation Suite",
   "Video & Static Image Support",
-  "Complete Metadata & Hash Wipe",
+  "Automatic Metadata Privacy Clean-Up",
   "Standard Processing Queue",
 ];
 
@@ -98,7 +98,7 @@ export function PricingSection({ plans: listed, currency, ctaHref, promo }: Pric
           <CmsHeadline
             k="pricing.headline"
             dark
-            text="One Saved Campaign Pays for Your Entire Year."
+            text="Flexible Plans Built for Creative Velocity."
             className="text-4xl sm:text-5xl lg:text-6xl"
           />
         </div>

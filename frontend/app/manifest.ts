@@ -1,10 +1,10 @@
 import type { MetadataRoute } from "next";
 
-// Lets phones add the app to the home screen with the BluCloacking shield.
+// Lets phones add the app to the home screen with the BluEditor shield.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "BluCloacking",
-    short_name: "BluCloacking",
+    name: "BluEditor",
+    short_name: "BluEditor",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",

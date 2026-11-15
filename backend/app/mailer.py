@@ -57,7 +57,7 @@ ENDED_WINDOW_HOURS = 24
 # Any constant works; it only has to be the same for every reminder run.
 REMINDER_LOCK_ID = 7_420_031
 
-BRAND = "BluCloacking"
+BRAND = "BluEditor"
 SIGN_OFF = f"The {BRAND} team"
 
 # --------------------------------------------------------------------------

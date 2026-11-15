@@ -933,7 +933,7 @@ export default function WorkspacePage() {
                         ) : (
                           <>
                             <Rocket className="h-4 w-4" aria-hidden />
-                            Run mutation on {files.length || "0"} asset
+                            Render variations on {files.length || "0"} asset
                             {files.length === 1 ? "" : "s"}
                             {options.variants > 1 ? ` × ${options.variants} variants` : ""}
                           </>
@@ -1022,7 +1022,7 @@ export default function WorkspacePage() {
                     <div id="queue" data-tour="render.queue" className="min-w-0">
                       <p className="label mb-3 flex items-center gap-1.5">
                         <Radar className="h-3.5 w-3.5" aria-hidden />
-                        Mutation queue
+                        Render queue
                       </p>
                       <div className="max-h-[60vh] overflow-y-auto rounded-2xl pr-1">
                         <JobQueue
@@ -1066,8 +1066,7 @@ export default function WorkspacePage() {
 
           <CmsSection k="workspace.footer" label="Footer" as="footer" className="mt-6 flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
             <p>
-              AdCamouflage {health?.version ? `v${health.version}` : ""} · FastAPI · Celery · FFmpeg
-              · OpenCV
+              BluEditor {health?.version ? `v${health.version}` : ""} · Cloud Creative Studio · FastAPI · Celery · FFmpeg
             </p>
             <p>
               Use only on creatives you own or are licensed to distribute, and within the terms of

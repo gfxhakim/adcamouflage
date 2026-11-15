@@ -3,10 +3,8 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
-import IntroScreen from "@/components/IntroScreen";
 import MetaPixel from "@/components/MetaPixel";
 import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
-import { INTRO_GATE_SCRIPT } from "@/lib/intro";
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -65,11 +63,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${GeistSans.variable} ${GeistMono.variable} ${display.variable}`}
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: INTRO_GATE_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: DECK_THEME_SCRIPT }} />
       </head>
       <body className="min-h-screen">
-        <IntroScreen />
         {children}
         <MetaPixel />
       </body>

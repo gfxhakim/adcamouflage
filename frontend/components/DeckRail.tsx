@@ -37,7 +37,7 @@ const ITEMS: NavItem[] = [
   { href: "/app/plan", label: "My plan", icon: Crown },
 ];
 
-/** The BluCloacking spy-shield mark, sitting at the top of the rail. */
+/** The BluEditor shield mark, sitting at the top of the rail. */
 const BRAND_MARK = "/brand/blucloacking-mark.png";
 
 function isActive(pathname: string, href: string): boolean {
@@ -132,12 +132,12 @@ export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }
       >
         <Link
           href="/app"
-          title="BluCloacking"
+          title="BluEditor"
           className="group relative mb-1 grid h-11 w-11 place-items-center rounded-xl transition hover:bg-meta-500/15"
         >
           <img
             src={brandMark}
-            alt="BluCloacking"
+            alt="BluEditor"
             width={28}
             height={28}
             className="h-7 w-7 drop-shadow-[0_0_10px_rgba(51,133,255,0.5)]"
@@ -149,7 +149,7 @@ export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }
             )}
             role="tooltip"
           >
-            BluCloacking
+            BluEditor
           </span>
         </Link>
 
@@ -267,12 +267,12 @@ export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }
       >
         <Link
           href="/app"
-          title="BluCloacking"
+          title="BluEditor"
           className="flex h-11 min-w-[2.4rem] items-center justify-center rounded-xl px-1 transition hover:bg-meta-500/15"
         >
           <img
             src={brandMark}
-            alt="BluCloacking"
+            alt="BluEditor"
             width={24}
             height={24}
             className="h-6 w-6 drop-shadow-[0_0_8px_rgba(51,133,255,0.5)]"

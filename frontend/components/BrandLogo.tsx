@@ -17,6 +17,7 @@ interface BrandLogoProps {
 }
 
 const MARK = "/brand/blucloacking-mark.png";
+const NAME = "BluEditor";
 
 /** A bright band that sweeps across whatever image `src` outlines. */
 function Shine({ src }: { src: string }) {
@@ -36,7 +37,7 @@ function Shine({ src }: { src: string }) {
   );
 }
 
-/** The BluCloacking shield plus wordmark, used in every header and the footer. */
+/** The BluEditor shield plus wordmark, used in every header and the footer. */
 export function BrandLogo({
   caption,
   captionClassName,
@@ -46,14 +47,9 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const cms = useCms();
   const mark = cms.media("brand.mark", { src: MARK, kind: "image", alt: "" }, "Logo shield").src || MARK;
-  const wordmark =
-    (onDark
-      ? cms.media("brand.wordmarkLight", { src: "/brand/blucloacking-wordmark-light.png", kind: "image", alt: "BluCloacking" }, "Logo name (on dark)").src
-      : cms.media("brand.wordmark", { src: "/brand/blucloacking-wordmark.png", kind: "image", alt: "BluCloacking" }, "Logo name (on light)").src) ||
-    "/brand/blucloacking-wordmark.png";
-  const name = cms.text("brand.name", "BluCloacking", "text", "Brand name");
+  const rawName = cms.text("brand.name", NAME, "text", "Brand name");
+  const name = /blucloack|blucloak|adcamouflage|camouflage/i.test(rawName) ? NAME : rawName;
   const showMark = !cms.hidden("brand.mark");
-  const showWordmark = !cms.hidden("brand.wordmark");
   return (
     <span className={cn("flex min-w-0 items-center gap-2.5", className)}>
       <span
@@ -66,14 +62,16 @@ export function BrandLogo({
         {animated && showMark ? <Shine src={mark} /> : null}
       </span>
       <span className="min-w-0 leading-tight">
-        {showWordmark ? (
-          <span className="relative block w-fit">
-            <img src={wordmark} alt={name} width={120} height={20} className="block h-5 w-auto" {...cms.mark("brand.wordmark")} />
-            {animated ? <Shine src={wordmark} /> : null}
-          </span>
-        ) : (
-          <span className={cn("block text-base font-semibold tracking-tight", onDark ? "text-white" : "text-black")}>{name}</span>
-        )}
+        <span
+          className={cn(
+            "block text-lg font-bold tracking-tight",
+            onDark ? "text-white" : "text-black",
+          )}
+          {...cms.mark("brand.name")}
+        >
+          <span className="text-meta-500">Blu</span>
+          <span>{name.replace(/^Blu/i, "") || "Editor"}</span>
+        </span>
         {caption ? (
           <span className={cn("mt-0.5 block text-[11px]", onDark ? "text-white/55" : "text-ink-subtle", captionClassName)}>
             {caption}
@@ -86,19 +84,18 @@ export function BrandLogo({
 
 /** The full stacked logo (shield above the name) on its dark tile, for the login and sign-up pages. */
 export function BrandLogoFull({ className }: { className?: string }) {
-  const cms = useCms();
-  const logo = cms.media("brand.full", { src: "/brand/blucloacking-logo-dark.jpg", kind: "image", alt: "BluCloacking" }, "Full logo tile");
   return (
-    <img
-      src={logo.src || "/brand/blucloacking-logo-dark.jpg"}
-      alt={logo.alt || "BluCloacking"}
-      width={640}
-      height={640}
+    <div
       className={cn(
-        "h-auto w-40 rounded-3xl shadow-[0_18px_50px_-14px_rgba(8,102,255,0.55)] ring-1 ring-meta-500/30",
+        "flex h-40 w-40 flex-col items-center justify-center gap-2.5 rounded-3xl bg-[#050b1a] p-4 shadow-[0_18px_50px_-14px_rgba(8,102,255,0.55)] ring-1 ring-meta-500/30",
         className,
       )}
-    />
+    >
+      <img src={MARK} alt="BluEditor" width={76} height={76} className="h-16 w-16 object-contain drop-shadow-[0_0_14px_rgba(51,133,255,0.65)]" />
+      <span className="text-xl font-bold tracking-tight text-white">
+        <span className="text-meta-400">Blu</span>Editor
+      </span>
+    </div>
   );
 }
 

@@ -9,7 +9,7 @@ import MatrixWords from "@/components/landing/MatrixWords";
 import { CmsHeadline, EASE } from "@/components/landing/primitives";
 
 // The hero background morphs between these, cell by cell.
-const WORDS = ["CLOAK IT", "RUN IT"];
+const WORDS = ["EDIT IT", "SCALE IT", "SHIP IT"];
 
 export function Hero({ startHref }: { startHref: string }) {
   const cms = useCms();
@@ -47,14 +47,14 @@ export function Hero({ startHref }: { startHref: string }) {
           transition={{ duration: 0.6, ease: EASE }}
         >
           <CmsIcon k="hero.badge.icon" fallback={ShieldCheck} className="h-3.5 w-3.5 text-meta-400" aria-hidden />
-          <T k="hero.badge">AI ENGINE ONLINE • ZERO-TRACE ARCHITECTURE</T>
+          <T k="hero.badge">CREATIVE VARIATION STUDIO • CLOUD BATCH RENDERING</T>
         </motion.span>
 
         <CmsHeadline
           k="hero.headline"
           as="h1"
           dark
-          text="Algorithms Flag Patterns. | [Our AI super agent] | [breaks them.]"
+          text="One Winning Creative. | [Ten Studio-Ready] | [Variations in Seconds.]"
           className="text-[2.6rem] sm:text-6xl lg:text-[5.4rem]"
         />
 
@@ -67,7 +67,7 @@ export function Hero({ startHref }: { startHref: string }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.5, ease: EASE }}
         >
-          {"AdCamouflage reconstructs the digital DNA of your videos and static creatives in seconds. Bypass automated AI vision, audio transcription, and hash-matching filters across Meta, TikTok, and YouTube without touching a timeline editor."}
+          {"BluEditor turns your finished video and static creatives into fresh, broadcast-ready variations in seconds. Apply studio color grading, subtle framing polish, audio mastering, brand logo overlays, and clean export packaging for Meta, TikTok, and YouTube without opening a timeline editor."}
         </T>
 
         <motion.div
@@ -79,7 +79,7 @@ export function Hero({ startHref }: { startHref: string }) {
           <CmsLink
             k="hero.cta"
             href={startHref}
-            label="Camouflage My Creatives Now"
+            label="Create My First Batch Now"
             className="group inline-flex items-center gap-3 rounded-full bg-white py-1.5 pl-5 pr-1.5 text-sm font-semibold text-black transition hover:bg-meta-50"
           >
             {(label) => (

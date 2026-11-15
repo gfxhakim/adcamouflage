@@ -12,23 +12,23 @@ import { cn } from "@/lib/utils";
 const WHY = [
   {
     icon: Layers,
-    title: "One upload. Ten unique winners.",
-    body: "No Premiere, no CapCut, no re-render. Every copy gets its own fingerprint.",
+    title: "One upload. Ten studio variations.",
+    body: "No Premiere, no CapCut, no manual timeline re-exports. Every variation is rendered automatically in the cloud.",
   },
   {
     icon: Gauge,
-    title: "Back in the auction in seconds.",
-    body: "Relaunch before the algorithm forgets you. Momentum keeps compounding.",
+    title: "Launch new creative batches in seconds.",
+    body: "Keep your paid social campaigns supplied with fresh creative variations without waiting days on manual editing.",
   },
   {
     icon: Sparkles,
-    title: "Zero pixel loss.",
-    body: "Your audience sees the exact creative that converted. Only the bots see something new.",
+    title: "Crisp broadcast quality.",
+    body: "Your audience sees the exact high-converting visual story and clear voiceover with studio-grade color and audio polish.",
   },
 ];
 
 /** What the engine does to each file, shown ticking off one by one. */
-const STEPS = ["Scrub metadata", "Rewrite file hash", "Shift frames & pixels", "Pitch-shift audio", "Re-encode clean"];
+const STEPS = ["Clean project metadata", "Apply 3D LUT color polish", "Refine framing & cadence", "Master audio eq & dynamics", "Export clean MP4 package"];
 
 /** Output files that fan out of the engine. */
 const OUTPUTS = ["winner_v1_a.mp4", "winner_v1_b.mp4", "winner_v1_c.mp4"];
@@ -204,13 +204,11 @@ export function WhyRadar() {
         <div className="min-w-0">
           <CmsHeadline
             k="why.headline"
-            text="Your Winner Got Flagged. | [Relaunch It in Seconds.]"
+            text="Scale Creative Testing. | [Without Manual Re-Editing.]"
             className="text-4xl sm:text-5xl lg:text-6xl"
           />
           <T k="why.lede" long as="p" className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted">
-            Platforms don&apos;t ban your idea. They ban your file. AdCamouflage rewrites the
-            fingerprint so the bots see a brand-new asset and your audience sees the same creative
-            that was already printing.
+            High-velocity marketing teams need more creative variations every week. BluEditor automates color grading, framing refinement, audio mastering, and clean export packaging so you can turn one master file into ten ready-to-launch assets in seconds.
           </T>
           <ul className="mt-10 divide-y divide-black/10 border-y border-black/10">
             {why.map(({ item: { icon: Icon, title, body }, key, id }, i) => (

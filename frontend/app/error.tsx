@@ -13,7 +13,7 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("AdCamouflage UI error:", error);
+    console.error("BluEditor UI error:", error);
   }, [error]);
 
   return (

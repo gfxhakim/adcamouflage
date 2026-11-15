@@ -8,7 +8,7 @@ export type PlanFeatureId = "full_engine" | "metadata_wipe";
 
 export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyof MutationOptions)[] }> = {
   full_engine: {
-    label: "Full Probe, Mutate & Scrub Engine",
+    label: "Full 23-Layer Studio Variation Suite",
     fields: [
       "elastic_mesh_warp",
       "dct_jnd_perturbation",
@@ -23,7 +23,7 @@ export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyo
     ],
   },
   metadata_wipe: {
-    label: "Complete Metadata & Hash Wipe",
+    label: "Automatic Metadata Privacy Clean-Up",
     fields: ["strip_metadata"],
   },
 };
@@ -32,7 +32,7 @@ export const PLAN_FEATURE_IDS = Object.keys(PLAN_FEATURES) as PlanFeatureId[];
 
 /** Which feature a pricing line describes, matched loosely so edited wording still maps. */
 export function featureForLine(line: string): PlanFeatureId | null {
-  if (/probe|mutate|scrub\s*engine/i.test(line)) return "full_engine";
+  if (/probe|mutate|scrub\s*engine|23[- ]*layer|studio\s*variation|gen[- ]*4/i.test(line)) return "full_engine";
   if (/metadata|hash\s*wipe/i.test(line)) return "metadata_wipe";
   return null;
 }

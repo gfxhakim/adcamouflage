@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 // The picture shown when the site is shared on Facebook, WhatsApp, X, Slack...
-export const alt = "BluCloacking — video ad creative editor";
+export const alt = "BluEditor — video ad creative studio";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -21,7 +21,7 @@ export default function OpengraphImage() {
           fontFamily: "sans-serif",
         }}
       >
-        <div style={{ fontSize: 34, letterSpacing: 6, color: "#7fb0ff" }}>BLUCLOACKING</div>
+        <div style={{ fontSize: 34, letterSpacing: 6, color: "#7fb0ff" }}>BLUEDITOR</div>
         <div style={{ fontSize: 76, fontWeight: 700, lineHeight: 1.05, marginTop: 28, maxWidth: 980 }}>
           Platform-ready video ads in minutes.
         </div>

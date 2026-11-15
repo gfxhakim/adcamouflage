@@ -11,33 +11,33 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "Is BluCloacking a video editor like CapCut or Premiere?",
-    a: "No. Video editors are built for humans to cut clips and add captions. BluCloacking is an automated binary and structural sanitization engine. You upload your finished ad creative, and our engine alters its internal file fingerprint, pixel matrix, and audio frequencies so ad algorithms treat it as a brand-new, never-before-seen asset.",
-    tag: "Engine",
+    q: "How is BluEditor different from a traditional timeline editor like CapCut or Premiere?",
+    a: "Traditional editors require manual cutting, color grading, and exporting one file at a time. BluEditor is an automated creative variation studio: upload your finished video or image once, and our cloud pipeline renders up to 10 studio-polished variations—complete with color grading, framing adjustments, audio mastering, and brand overlays—in under a minute.",
+    tag: "Studio",
   },
   {
-    q: "Will mutating my video or image reduce its visual or audio quality?",
-    a: "Not at all. Our mutation parameters operate at the sub-pixel and micro-frequency level. To your prospects watching the ad, the visual sharpness, colors, and voiceover clarity remain 100% identical to your original export.",
+    q: "Will generating variations reduce my video or audio quality?",
+    a: "No. BluEditor's 23 studio variation layers are engineered to preserve 1:1 visual sharpness, natural colors, and crystal-clear voiceovers across every export.",
     tag: "Quality",
   },
   {
-    q: "Are my winning creatives safe? Do you store my uploaded ads?",
-    a: "Your creatives never stay on our servers. All files are processed inside an isolated, encrypted container and are automatically and permanently deleted immediately after processing. Nobody—including our team—can view or access your ads.",
+    q: "Are my uploaded creatives private and secure?",
+    a: "Yes. Your media is processed inside an isolated, encrypted cloud workspace used solely to render your requested variations and let you download the outputs. Files are automatically purged on a rolling schedule.",
     tag: "Privacy",
   },
   {
-    q: "Why is simply removing metadata not enough anymore?",
-    a: "Ad platforms stopped relying solely on basic file metadata years ago. Today, automated review bots generate perceptual hashes of your video frames and run AI speech-to-text on your audio track. If you only strip metadata, the algorithm still recognizes the visual and audio signature in seconds. BluCloacking modifies all three layers: metadata, optical pixels, and audio frequencies.",
-    tag: "Security",
+    q: "What does BluEditor change across each variation?",
+    a: "Depending on your selected profile (Light, Balanced, Studio Pro, Dynamic, or Max Studio), BluEditor applies a unique combination of 3D LUT color grading, subtle lens and framing adjustments, frame-rate cadence tuning, broadcast audio EQ/phase mastering, brand logo overlays, custom cover frames, and clean export packaging.",
+    tag: "Features",
   },
   {
-    q: "Which ad platforms does BluCloacking work for?",
-    a: "Our presets are engineered specifically for Meta Ads (Facebook & Instagram), TikTok Ads, and Google/YouTube Ads—supporting both vertical short-form videos and static image formats.",
+    q: "Which ad formats and social platforms does BluEditor support?",
+    a: "BluEditor includes built-in export profiles for Meta (Facebook & Instagram Reels/Feed), TikTok, and YouTube Shorts—supporting both vertical/horizontal videos (MP4, MOV, WEBM, MKV) and static images (PNG, JPG, WEBP).",
     tag: "Platforms",
   },
   {
-    q: "Can I generate multiple unique copies from a single video?",
-    a: "Yes. If you are launching the same winning creative across 5 or 10 contingency ad accounts, you can generate multiple distinct downloads from a single upload. Every file receives a completely independent hash and mutation pattern so accounts are never linked by creative footprint.",
+    q: "Can I generate multiple variations from a single upload?",
+    a: "Yes. You can generate from 1 to 10 distinct variations per upload and download them all in a single ZIP archive, making it effortless to organize creative testing across multiple campaigns and ad sets.",
     tag: "Batching",
   },
 ];
@@ -56,18 +56,18 @@ export function Faq() {
           <CmsSection k="faq.card" label="Help card" as="div" className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-white/60">
               <span className="h-1.5 w-1.5 rounded-full bg-meta-400" />
-              <T k="faq.card.kicker">Still unsure?</T>
+              <T k="faq.card.kicker">Ready to try it?</T>
             </p>
             <T k="faq.card.title" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
-              Camouflage your first creative in under a minute.
+              Render your first creative batch in under a minute.
             </T>
             <T k="faq.card.body" long as="p" className="mt-2 text-sm text-white/60">
-              Create an account, drop in a file, and process a clean variant before the next moderation loop hits.
+              Create an account, drop in your master video or image, and export studio-ready variations in seconds.
             </T>
             <CmsLink
               k="faq.card.cta"
               href="/login"
-              label="Test the Engine Now"
+              label="Open BluEditor Studio"
               className="group mt-5 inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white"
             >
               {(label) => (

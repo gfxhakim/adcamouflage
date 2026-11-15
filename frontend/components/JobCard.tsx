@@ -192,9 +192,9 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                 {sizeDelta ? <span className="chip !text-[10px]">size {sizeDelta}</span> : null}
 
                 {typeof metrics.dhash_distance === "number" ? (
-                  <span className="chip !text-[10px]" title="Perceptual hash distance from the original">
+                  <span className="chip !text-[10px]" title="Visual variation delta from the original">
                     <Fingerprint className="h-3 w-3 text-meta-600 dark:text-meta-300" aria-hidden />
-                    pHash Δ {metrics.dhash_distance}
+                    Visual Δ {metrics.dhash_distance}
                   </span>
                 ) : null}
 
@@ -216,7 +216,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
             {expanded && asset.status === "completed" ? (
               <div className="mt-3 space-y-3 rounded-lg border border-black/[0.08] dark:border-white/10 bg-meta-50/60 dark:bg-meta-500/10 p-3">
                 <div>
-                  <p className="label mb-1.5">Applied mutations</p>
+                  <p className="label mb-1.5">Applied studio layers</p>
                   <ul className="space-y-1">
                     {asset.applied.map((entry) => (
                       <li key={entry} className="flex gap-2 text-[11px] text-ink-subtle dark:text-slate-400">
@@ -264,7 +264,7 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   ) : null}
                   {typeof metrics.scrubbed_signatures === "number" ? (
                     <div className="flex justify-between gap-2">
-                      <dt className="text-ink-subtle dark:text-slate-400">Signatures wiped</dt>
+                      <dt className="text-ink-subtle dark:text-slate-400">Metadata tags cleaned</dt>
                       <dd className="font-mono text-ink-muted dark:text-slate-300">{metrics.scrubbed_signatures}</dd>
                     </div>
                   ) : null}

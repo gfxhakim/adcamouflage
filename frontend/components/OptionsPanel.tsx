@@ -51,21 +51,25 @@ function UpgradeHint({ href }: { href: string }) {
   );
 }
 
-const PRESET_COPY: Record<Exclude<PresetId, "custom">, { blurb: string; accent: string }> = {
+const PRESET_COPY: Record<Exclude<PresetId, "custom">, { title: string; blurb: string; accent: string }> = {
   stealth: {
-    blurb: "Minimum visible change. Breaks byte and pixel hashes only.",
+    title: "Light",
+    blurb: "Subtle studio polish. Clean metadata and light color/framing pass.",
     accent: "from-meta-50 to-white text-meta-700 border-meta-500/50",
   },
   balanced: {
-    blurb: "The default. Geometry, noise, colour and audio all shift.",
+    title: "Balanced",
+    blurb: "Recommended default. Full color, framing, audio mastering, and clean export.",
     accent: "from-meta-100 to-meta-50 text-meta-700 border-meta-500/60",
   },
   aggressive: {
-    blurb: "Adds the per-frame OpenCV scramble. Slower, far harder to match.",
+    title: "Dynamic",
+    blurb: "Adds per-frame film texture and deeper studio variation across copies.",
     accent: "from-meta-200 to-meta-50 text-meta-800 border-meta-600/70",
   },
   nuclear: {
-    blurb: "Everything on, mirrored frame. Maximum divergence.",
+    title: "Max Studio",
+    blurb: "All variation layers enabled, including horizontal flip, for maximum contrast.",
     accent: "from-meta-300 to-meta-100 text-meta-900 border-meta-700/80",
   },
 };
@@ -111,18 +115,18 @@ const ADVANCED_TOGGLES: {
 }[] = [
   {
     key: "elastic_mesh_warp",
-    label: "Sub-pixel perspective & mesh warp",
+    label: "Sub-pixel perspective & lens polish",
     badge: "Spatial",
     description:
-      "Shifts 8×8 and 16×16 DCT block grid alignment via sub-pixel perspective & smooth displacement without clipping subtitles or faces.",
+      "Applies gentle sub-pixel perspective and lens alignment refinement without clipping subtitles or faces.",
     icon: Maximize2,
   },
   {
     key: "dct_jnd_perturbation",
-    label: "DCT mid-band & JND masking",
+    label: "Fine texture detail enhancement",
     badge: "Frequency",
     description:
-      "Perturbs mid-frequency DCT bands strictly inside high-texture regions so changes survive platform H.264/H.265/AV1 re-encoding.",
+      "Refines mid-band texture detail inside high-detail regions so exports stay crisp after social platform compression.",
     icon: Waves,
   },
   {
@@ -130,63 +134,63 @@ const ADVANCED_TOGGLES: {
     label: "Skin-protected 3D LUT & CLAHE",
     badge: "Photometric",
     description:
-      "Modulates local contrast (LAB CLAHE) and rotates shadow/highlight vectors while locking the human skin-tone corridor.",
+      "Balances local contrast (LAB CLAHE) and refines shadow/highlight tones while protecting natural skin tones.",
     icon: Palette,
   },
   {
     key: "optical_flow_timewarp",
-    label: "Temporal motion micro-interpolation",
+    label: "Temporal motion smoothing",
     badge: "Temporal",
     description:
-      "Blends sub-frame temporal motion gradients across adjacent frames at a rock-solid constant FPS without dropping hooks or CTAs.",
+      "Blends sub-frame temporal motion gradients across adjacent frames at a constant FPS without dropping hooks or CTAs.",
     icon: Gauge,
   },
   {
     key: "adversarial_cnn_layer",
-    label: "Adversarial CNN edge perturbation",
-    badge: "Neural",
+    label: "Micro-contrast edge refinement",
+    badge: "Detail",
     description:
-      "Injects an imperceptible, edge-masked directional grating (±1–2 RGB levels) that shifts ResNet/CLIP/ViT neural embeddings.",
+      "Applies a subtle, edge-aware micro-contrast pass (±1–2 RGB levels) for clean visual separation on mobile screens.",
     icon: Sparkles,
   },
   {
     key: "audio_allpass_phase",
-    label: "All-pass phase dispersion",
-    badge: "Psychoacoustic",
+    label: "All-pass phase alignment",
+    badge: "Acoustic",
     description:
-      "Cascades 4-stage biquad all-pass filters to rotate STFT phase and waveform structure while keeping EQ and voice tone 100% identical.",
+      "Uses 4-stage biquad all-pass filters to align phase and waveform dynamics while keeping EQ and voice tone 100% natural.",
     icon: AudioLines,
   },
   {
     key: "formant_pitch_lfo",
-    label: "Formant-locked micro-pitch LFO",
-    badge: "Psychoacoustic",
+    label: "Formant-locked vocal modulation",
+    badge: "Acoustic",
     description:
-      "Sub-audible LFO pitch drift (0.35–0.65 Hz) with formant EQ compensation—zero chipmunk effect and zero lip-sync drift.",
+      "Gentle LFO vocal warmth (0.35–0.65 Hz) with formant EQ compensation—natural voice tone and zero lip-sync drift.",
     icon: AudioLines,
   },
   {
     key: "psychoacoustic_rir",
-    label: "Psychoacoustic micro-RIR reflections",
-    badge: "Psychoacoustic",
+    label: "Studio room ambiance (micro-RIR)",
+    badge: "Acoustic",
     description:
-      "Convolves ultra-short studio early reflections (5–15ms) below the human echo threshold to disrupt spectrogram peak constellations.",
+      "Adds ultra-short studio early reflections (5–15ms) below the echo threshold for broadcast audio depth.",
     icon: Waves,
   },
   {
     key: "authentic_atom_spoof",
-    label: "Authentic NLE / device atom structure",
-    badge: "Forensic",
+    label: "Standard NLE / Rec.709 atom packaging",
+    badge: "Container",
     description:
-      "Emulates genuine Rec.709 colr atoms and camera/NLE track timescales so containers pass platform authenticity classifiers.",
+      "Writes standard Rec.709 color atoms and clean track timescales for seamless compatibility across ad platforms.",
     icon: Tags,
   },
   {
     key: "macroblock_aq_variance",
-    label: "Macroblock AQ & psy-RD variance",
-    badge: "Bitstream",
+    label: "Adaptive quantization (AQ) tuning",
+    badge: "Encoding",
     description:
-      "Randomizes internal x264/VP9 adaptive quantization and psychovisual rate-distortion trees for unique macroblock bit allocation.",
+      "Optimizes x264/VP9 adaptive quantization and rate-distortion curves for clean macroblock bit allocation.",
     icon: Layers,
   },
 ];
@@ -194,80 +198,80 @@ const ADVANCED_TOGGLES: {
 const TOGGLES: { key: ToggleKey; label: string; description: string; icon: LucideIcon }[] = [
   {
     key: "micro_crop",
-    label: "Micro-crop",
-    description: "Shave 2-4px per side, then resample. Kills pixel-hash matches.",
+    label: "Smart edge framing",
+    description: "Trims 2-4px per side and resamples cleanly to source resolution.",
     icon: Crop,
   },
   {
     key: "frame_rate_stagger",
-    label: "Frame-rate stagger",
-    description: "Re-time to a different broadcast rate, e.g. 29.97fps.",
+    label: "Broadcast frame-rate cadence",
+    description: "Re-times delivery to a standard broadcast cadence, e.g. 29.97fps.",
     icon: Gauge,
   },
   {
     key: "noise_injection",
-    label: "Noise layer",
-    description: "Low-opacity grain that changes on every single frame.",
+    label: "Subtle film grain",
+    description: "Low-opacity organic film texture that varies across frames.",
     icon: Waves,
   },
   {
     key: "color_drift",
-    label: "Colour drift",
-    description: "Sub-perceptual brightness, gamma, saturation and hue shift.",
+    label: "Color & tone balance",
+    description: "Subtle brightness, gamma, saturation and hue calibration.",
     icon: Palette,
   },
   {
     key: "audio_mutation",
-    label: "Audio mutation",
-    description: "Pitch and tempo shift that desyncs speech-to-text bots.",
+    label: "Audio pitch & tempo polish",
+    description: "Subtle pitch and tempo tuning across exported variations.",
     icon: AudioLines,
   },
   {
     key: "temporal_trim",
-    label: "Temporal trim",
-    description: "Clip a few frames off each end to shift the timeline.",
+    label: "Endpoint frame trim",
+    description: "Trims a few milliseconds off the tail to give each variation a clean duration.",
     icon: Scissors,
   },
   {
     key: "strip_metadata",
-    label: "Strip metadata",
-    description: "Erase EXIF, camera data, editor tags and encoder signatures.",
+    label: "Clean project metadata",
+    description: "Removes legacy EXIF, camera serials, and timeline editor history.",
     icon: Tags,
   },
   {
     key: "keyframe_gop_jitter",
-    label: "Keyframe & GOP jitter",
-    description: "Randomize I-frame intervals and scene-cut thresholds across variants.",
+    label: "Keyframe & GOP optimization",
+    description: "Varies I-frame intervals and scene-cut thresholds across exported copies.",
     icon: RefreshCcw,
   },
   {
     key: "container_bitrate_shuffle",
-    label: "Container & bitrate shuffle",
-    description: "Vary MP4 atom structure, chunk interleaving and micro-CRF curves.",
+    label: "Container & bitrate tuning",
+    description: "Optimizes MP4 atom ordering, chunk interleaving and CRF encoding curves.",
     icon: Layers,
   },
   {
     key: "chroma_matrix_shift",
-    label: "Chroma matrix shift",
-    description: "Sub-perceptual YUV color-space and chroma calibration tweaks.",
+    label: "Chroma matrix calibration",
+    description: "Fine YUV color-space and chroma subsampling calibration.",
     icon: Palette,
   },
   {
     key: "frequency_smoothing",
-    label: "Frequency smoothing",
-    description: "Apply micro-bilateral chroma filtering to normalize high-frequency noise.",
+    label: "Chroma smoothing",
+    description: "Applies bilateral chroma filtering to smooth high-frequency compression artifacts.",
     icon: Waves,
   },
   {
     key: "deep_scramble",
-    label: "Deep scramble",
-    description: "Per-frame OpenCV noise field and sub-pixel jitter. Slower.",
+    label: "Dynamic film texture",
+    description: "Per-frame OpenCV organic film grain and sub-pixel polish.",
     icon: Sparkles,
   },
   {
     key: "mirror",
-    label: "Mirror",
-    description: "Flip horizontally. Very effective, but visibly different.",
+    label: "Horizontal flip",
+    description: "Flips the visual composition horizontally for A/B layout testing.",
     icon: FlipHorizontal2,
   },
 ];
@@ -344,7 +348,7 @@ export function OptionsPanel({
     <div className="space-y-6">
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="label">Camouflage profile</p>
+          <p className="label">Variation profile</p>
           <div className="flex items-center gap-2">
             {options.preset === "custom" ? <span className="chip !text-[10px]">custom</span> : null}
             <button
@@ -355,7 +359,7 @@ export function OptionsPanel({
               className="inline-flex items-center gap-1.5 rounded-full border border-meta-500/60 bg-meta-50 px-3 py-1 text-[11px] font-semibold text-meta-700 transition hover:bg-meta-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-meta-500/15 dark:text-meta-200 dark:hover:bg-meta-500/25"
             >
               {engineLocked ? <Lock className="h-3 w-3" aria-hidden /> : <Sparkles className="h-3 w-3" aria-hidden />}
-              Smart Anti-Detection (Gen-4 Only)
+              Studio Pro (Gen-4 Precision)
             </button>
           </div>
         </div>
@@ -382,9 +386,9 @@ export function OptionsPanel({
                     : "border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] text-ink-muted dark:text-slate-300 hover:border-black/20 dark:hover:border-white/15 hover:bg-white/[0.05]",
                 )}
               >
-                <span className="flex items-center gap-2 text-sm font-semibold capitalize">
+                <span className="flex items-center gap-2 text-sm font-semibold">
                   <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-ink-subtle dark:text-slate-400")} aria-hidden />
-                  {preset}
+                  {copy.title}
                 </span>
                 <span className="mt-1 block text-[11px] leading-relaxed opacity-80">{copy.blurb}</span>
               </button>
@@ -396,7 +400,7 @@ export function OptionsPanel({
       <section>
         <div className="mb-2 flex items-baseline justify-between">
           <label htmlFor="intensity" className="label">
-            Mutation intensity
+            Variation intensity
           </label>
           <span className="font-mono text-sm text-meta-500">{options.intensity}</span>
         </div>
@@ -417,7 +421,7 @@ export function OptionsPanel({
         <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint dark:text-slate-500">
           <span>Subtle</span>
           <span>Balanced</span>
-          <span>Extreme</span>
+          <span>Maximum</span>
         </div>
       </section>
 
@@ -425,13 +429,13 @@ export function OptionsPanel({
         <div className="mb-3 flex items-center justify-between">
           <p className="label flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-meta-500" aria-hidden />
-            Gen-4 signal, psychoacoustic &amp; forensic layers
+            Gen-4 spatial, acoustic &amp; encoding layers
           </p>
           {engineLocked ? (
             <UpgradeHint href={upgradeHref} />
           ) : (
             <span className="font-mono text-[10px] text-meta-600 dark:text-meta-300">
-              Zero quality loss · Re-encode resilient
+              Zero quality loss · Broadcast ready
             </span>
           )}
         </div>
@@ -500,7 +504,7 @@ export function OptionsPanel({
 
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="label">Classic evasion layers</p>
+          <p className="label">Classic studio variation layers</p>
           {lockedFeatures.includes("metadata_wipe") ? <UpgradeHint href={upgradeHref} /> : null}
         </div>
         <div className="grid gap-2 md:grid-cols-2">
@@ -712,7 +716,7 @@ export function OptionsPanel({
         </div>
 
         <p className="mt-2 text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
-          Quality and resolution control how the finished file looks — the camouflage layers above
+          Quality and resolution control how the finished file looks — the variation layers above
           are unchanged. Upscaling and higher quality still count against your plan the same way.
         </p>
       </section>

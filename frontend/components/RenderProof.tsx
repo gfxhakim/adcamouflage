@@ -26,7 +26,7 @@ const hex = (n: number) =>
   Array.from({ length: n }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
 
 const ROWS: Row[] = [
-  { label: "File hash", before: "6fa82c49ec91…", next: () => `${hex(10)}…` },
+  { label: "Export ID", before: "6fa82c49ec91…", next: () => `${hex(10)}…` },
   {
     label: "Resolution",
     before: "1280 × 720",
@@ -37,9 +37,9 @@ const ROWS: Row[] = [
     before: "30 fps",
     next: () => pick(["23.976 fps", "29.97 fps", "25 fps", "24 fps", "59.94 fps"]),
   },
-  { label: "Metadata tags", before: "camera, editor, title", next: () => "none" },
+  { label: "Project metadata", before: "camera, editor, title", next: () => "clean" },
   {
-    label: "Audio pitch",
+    label: "Audio tuning",
     before: "0 cents",
     next: () => {
       const cents = (Math.random() * 50 + 15) * (Math.random() < 0.5 ? -1 : 1);
@@ -49,7 +49,7 @@ const ROWS: Row[] = [
 ];
 
 // What the server renders and what shows first, so hydration matches.
-const FIRST = ["358da85223…", "1274 × 708", "23.976 fps", "none", "+39.8 cents"];
+const FIRST = ["358da85223…", "1274 × 708", "23.976 fps", "clean", "+39.8 cents"];
 
 /** One value assembling itself letter by letter, intro style. */
 function ShutterValue({ text, delay }: { text: string; delay: number }) {
@@ -143,8 +143,8 @@ export function RenderProof() {
       </dl>
 
       <p className="mt-5 border-t border-black/10 pt-4 text-[11px] leading-relaxed text-ink-faint">
-        A live preview: every copy you render gets its own new values. Each job ships with a report
-        of hashes before and after, the changes applied, and how many provenance tags remain.
+        A live preview: every variation you render gets its own studio parameters. Each job ships with a full report
+        of export checksums, studio layers applied, and clean metadata status.
       </p>
     </NeonCard>
   );

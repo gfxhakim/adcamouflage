@@ -104,7 +104,7 @@ export function PlanOptions({ plans, currentId, expired, currency, pending, onRe
               </p>
               <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
                 <Check className="h-3.5 w-3.5 text-meta-500" aria-hidden />
-                Every camouflage layer and overlay
+                Every studio variation layer and overlay
               </p>
 
               <div className="mt-auto pt-4">

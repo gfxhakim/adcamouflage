@@ -15,8 +15,8 @@ const STEP_ICONS: Record<HelpStepId, typeof Upload> = {
 };
 
 const PROMISES = [
-  "Your file looks identical to people",
-  "Every copy gets a brand-new fingerprint",
+  "Crisp 1:1 visual & audio broadcast quality",
+  "Every variation gets independent studio parameters",
   "1 output file = 1 generation (token cost shown before render)",
 ];
 
@@ -134,7 +134,7 @@ export function WelcomeTour({ open, activeStep, onStartTour, onSkip, onJumpStep 
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-meta-300">
               <T k="help.tour.kicker" label="Tour welcome kicker">
-                Welcome to BluCloaking
+                Welcome to BluEditor
               </T>
             </p>
             <h2
@@ -142,7 +142,7 @@ export function WelcomeTour({ open, activeStep, onStartTour, onSkip, onJumpStep 
               className="mt-2.5 text-2xl font-bold leading-[1.08] tracking-[-0.03em] text-white sm:text-3xl"
             >
               <T k="help.tour.title" label="Tour headline">
-                One winning ad in. Fresh, unique copies out.
+                One master creative in. Studio-ready variations out.
               </T>
             </h2>
             <p className="mt-3.5 text-sm leading-relaxed text-slate-400">

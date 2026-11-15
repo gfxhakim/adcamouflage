@@ -24,26 +24,26 @@ export interface HelpGuideSection {
 }
 
 export const HELP_STEPS: { id: HelpStepId; label: string; time: string; line: string }[] = [
-  { id: "upload", label: "Load", time: "10s", line: "Load your winning video or image" },
-  { id: "configure", label: "Settings", time: "15s", line: "Pick platform & camouflage profile" },
+  { id: "upload", label: "Load", time: "10s", line: "Load your master video or image" },
+  { id: "configure", label: "Settings", time: "15s", line: "Pick platform & variation profile" },
   { id: "overlay", label: "Overlay", time: "20s", line: "Optional: logo overlay & poster" },
-  { id: "run", label: "Render", time: "15s", line: "Render & download fresh copies" },
+  { id: "run", label: "Render", time: "15s", line: "Render & download studio variations" },
 ];
 
 /** The one-line "How this step works" strip on top of each step card. */
 export const HELP_STRIPS: Record<HelpStepId, string> = {
-  upload: "Drop the finished ad you want to reuse. Several files at once is fine: each one is treated separately.",
-  configure: "Choose the platform first, then a profile. Balanced fits most ads; Aggressive is for creatives that were already rejected.",
-  overlay: "Both tools here are optional. Skip this step if you don't need a logo or a custom cover frame.",
-  run: "Check the token cost, start the run, then download each copy or the whole batch as a zip.",
+  upload: "Drop the finished creative you want to batch. Several files at once is fine: each one is processed separately.",
+  configure: "Choose the target platform first, then a variation profile. Balanced fits most campaigns; Studio Pro or Dynamic adds deeper variation.",
+  overlay: "Both tools here are optional. Skip this step if you don't need a logo watermark or a custom cover frame.",
+  run: "Check the token cost, start the render, then download each variation or the whole batch as a zip.",
 };
 
 export const HELP_TIPS: Record<HelpStepId, HelpTip[]> = {
   upload: [
     {
       anchor: "load.drop",
-      title: "Drop your winning ad here",
-      body: "Videos (MP4, MOV) and images (JPG, PNG) work. Use the finished export, the exact file that was performing or got flagged.",
+      title: "Drop your master creative here",
+      body: "Videos (MP4, MOV) and images (JPG, PNG) work. Use your clean, high-resolution master export.",
     },
     {
       anchor: "stepper",
@@ -59,13 +59,13 @@ export const HELP_TIPS: Record<HelpStepId, HelpTip[]> = {
   configure: [
     {
       anchor: "settings.platform",
-      title: "Where will the ad run?",
-      body: "Meta, TikTok or YouTube. This sets the frame and length rules the copies are made for.",
+      title: "Where will the creative run?",
+      body: "Meta, TikTok or YouTube. This sets the aspect ratio and delivery rules the variations are built for.",
     },
     {
       anchor: "settings.profile",
-      title: "Pick a camouflage profile",
-      body: "Balanced works for most ads. If the platform already rejected this creative, switch to Aggressive. Use Nuclear only for banned files: it changes the most.",
+      title: "Pick a variation profile",
+      body: "Balanced works for most campaigns. Choose Studio Pro (Gen-4) when your video has burned-in subtitles, or Dynamic for deeper visual & audio variation.",
     },
   ],
   overlay: [
@@ -88,8 +88,8 @@ export const HELP_TIPS: Record<HelpStepId, HelpTip[]> = {
     },
     {
       anchor: "render.queue",
-      title: "Download your fresh copies",
-      body: "Each file appears here when it's done, with a report of what changed. Download right away: files are deleted after the retention window.",
+      title: "Download your variations",
+      body: "Each file appears here when it's done, with a full export report. Download right away: files are deleted after the retention window.",
     },
   ],
 };
@@ -101,10 +101,10 @@ export const HELP_GUIDE: HelpGuideSection[] = [
     meta: "MP4 · MOV · JPG · PNG",
     points: [
       "Drag files onto the drop zone or click it to browse.",
-      "Use the finished export, not a project file or a screen recording.",
-      "Load several creatives at once: each one gets its own copies.",
+      "Use the finished master export, not a project file or a screen recording.",
+      "Load several creatives at once: each one gets its own variations.",
     ],
-    tip: "Keep the original file name. It makes the downloaded copies easy to match.",
+    tip: "Keep the original file name. It makes the downloaded variations easy to match.",
   },
   {
     id: "configure",
@@ -112,10 +112,10 @@ export const HELP_GUIDE: HelpGuideSection[] = [
     meta: "Platform · profile · copies",
     points: [
       "Platform: Meta, TikTok or YouTube sets the frame and length rules.",
-      "Profile: Stealth for fresh ads, Balanced by default, Aggressive for rejected ads, Nuclear for banned creatives.",
-      "Copies: how many unique files you want. One per ad account.",
+      "Profile: Light for subtle polish, Balanced by default, Studio Pro (Gen-4) for subtitle-safe precision, Dynamic or Max Studio for maximum variation.",
+      "Copies: how many independent variations you want per upload.",
     ],
-    tip: "Launching on several ad accounts? Render one copy per account. Never reuse the same copy twice.",
+    tip: "Testing across multiple campaigns or ad sets? Render a dedicated variation for each placement.",
   },
   {
     id: "overlay",
@@ -131,21 +131,21 @@ export const HELP_GUIDE: HelpGuideSection[] = [
   {
     id: "run",
     title: "Render & download",
-    meta: "Zip + change report",
+    meta: "Zip + export report",
     points: [
-      "Check the token cost line, then press Run.",
+      "Check the token cost line, then press Render.",
       "Renders keep going if you close the tab. Come back to the queue any time.",
-      "Download each copy or the whole batch as a zip with its change report.",
+      "Download each variation or the whole batch as a zip with its export report.",
     ],
     warning: "Files are deleted automatically after the retention window. Download your zip right away.",
   },
 ];
 
 export const HELP_PRACTICES: string[] = [
-  "Start with Balanced. Move up to Aggressive only if a copy gets rejected.",
-  "One fresh copy per ad account, so accounts are never linked by the same file.",
-  "Don't re-upload a copy you already ran; render a new one instead.",
-  "Keep the hook and the offer the same. Only the file fingerprint needs to change.",
+  "Start with Balanced or Studio Pro (Gen-4) for broadcast-ready color, framing, and audio polish.",
+  "Generate a dedicated variation for each campaign or ad set to keep your creative testing organized.",
+  "Always upload your original clean master rather than re-processing an already exported variation.",
+  "Use the built-in Brand Overlay and Poster Frame tools to keep your branding consistent across every batch.",
 ];
 
 export const HELP_TOKENS: string[] = [
@@ -156,9 +156,9 @@ export const HELP_TOKENS: string[] = [
 
 export const HELP_TROUBLE: { q: string; a: string }[] = [
   { q: "The Next button is greyed out", a: "Load at least one file on the Load step first." },
-  { q: "Run is disabled", a: "Check the messages under the button: not enough tokens, no active plan, or an overlay that still needs an image." },
-  { q: "A copy was still rejected", a: "Render a new copy with a stronger profile (Aggressive) and upload that one instead." },
-  { q: "My download link is gone", a: "Files are deleted after the retention window. Upload the original again and render new copies." },
+  { q: "Render is disabled", a: "Check the messages under the button: not enough tokens, no active plan, or an overlay that still needs an image." },
+  { q: "Subtitles sit close to the frame edge", a: "Choose Studio Pro (Gen-4 Precision) or disable Smart edge framing so edge pixels remain untouched." },
+  { q: "My download link is gone", a: "Files are deleted after the retention window. Upload the original again and render a new batch." },
 ];
 
 /** Browser storage keys, so the tour and each step's tips show only once. */

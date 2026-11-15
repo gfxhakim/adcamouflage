@@ -50,7 +50,7 @@ export function Header({ health, healthError, user, onDark = false }: HeaderProp
   return (
     <header className="sticky top-0 z-40 border-b border-black/[0.07] dark:border-white/10 bg-white/[0.85] dark:bg-slate-900/85 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluCloacking home">
+        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluEditor home">
           <BrandLogo caption="Workspace" captionClassName="hidden sm:block" onDark={onDark} />
         </Link>
 

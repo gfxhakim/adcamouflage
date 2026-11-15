@@ -123,29 +123,29 @@ function OverlayVisual() {
 
 const PANELS: Panel[] = [
   {
-    name: "PROBE",
-    title: "See exactly what got you flagged.",
-    body: "We find every fingerprint the ad bots use to recognize your file. Before they do.",
-    points: ["Hash that matched", "Hidden metadata", "Audio & visual signatures"],
-    stat: "FLAGGED → MAPPED",
+    name: "ANALYZE",
+    title: "Automatic media & stream inspection.",
+    body: "BluEditor inspects your source video or static image—checking resolution, frame rate, color space, and audio loudness before rendering.",
+    points: ["Container & stream check", "Color & luminance profile", "Audio loudness & spectrum check"],
+    stat: "INSPECTED → READY",
     look: "gray",
     visual: <HashVisual />,
   },
   {
-    name: "MUTATE",
-    title: "Same ad to humans. New file to AI.",
-    body: "Invisible pixel, frame and audio shifts. Your creative looks identical, the model sees a stranger.",
-    points: ["Zero visible change", "Beats AI vision & transcription", "Stealth or Aggressive mode"],
-    stat: "100% UNDETECTABLE",
+    name: "ENHANCE",
+    title: "23 studio-grade variation layers.",
+    body: "Subtle 3D LUT color grading, smart framing adjustments, and broadcast audio mastering keep every variation crisp and natural.",
+    points: ["Zero visible quality loss", "Studio color, framing & audio polish", "Light, Balanced, or Studio Pro profiles"],
+    stat: "BROADCAST QUALITY",
     look: "black",
     visual: <FrameVisual />,
   },
   {
-    name: "SCRUB",
-    title: "Every download is a fresh fingerprint.",
-    body: "Editing traces, timestamps and tracking tags gone. Each export is a brand-new file ready to scale.",
-    points: ["No CapCut / Premiere traces", "Unique hash every export", "Ready to upload in seconds"],
-    stat: "CLEAN → SCALE",
+    name: "PACKAGE",
+    title: "Every download is a clean, independent export.",
+    body: "Legacy project tags and editing software history are cleaned automatically. Each variation is exported as a fresh, standards-compliant MP4 or PNG.",
+    points: ["Clean project metadata", "Independent file per variation", "Ready to upload in seconds"],
+    stat: "CLEAN → EXPORT",
     look: "blue",
     visual: <MetaVisual />,
   },
@@ -203,7 +203,7 @@ function PanelBody({ panel, index }: { panel: ShownPanel; index: number }) {
           <CmsLink
             k="features.cta"
             href="/login"
-            label="Camouflage my ad"
+            label="Create my batch"
             className={cn(
               "group inline-flex items-center gap-3 rounded-full py-1.5 pl-4 pr-1.5 text-sm font-semibold",
               panel.look === "black" || panel.look === "blue" ? "bg-white text-black" : "bg-black text-white",
@@ -246,10 +246,10 @@ export function FeaturePanels() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <CmsHeadline k="features.headline" text="Flagged In. | [Unstoppable Out.]" className="text-4xl sm:text-5xl lg:text-6xl" />
+            <CmsHeadline k="features.headline" text="One Master In. | [Ten Variations Out.]" className="text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <T k="features.lede" long as="p" className="text-sm leading-relaxed text-ink-muted">
-            Three layers. One click. Your winning ad comes back with a fingerprint the platforms have never seen.
+            Three studio stages. One click. Turn any finished video or static ad into a complete batch of ready-to-launch creative variations.
           </T>
         </div>
       </div>

@@ -56,17 +56,17 @@ export function ClosingCta({ startHref }: { startHref: string }) {
           <CmsHeadline
             k="cta.headline"
             dark
-            text="Stop Letting Algorithms Dictate Your Scale."
+            text="Ship More Creative Variations in Less Time."
             className="text-4xl sm:text-6xl lg:text-7xl"
           />
           <T k="cta.lede" long as="p" className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">
-            Protect your winning creatives, isolate your ad accounts from hash-linking, and get rejected campaigns back into profit in seconds.
+            Turn one winning video or static creative into ten studio-polished variations with custom branding, cover frames, and clean export packaging in seconds.
           </T>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <CmsLink
               k="cta.primary"
               href={startHref}
-              label="Camouflage Your First Ad Now"
+              label="Start Creating in BluEditor"
               className="group inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white transition hover:bg-meta-600"
             >
               {(label) => (

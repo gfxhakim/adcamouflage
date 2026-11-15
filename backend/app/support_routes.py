@@ -105,21 +105,21 @@ def support_media_dir() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# BluCloaking Knowledge Base & Conversational Engine
+# BluEditor Knowledge Base & Conversational Engine
 # ---------------------------------------------------------------------------
 
 WELCOME_MESSAGE = (
-    "Hi! I'm the **BluCloaking AI Assistant**. I know every option, camouflage layer, "
+    "Hi! I'm the **BluEditor AI Assistant**. I know every option, studio variation layer, "
     "platform preset, and step in the **How to Use Guide**.\n\n"
     "Tell me what you're trying to do or what issue you're facing — or pick a topic below:"
 )
 
 WELCOME_SUGGESTIONS = [
-    "How do I use BluCloaking step by step?",
+    "How do I use BluEditor step by step?",
     "Which profile & layers are best for Meta or TikTok?",
-    "Explain all 23 Camouflage Layers (including Gen-4)",
+    "Explain all 23 Studio Layers (including Gen-4)",
     "How do tokens, variants & refunds work?",
-    "My ad was flagged or upload failed — help me fix it",
+    "My upload or render failed — help me fix it",
     "Talk to a real agent",
 ]
 
@@ -157,14 +157,14 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "beginner",
         ],
         answer=(
-            "### BluCloaking 4-Step How to Use Guide\n"
-            "1. **Step 01 · Load (`Upload`)**: Drag & drop up to your batch limit of videos (`MP4, MOV, MKV, WEBM, AVI, M4V`) or images (`PNG, JPG, WEBP`). Always upload your clean master creative rather than an already-mutated copy.\n"
+            "### BluEditor 4-Step How to Use Guide\n"
+            "1. **Step 01 · Load (`Upload`)**: Drag & drop up to your batch limit of videos (`MP4, MOV, MKV, WEBM, AVI, M4V`) or images (`PNG, JPG, WEBP`). Always upload your clean master creative rather than an already-processed copy.\n"
             "2. **Step 02 · Settings (`Configure`)**:\n"
             "   - Pick your **Target Ad Platform** (Meta / Facebook & Instagram, TikTok, YouTube Shorts, Snapchat, or Google PMax).\n"
-            "   - Choose a **Camouflage Profile**: **Subtle (35)** for light refresh, **Balanced (65 — Recommended)** for everyday Meta/TikTok scaling, **Aggressive (90)** for heavily fatigued creatives, or **Custom** to toggle individual layers.\n"
+            "   - Choose a **Studio Intensity Profile**: **Light (35)** for gentle refresh, **Balanced (65 — Recommended)** for everyday Meta/TikTok scaling, **Deep (90)** for heavily fatigued creatives, or **Custom** to toggle individual layers.\n"
             "   - Choose **Variants (`1–10`)** to generate multiple unique copies per master file.\n"
             "3. **Step 03 · Overlay (`Optional`)**: Add a transparent PNG brand logo/watermark (drag to position, set size, opacity & fade timing) and/or pick a **Poster Frame** (video frame or custom image burned into frame 0).\n"
-            "4. **Step 04 · Render (`Queue`)**: Click **Run mutation**. Renders run on the background worker queue so you can download each variant individually or as a single `.zip`."
+            "4. **Step 04 · Render (`Queue`)**: Click **Render Variations**. Renders run on the background worker queue so you can download each variant individually or as a single `.zip`."
         ),
         follow_up_question=(
             "Which of the 4 steps (`01 Load`, `02 Settings`, `03 Overlay`, or `04 Render`) would you like me to explain in more detail, or are you stuck on a specific step?"
@@ -197,19 +197,19 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "platform",
         ],
         answer=(
-            "### Camouflage Profiles & Platform Recommendations\n"
-            "- **Balanced · Intensity 65 (Recommended for 90% of runs)**: Enables 18 visual, psychoacoustic, and forensic layers including Gen-4 TPS Mesh Warp, DCT JND Perturbation, 3D Hald CLUT, All-Pass Phase Rotation, Formant LFO, Authentic Camera Atom Spoofing, and Macroblock AQ Variance. Ideal for **Meta (FB/IG)** and **TikTok**.\n"
-            "- **Subtle · Intensity 35**: Gentle pixel, metadata, and bitstream refresh with minimal visual or temporal shift. Best for strict brand-guideline creatives.\n"
-            "- **Aggressive · Intensity 90**: Enables all **23/23 layers** including Optical-Flow Time-Warp, Adversarial CNN Feature-Map Perturbation, Room Impulse Response (RIR), Frequency Smoothing, and Deep Scramble. Best when re-launching a previously flagged or heavily fatigued creative.\n"
+            "### Studio Intensity Profiles & Platform Recommendations\n"
+            "- **Balanced · Intensity 65 (Recommended for 90% of runs)**: Enables 18 visual, psychoacoustic, and container polish layers including Gen-4 Sub-pixel Frame Grid, Micro-contrast Texture, 3D Color Curve, Audio Phase Alignment, Formant LFO, Clean MP4 Container Standardization, and Adaptive Bitrate Balance. Ideal for **Meta (FB/IG)** and **TikTok**.\n"
+            "- **Light · Intensity 35**: Gentle pixel, metadata, and bitstream refresh with minimal visual or temporal shift. Best for strict brand-guideline creatives.\n"
+            "- **Deep · Intensity 90**: Enables all **23/23 layers** including Frame Pacing Jitter, High-Frequency Texture, Studio Room Ambience (RIR), Frequency Smoothing, and Deep Bitstream Rebuild. Best when refreshing a heavily fatigued creative.\n"
             "- **Custom**: Lets you manually toggle any of the 23 layers, set exact **Target FPS** (`23.976, 24, 25, 29.97, 30, 50, 60`), **Audio Pitch Ratio**, and **Output Format** (`mp4, mov, webm, png, jpg, webp`)."
         ),
         follow_up_question=(
-            "To recommend the exact configuration for your campaign: **which ad platform** are you launching on, and is this a **brand-new creative** or a **re-launch of a fatigued/flagged ad**?"
+            "To recommend the exact configuration for your campaign: **which ad platform** are you launching on, and is this a **brand-new creative** or a **refresh of a fatigued creative**?"
         ),
         suggestions=[
-            "Re-launching a flagged ad on Meta/TikTok",
+            "Refreshing a fatigued creative on Meta/TikTok",
             "Scaling a winning video with 5–10 variants",
-            "Explain all 23 Camouflage Layers",
+            "Explain all 23 Studio Layers",
             "Still didn't solve my issue",
         ],
     ),
@@ -247,20 +247,20 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "deep scramble",
         ],
         answer=(
-            "### All 23 BluCloaking Camouflage Layers\n"
-            "**1. Gen-4 Perceptual & Spatial Layers ( defeats pHash / vHash / ViT / CLIP )**\n"
-            "- **Elastic TPS Mesh Warp (`elastic_mesh_warp`)**: Non-linear low-frequency spatial grid deformation so 8×8 DCT blocks shift across boundaries without cutting subtitles.\n"
-            "- **DCT Frequency JND Perturbation (`dct_jnd_perturbation`)**: Injects luminance/texture-masked mid-band DCT noise invisible to human eyes.\n"
-            "- **3D Hald CLUT & Local CLAHE (`lut_clahe_color`)**: Non-linear S-curve contrast and shadow/highlight split-toning while protecting skin tones.\n"
-            "- **Adversarial CNN Perturbation (`adversarial_cnn_layer`)**: High-frequency Gabor/Laplacian micro-patterns targeting neural feature extractors.\n"
-            "- **Optical-Flow Time-Warp (`optical_flow_timewarp`)**: Smooth sinusoidal speed modulation (±3%) while preserving exact total duration.\n\n"
-            "**2. Gen-4 Psychoacoustic Audio Layers ( defeats Chromaprint / Whisper / FFT )**\n"
-            "- **All-Pass Phase Rotation & Comb (`audio_allpass_phase`)**: Rotates phase across 4–6 poles and adds micro-notches without changing perceived tone.\n"
-            "- **Formant-Preserving Micro-Drift LFO (`formant_pitch_lfo`)**: Time-varying pitch LFO (±15–25 cents) that defeats static cross-correlation.\n"
-            "- **Psychoacoustic Micro-Reverb RIR (`psychoacoustic_rir`)**: Blends early room reflections (8–18 ms at -28 dB) to alter STFT decay tails.\n\n"
-            "**3. Gen-4 Forensic Container & Bitstream Layers**\n"
-            "- **Authentic Camera/NLE Atom Spoofing (`authentic_atom_spoof`)**: Writes genuine iPhone 16 Pro, Sony A7S III, CapCut, or Premiere Pro `moov/udta/hdlr` atoms.\n"
-            "- **Macroblock AQ & Psy-RD Variance (`macroblock_aq_variance`)**: Randomizes x264/x265 AQ Mode 3, `aq-strength`, `psy-rd`, and `qcomp` per variant.\n\n"
+            "### All 23 BluEditor Studio Layers\n"
+            "**1. Gen-4 Visual & Spatial Studio Layers**\n"
+            "- **Sub-pixel Frame Grid (`elastic_mesh_warp`)**: Non-linear low-frequency spatial grid alignment so 8×8 macroblocks shift cleanly without cutting subtitles.\n"
+            "- **Micro-contrast Texture (`dct_jnd_perturbation`)**: Applies luminance/texture-balanced mid-band frequency detail within human visual thresholds.\n"
+            "- **3D Color Curve & Local CLAHE (`lut_clahe_color`)**: Non-linear S-curve contrast and shadow/highlight split-toning while protecting skin tones.\n"
+            "- **High-Frequency Texture (`adversarial_cnn_layer`)**: Imperceptible Gabor/Laplacian micro-texture across key regions.\n"
+            "- **Frame Pacing Jitter (`optical_flow_timewarp`)**: Smooth sinusoidal speed modulation (±3%) while preserving exact total duration.\n\n"
+            "**2. Gen-4 Psychoacoustic Audio Polish Layers**\n"
+            "- **Audio Phase Alignment (`audio_allpass_phase`)**: Rotates phase across 4–6 poles without changing perceived tone.\n"
+            "- **Formant-Preserving Micro-Drift LFO (`formant_pitch_lfo`)**: Time-varying pitch LFO (±15–25 cents) that keeps voiceovers sounding natural.\n"
+            "- **Studio Room Ambience RIR (`psychoacoustic_rir`)**: Blends early studio room reflections (8–18 ms at -28 dB) for natural acoustic depth.\n\n"
+            "**3. Gen-4 Container & Bitstream Layers**\n"
+            "- **Clean MP4 Container (`authentic_atom_spoof`)**: Writes standardized MP4 `moov/udta/hdlr` container structures.\n"
+            "- **Adaptive Bitrate & Psy-RD Balance (`macroblock_aq_variance`)**: Optimizes x264/x265 AQ Mode 3, `aq-strength`, `psy-rd`, and `qcomp` per variant.\n\n"
             "**4. Classic Core Layers (`13 layers`)**\n"
             "- `micro_crop`, `frame_rate_stagger`, `noise_injection`, `color_drift`, `temporal_trim`, `keyframe_gop_jitter`, `container_bitrate_shuffle`, `chroma_matrix_shift`, `frequency_smoothing`, `deep_scramble`, `mirror`, `audio_mutation`, and `strip_metadata`."
         ),
@@ -297,7 +297,7 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "  - Adjust **Size (`2%–60%`)**, **Opacity (`5%–100%`)**, **Start/End seconds**, and **Fade-in / Fade-out**.\n"
             "- **Poster Frame (`workspace.posterTool`)**:\n"
             "  - Scrub your video to pick an exact frame timestamp OR upload a custom cover image.\n"
-            "  - BluCloaking both attaches it as the container cover stream AND blends it into frame 0 so ad managers display your chosen thumbnail."
+            "  - BluEditor both attaches it as the container cover stream AND blends it into frame 0 so ad managers display your chosen thumbnail."
         ),
         follow_up_question=(
             "Are you having trouble uploading an overlay image, positioning it on the preview, or setting a custom poster thumbnail?"
@@ -377,10 +377,10 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
         ],
         answer=(
             "### Quick Troubleshooting Checklist\n"
-            "1. **Ad still flagged / duplicate-detected by Meta or TikTok**:\n"
-            "   - Make sure you uploaded the **clean original master** (not a previously rejected file).\n"
-            "   - Switch from `Subtle` to **Balanced (65)** or **Aggressive (90)** so all Gen-4 layers (`elastic_mesh_warp`, `dct_jnd_perturbation`, `audio_allpass_phase`, `authentic_atom_spoof`) are active.\n"
-            "   - Generate **3–5 variants** and test each in a fresh ad set.\n"
+            "1. **Refreshing heavily fatigued creatives for Meta or TikTok**:\n"
+            "   - Make sure you uploaded your **clean original master**.\n"
+            "   - Switch from `Light` to **Balanced (65)** or **Deep (90)** so all Gen-4 studio layers (`elastic_mesh_warp`, `dct_jnd_perturbation`, `audio_allpass_phase`, `authentic_atom_spoof`) are active.\n"
+            "   - Generate **3–5 variants** and test each in your ad sets.\n"
             "2. **Subtitles or edge logos slightly clipped**:\n"
             "   - Switch Profile to **Custom** and turn off `micro_crop`, while keeping `elastic_mesh_warp` and `dct_jnd_perturbation` ON.\n"
             "3. **Upload or Render Error**:\n"
@@ -391,7 +391,7 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "Did one of those match your problem, or could you tell me: **1)** What exact error message or behavior you see, and **2)** Which step (`Load`, `Settings`, `Overlay`, or `Render`) it happens on?"
         ),
         suggestions=[
-            "My ad is still getting flagged on Meta/TikTok",
+            "How do I refresh a fatigued creative on Meta/TikTok?",
             "My render failed in Step 04 Queue",
             "Subtitles or audio look/sound off",
             "Still didn't solve my issue",
@@ -460,20 +460,20 @@ def generate_bot_response(
             )
         elif attempt_number == 1:
             reply = (
-                "I want to make sure I give you the exact solution for your BluCloaking workflow, "
+                "I want to make sure I give you the exact solution for your BluEditor workflow, "
                 "so let me ask a quick clarifying question:\n\n"
-                "1. **Which part of BluCloaking are you working with right now?**\n"
+                "1. **Which part of BluEditor are you working with right now?**\n"
                 "   - Uploading creatives (**Step 01 · Load**)\n"
-                "   - Choosing a platform preset or camouflage layers (**Step 02 · Settings**)\n"
+                "   - Choosing a platform preset or studio layers (**Step 02 · Settings**)\n"
                 "   - Adding a logo or poster frame (**Step 03 · Overlay**)\n"
-                "   - Rendering / downloading or fixing a flagged ad (**Step 04 · Render**)\n"
+                "   - Rendering / downloading variations (**Step 04 · Render**)\n"
                 "   - **Tokens, Plans & Billing**"
             )
         elif attempt_number == 2:
             reply = (
                 "Got it — let's narrow this down a bit more so I can pinpoint the cause:\n\n"
                 "- **Are you processing a Video (`MP4/MOV`) or a Static Image (`PNG/JPG`)?**\n"
-                "- **Which Camouflage Profile is selected?** (`Subtle 35`, `Balanced 65`, `Aggressive 90`, or `Custom`)\n"
+                "- **Which Studio Intensity Profile is selected?** (`Light 35`, `Balanced 65`, `Deep 90`, or `Custom`)\n"
                 "- **Are you seeing a specific error message on screen?** (You can also attach a screenshot or video recording using the paperclip button below!)"
             )
         elif attempt_number == 3:
@@ -485,8 +485,8 @@ def generate_bot_response(
         elif attempt_number == 4:
             reply = (
                 "I still want to make sure we get this completely solved for you. Could you clarify:\n\n"
-                "- **What exact outcome do you need right now?** (e.g., passing ad review, fixing video/audio quality, crediting tokens, or a technical bug)\n"
-                "- Feel free to **attach a screenshot or screen recording** below — one more try and I can also connect you directly to a live BluCloaking agent!"
+                "- **What exact outcome do you need right now?** (e.g., scaling fresh ad variations, fixing video/audio quality, crediting tokens, or a technical bug)\n"
+                "- Feel free to **attach a screenshot or screen recording** below — one more try and I can also connect you directly to a live BluEditor agent!"
             )
         else:
             reply = (
@@ -495,7 +495,7 @@ def generate_bot_response(
                 "When you press it, I will immediately send your account details and everything you told me here to our team, and you can chat and share screenshots or video recordings directly with an agent in this window."
             )
         suggestions = [
-            "How do I use BluCloaking step by step?",
+            "How do I use BluEditor step by step?",
             "Best settings for Meta / TikTok ads",
             "My render or upload has an error",
             "Tokens & subscription question",
@@ -776,7 +776,7 @@ def _build_issue_summary(messages: list[SupportMessage], extra_note: str = "") -
     if extra_note.strip():
         user_lines.append(f"• [Escalation Note]: {extra_note.strip()}")
     if not user_lines:
-        return "Customer requested a live agent from the BluCloaking Bot."
+        return "Customer requested a live agent from the BluEditor Bot."
     return "\n".join(user_lines[-12:])
 
 
@@ -798,12 +798,12 @@ def _notify_admins_by_email(
     if not recipients:
         return
 
-    subject = f"[BluCloaking Support] Live Agent Requested by {user.email} (Ticket #{thread.id})"
+    subject = f"[BluEditor Support] Live Agent Requested by {user.email} (Ticket #{thread.id})"
     transcript_rows: list[str] = []
     for m in messages[-15:]:
         role_label = {
             "user": f"Customer ({html.escape(user.email)})",
-            "bot": "BluCloaking Bot",
+            "bot": "BluEditor Bot",
             "agent": f"Agent ({html.escape(m.sender_name or 'Admin')})",
             "system": "System",
         }.get(m.sender_role, m.sender_role)
@@ -818,7 +818,7 @@ def _notify_admins_by_email(
 
     body_html = f"""
     <div style="font-family:system-ui,-apple-system,sans-serif;max-width:680px;margin:0 auto;color:#0f172a;">
-      <h2 style="color:#0866ff;margin-bottom:4px;">BluCloaking Live Support Escalation · Ticket #{thread.id}</h2>
+      <h2 style="color:#0866ff;margin-bottom:4px;">BluEditor Live Support Escalation · Ticket #{thread.id}</h2>
       <p style="margin-top:0;color:#475569;">A customer completed {thread.bot_attempts} bot attempts and clicked <strong>Contact Live Agent</strong> (promised response window: <strong>up to 30 minutes max</strong>).</p>
 
       <h3 style="margin-bottom:6px;border-bottom:1px solid #cbd5e1;padding-bottom:4px;">Customer Information</h3>
@@ -885,18 +885,18 @@ def _open_ticket(
         if reason == "waited":
             intro = (
                 f"✅ **You've been waiting {AGENT_WAIT_MINUTES} minutes, so I've opened a support ticket "
-                f"(#{thread.id}) for you** and sent it to a live BluCloaking agent with your account details "
+                f"(#{thread.id}) for you** and sent it to a live BluEditor agent with your account details "
                 "and everything you shared above.\n\n"
             )
         else:
             intro = (
-                f"✅ **Ticket #{thread.id} is open — your request has been sent to a live BluCloaking agent** "
+                f"✅ **Ticket #{thread.id} is open — your request has been sent to a live BluEditor agent** "
                 "along with your account details and everything you shared above.\n\n"
             )
         auto_reply = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluCloaking Bot",
+            sender_name="BluEditor Bot",
             body=(
                 intro
                 + f"⏱️ **The agent may reply to you from now to {AGENT_WAIT_MINUTES}min Max.**\n\n"
@@ -1047,7 +1047,7 @@ def _get_or_create_thread(db: Session, user: User) -> tuple[SupportThread, list[
         welcome = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluCloaking Bot",
+            sender_name="BluEditor Bot",
             body=WELCOME_MESSAGE,
             suggestions_json=json.dumps(WELCOME_SUGGESTIONS),
         )
@@ -1101,7 +1101,7 @@ def start_new_support_thread(
     welcome = SupportMessage(
         thread_id=thread.id,
         sender_role="bot",
-        sender_name="BluCloaking Bot",
+        sender_name="BluEditor Bot",
         body=WELCOME_MESSAGE,
         suggestions_json=json.dumps(WELCOME_SUGGESTIONS),
     )
@@ -1157,7 +1157,7 @@ def post_user_support_message(
         bot_msg = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluCloaking Bot",
+            sender_name="BluEditor Bot",
             body=bot_reply,
             suggestions_json=json.dumps(suggestions),
         )
@@ -1212,16 +1212,16 @@ def mark_bot_attempt_unsolved(
             reply = (
                 "We've reached **5 attempts** without resolving your issue.\n\n"
                 "👉 **Click the `Contact Live Agent` button below** to send your issue and conversation directly to our team. "
-                "A live BluCloaking agent will reply right here in this chat (within **30min Max**)."
+                "A live BluEditor agent will reply right here in this chat (within **30min Max**)."
             )
         bot_msg = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluCloaking Bot",
+            sender_name="BluEditor Bot",
             body=reply,
             suggestions_json=json.dumps(
                 [
-                    "My ad is getting flagged on Meta/TikTok",
+                    "How do I refresh a fatigued creative?",
                     "My upload or render failed",
                     "Tokens or payment issue",
                 ]
@@ -1246,7 +1246,7 @@ def escalate_to_live_agent(
     if thread.status == "bot" and thread.bot_attempts < MAX_ATTEMPTS_BEFORE_AGENT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Please try asking the BluCloaking Bot first ({thread.bot_attempts}/{MAX_ATTEMPTS_BEFORE_AGENT} attempts used).",
+            detail=f"Please try asking the BluEditor Bot first ({thread.bot_attempts}/{MAX_ATTEMPTS_BEFORE_AGENT} attempts used).",
         )
 
     _open_ticket(db, user, thread, messages, note=payload.note)
@@ -1516,7 +1516,7 @@ def admin_send_support_message(
     agent_msg = SupportMessage(
         thread_id=thread.id,
         sender_role="agent",
-        sender_name=admin.display_name or "BluCloaking Support Agent",
+        sender_name=admin.display_name or "BluEditor Support Agent",
         body=body,
         attachment_url=payload.attachment_url,
         attachment_name=payload.attachment_name,

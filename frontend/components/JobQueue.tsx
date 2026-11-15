@@ -37,7 +37,7 @@ export function JobQueue({
           <div>
             <p className="text-sm font-semibold text-ink-muted dark:text-slate-300">No active batch</p>
             <p className="mt-1 max-w-xs text-xs leading-relaxed text-ink-subtle dark:text-slate-400">
-              Drop your assets on the left, pick a camouflage profile, and the mutation queue will
+              Drop your assets on the left, pick a variation profile, and the render queue will
               appear here with live progress.
             </p>
           </div>
@@ -62,7 +62,7 @@ export function JobQueue({
               <div className="flex items-center gap-2">
                 {!allDone ? <RenderLoader size={26} /> : null}
                 <p className="text-sm font-semibold text-black dark:text-slate-100">
-                  {allDone ? "Batch complete" : "Mutating assets"}
+                  {allDone ? "Batch complete" : "Rendering variations"}
                 </p>
               </div>
               <p className="mt-0.5 break-all font-mono text-[11px] text-ink-subtle dark:text-slate-400">

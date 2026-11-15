@@ -23,8 +23,8 @@ const POINTS: { icon: LucideIcon; title: string; body: (hours: number) => string
   },
   {
     icon: Wallet,
-    title: "No card on file",
-    body: () => "Plans are paid per 30-day period in crypto through BTCPay. We never see or store payment details, and nothing renews on its own.",
+    title: "Secure checkout",
+    body: () => "Plans are paid per 30-day period through our verified payment providers. We never see or store card details, and nothing renews without your consent.",
   },
   {
     icon: ShieldCheck,
