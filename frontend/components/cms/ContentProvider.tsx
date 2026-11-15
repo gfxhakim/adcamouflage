@@ -115,12 +115,46 @@ function pageGroup(path: string): string {
   return PAGE_NAMES[path] ?? `Texts on ${path}`;
 }
 
+/**
+ * Old brand names and wording that may still sit in text saved from Admin
+ * before the BluEditor rebrand. Saved text overrides the code defaults, so we
+ * clean it here on every render.
+ */
+const LEGACY_WORDING: [RegExp, string][] = [
+  [/\bBlu[\s-]?Clo(?:a)?c?king\b/gi, "BluEditor"],
+  [/\bBlu[\s-]?Clo(?:a)?c?k\b/gi, "BluEditor"],
+  [/\bBlu[\s-]?Camouflage\b/gi, "BluEditor"],
+  [/\bAd[\s-]?Camouflage\b/gi, "BluEditor"],
+  [/\bcamouflaged\b/gi, "refreshed"],
+  [/\bcamouflage\b/gi, "variation"],
+  [/\bcloaked\b/gi, "refreshed"],
+  [/\bcloaking\b/gi, "variation"],
+  [/\bbypass(?:ing|es|ed)?\b/gi, "refresh"],
+  [/\bundetectable\b/gi, "seamless"],
+];
+
+export function cleanLegacyWording(value: string): string {
+  let out = value;
+  for (const [pattern, replacement] of LEGACY_WORDING) out = out.replace(pattern, replacement);
+  return out;
+}
+
+function cleanContent(content: SiteContent): SiteContent {
+  if (!content.text) return content;
+  const text: Record<string, string> = {};
+  for (const [key, value] of Object.entries(content.text)) {
+    text[key] = typeof value === "string" ? cleanLegacyWording(value) : value;
+  }
+  return { ...content, text } as SiteContent;
+}
+
 function buildApi(
   namespace: Namespace,
-  content: SiteContent,
+  rawContent: SiteContent,
   preview: boolean,
   register: (field: FieldInfo) => void,
 ): CmsApi {
+  const content = cleanContent(rawContent);
   const hide = content.hide ?? {};
   return {
     namespace,
