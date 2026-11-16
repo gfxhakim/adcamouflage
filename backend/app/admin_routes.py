@@ -1474,7 +1474,7 @@ def export_users(q: str = "", plan: str = "", state: str = "", db: Session = Dep
     return Response(
         content=buffer.getvalue(),
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="adcamouflage-users-{stamp}.csv"'},
+        headers={"Content-Disposition": f'attachment; filename="proteusflow-users-{stamp}.csv"'},
     )
 
 

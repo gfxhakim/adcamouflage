@@ -17,7 +17,18 @@ interface BrandLogoProps {
 }
 
 const MARK = "/brand/blucloacking-mark.png";
-const NAME = "BluEditor";
+const NAME = "ProteusFlow";
+
+/** First word of a CamelCase name ("Proteus" in "ProteusFlow"), shown in blue. */
+function wordHead(name: string): string {
+  const m = name.match(/^(.+?[a-z])(?=[A-Z])/);
+  return m ? m[1] : name;
+}
+
+/** The rest of the name after the blue part ("Flow"). */
+function wordTail(name: string): string {
+  return name.slice(wordHead(name).length);
+}
 
 /** A bright band that sweeps across whatever image `src` outlines. */
 function Shine({ src }: { src: string }) {
@@ -37,7 +48,7 @@ function Shine({ src }: { src: string }) {
   );
 }
 
-/** The BluEditor shield plus wordmark, used in every header and the footer. */
+/** The ProteusFlow shield plus wordmark, used in every header and the footer. */
 export function BrandLogo({
   caption,
   captionClassName,
@@ -48,7 +59,7 @@ export function BrandLogo({
   const cms = useCms();
   const mark = cms.media("brand.mark", { src: MARK, kind: "image", alt: "" }, "Logo shield").src || MARK;
   const rawName = cms.text("brand.name", NAME, "text", "Brand name");
-  const name = /blucloack|blucloak|adcamouflage|camouflage/i.test(rawName) ? NAME : rawName;
+  const name = /blucloack|blucloak|blu\s*-?editor|adcamouflage|camouflage/i.test(rawName) ? NAME : rawName;
   const showMark = !cms.hidden("brand.mark");
   return (
     <span className={cn("flex min-w-0 items-center gap-2.5", className)}>
@@ -69,8 +80,8 @@ export function BrandLogo({
           )}
           {...cms.mark("brand.name")}
         >
-          <span className="text-meta-500">Blu</span>
-          <span>{name.replace(/^Blu/i, "") || "Editor"}</span>
+          <span className="text-meta-500">{wordHead(name)}</span>
+          <span>{wordTail(name)}</span>
         </span>
         {caption ? (
           <span className={cn("mt-0.5 block text-[11px]", onDark ? "text-white/55" : "text-ink-subtle", captionClassName)}>
@@ -91,9 +102,10 @@ export function BrandLogoFull({ className }: { className?: string }) {
         className,
       )}
     >
-      <img src={MARK} alt="BluEditor" width={76} height={76} className="h-16 w-16 object-contain drop-shadow-[0_0_14px_rgba(51,133,255,0.65)]" />
+      <img src={MARK} alt="ProteusFlow" width={76} height={76} className="h-16 w-16 object-contain drop-shadow-[0_0_14px_rgba(51,133,255,0.65)]" />
       <span className="text-xl font-bold tracking-tight text-white">
-        <span className="text-meta-400">Blu</span>Editor
+        <span className="text-meta-400">{wordHead(NAME)}</span>
+        {wordTail(NAME)}
       </span>
     </div>
   );

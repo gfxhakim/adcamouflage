@@ -199,7 +199,7 @@ export default function AdminPage() {
     <div className="deck deck-fixed min-h-screen">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
         <div className={clsx("mx-auto flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8", editing ? "max-w-[1800px]" : "max-w-7xl")}>
-          <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="BluEditor home">
+          <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="ProteusFlow home">
             <BrandLogo caption="Admin · Command deck" captionClassName="hidden sm:block" onDark />
           </Link>
           <nav className="flex items-center gap-2">
@@ -308,7 +308,7 @@ export default function AdminPage() {
                       {(supportNotifs.overdue_count ?? 0) > 0
                         ? `${supportNotifs.overdue_count} ticket(s) waiting 30+ min with no agent reply — ${supportNotifs.escalated_count} open in total`
                         : supportNotifs.escalated_count > 0
-                        ? `${supportNotifs.escalated_count} customer(s) requested a Live Agent from the BluEditor Bot (≤30min response window)`
+                        ? `${supportNotifs.escalated_count} customer(s) requested a Live Agent from the ProteusFlow Bot (≤30min response window)`
                         : `${supportNotifs.unread_total} unread customer support message(s)`}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-300">

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch AdCamouflage on macOS or Linux.
+# Launch ProteusFlow on macOS or Linux.
 #
 #   ./scripts/start.sh
 #

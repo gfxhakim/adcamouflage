@@ -1,4 +1,4 @@
-# AdCamouflage
+# ProteusFlow
 
 Ad camouflage, media mutation and asset fingerprint stripping as a full-stack
 service. Upload creatives; get back derivatives that look the same to a person
@@ -136,7 +136,7 @@ The first run takes a few minutes while it installs dependencies. When it
 finishes it prints:
 
 ```
-  AdCamouflage is up
+  ProteusFlow is up
 
     Web UI     http://localhost:3000
     API docs   http://localhost:8000/api/docs

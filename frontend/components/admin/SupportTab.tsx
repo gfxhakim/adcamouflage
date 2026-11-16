@@ -548,7 +548,7 @@ export default function SupportTab({
                         ) : (
                           <>
                             <Bot className="h-3 w-3 text-meta-400" aria-hidden />
-                            <span className="text-meta-300">BluEditor AI Bot</span>
+                            <span className="text-meta-300">ProteusFlow AI Bot</span>
                           </>
                         )}
                         <span>· {new Date(msg.created_at).toLocaleTimeString()}</span>

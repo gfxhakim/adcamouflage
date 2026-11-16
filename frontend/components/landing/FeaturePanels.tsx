@@ -125,7 +125,7 @@ const PANELS: Panel[] = [
   {
     name: "ANALYZE",
     title: "Automatic media & stream inspection.",
-    body: "BluEditor inspects your source video or static image—checking resolution, frame rate, color space, and audio loudness before rendering.",
+    body: "ProteusFlow inspects your source video or static image—checking resolution, frame rate, color space, and audio loudness before rendering.",
     points: ["Container & stream check", "Color & luminance profile", "Audio loudness & spectrum check"],
     stat: "INSPECTED → READY",
     look: "gray",

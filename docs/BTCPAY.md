@@ -207,7 +207,7 @@ titles verified in the BTCPay source
    a store to begin accepting payments."). If it does not, use the store
    switcher at the top of the left sidebar and choose to create a store.
 2. Fill in:
-   - **Store Name**: anything, for example `BluCloacking`.
+   - **Store Name**: anything, for example `ProteusFlow`.
    - **Default currency**: `USD`. The app always creates invoices in USD.
    - Price source: keep the default unless you have a reason to change it.
 3. Click **Create Store**.

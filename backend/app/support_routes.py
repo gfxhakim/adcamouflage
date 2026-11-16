@@ -1,7 +1,7 @@
-"""BluCloaking AI Support Bot + Live Agent Escalation & Multimedia Chat.
+"""ProteusFlow AI Support Bot + Live Agent Escalation & Multimedia Chat.
 
 Features:
-- Complete knowledge base of all BluCloaking options, presets, 23 camouflage
+- Complete knowledge base of all ProteusFlow options, presets, 23 camouflage
   layers (including all 10 Gen-4 layers), the 4-step How to Use guide,
   platform presets, brand overlay & poster frame tools, token billing, and
   troubleshooting.
@@ -105,17 +105,17 @@ def support_media_dir() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# BluEditor Knowledge Base & Conversational Engine
+# ProteusFlow Knowledge Base & Conversational Engine
 # ---------------------------------------------------------------------------
 
 WELCOME_MESSAGE = (
-    "Hi! I'm the **BluEditor AI Assistant**. I know every option, studio variation layer, "
+    "Hi! I'm the **ProteusFlow AI Assistant**. I know every option, studio variation layer, "
     "platform preset, and step in the **How to Use Guide**.\n\n"
     "Tell me what you're trying to do or what issue you're facing — or pick a topic below:"
 )
 
 WELCOME_SUGGESTIONS = [
-    "How do I use BluEditor step by step?",
+    "How do I use ProteusFlow step by step?",
     "Which profile & layers are best for Meta or TikTok?",
     "Explain all 23 Studio Layers (including Gen-4)",
     "How do tokens, variants & refunds work?",
@@ -157,7 +157,7 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "beginner",
         ],
         answer=(
-            "### BluEditor 4-Step How to Use Guide\n"
+            "### ProteusFlow 4-Step How to Use Guide\n"
             "1. **Step 01 · Load (`Upload`)**: Drag & drop up to your batch limit of videos (`MP4, MOV, MKV, WEBM, AVI, M4V`) or images (`PNG, JPG, WEBP`). Always upload your clean master creative rather than an already-processed copy.\n"
             "2. **Step 02 · Settings (`Configure`)**:\n"
             "   - Pick your **Target Ad Platform** (Meta / Facebook & Instagram, TikTok, YouTube Shorts, Snapchat, or Google PMax).\n"
@@ -247,7 +247,7 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "deep scramble",
         ],
         answer=(
-            "### All 23 BluEditor Studio Layers\n"
+            "### All 23 ProteusFlow Studio Layers\n"
             "**1. Gen-4 Visual & Spatial Studio Layers**\n"
             "- **Sub-pixel Frame Grid (`elastic_mesh_warp`)**: Non-linear low-frequency spatial grid alignment so 8×8 macroblocks shift cleanly without cutting subtitles.\n"
             "- **Micro-contrast Texture (`dct_jnd_perturbation`)**: Applies luminance/texture-balanced mid-band frequency detail within human visual thresholds.\n"
@@ -297,7 +297,7 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "  - Adjust **Size (`2%–60%`)**, **Opacity (`5%–100%`)**, **Start/End seconds**, and **Fade-in / Fade-out**.\n"
             "- **Poster Frame (`workspace.posterTool`)**:\n"
             "  - Scrub your video to pick an exact frame timestamp OR upload a custom cover image.\n"
-            "  - BluEditor both attaches it as the container cover stream AND blends it into frame 0 so ad managers display your chosen thumbnail."
+            "  - ProteusFlow both attaches it as the container cover stream AND blends it into frame 0 so ad managers display your chosen thumbnail."
         ),
         follow_up_question=(
             "Are you having trouble uploading an overlay image, positioning it on the preview, or setting a custom poster thumbnail?"
@@ -460,9 +460,9 @@ def generate_bot_response(
             )
         elif attempt_number == 1:
             reply = (
-                "I want to make sure I give you the exact solution for your BluEditor workflow, "
+                "I want to make sure I give you the exact solution for your ProteusFlow workflow, "
                 "so let me ask a quick clarifying question:\n\n"
-                "1. **Which part of BluEditor are you working with right now?**\n"
+                "1. **Which part of ProteusFlow are you working with right now?**\n"
                 "   - Uploading creatives (**Step 01 · Load**)\n"
                 "   - Choosing a platform preset or studio layers (**Step 02 · Settings**)\n"
                 "   - Adding a logo or poster frame (**Step 03 · Overlay**)\n"
@@ -486,7 +486,7 @@ def generate_bot_response(
             reply = (
                 "I still want to make sure we get this completely solved for you. Could you clarify:\n\n"
                 "- **What exact outcome do you need right now?** (e.g., scaling fresh ad variations, fixing video/audio quality, crediting tokens, or a technical bug)\n"
-                "- Feel free to **attach a screenshot or screen recording** below — one more try and I can also connect you directly to a live BluEditor agent!"
+                "- Feel free to **attach a screenshot or screen recording** below — one more try and I can also connect you directly to a live ProteusFlow agent!"
             )
         else:
             reply = (
@@ -495,7 +495,7 @@ def generate_bot_response(
                 "When you press it, I will immediately send your account details and everything you told me here to our team, and you can chat and share screenshots or video recordings directly with an agent in this window."
             )
         suggestions = [
-            "How do I use BluEditor step by step?",
+            "How do I use ProteusFlow step by step?",
             "Best settings for Meta / TikTok ads",
             "My render or upload has an error",
             "Tokens & subscription question",
@@ -776,7 +776,7 @@ def _build_issue_summary(messages: list[SupportMessage], extra_note: str = "") -
     if extra_note.strip():
         user_lines.append(f"• [Escalation Note]: {extra_note.strip()}")
     if not user_lines:
-        return "Customer requested a live agent from the BluEditor Bot."
+        return "Customer requested a live agent from the ProteusFlow Bot."
     return "\n".join(user_lines[-12:])
 
 
@@ -798,12 +798,12 @@ def _notify_admins_by_email(
     if not recipients:
         return
 
-    subject = f"[BluEditor Support] Live Agent Requested by {user.email} (Ticket #{thread.id})"
+    subject = f"[ProteusFlow Support] Live Agent Requested by {user.email} (Ticket #{thread.id})"
     transcript_rows: list[str] = []
     for m in messages[-15:]:
         role_label = {
             "user": f"Customer ({html.escape(user.email)})",
-            "bot": "BluEditor Bot",
+            "bot": "ProteusFlow Bot",
             "agent": f"Agent ({html.escape(m.sender_name or 'Admin')})",
             "system": "System",
         }.get(m.sender_role, m.sender_role)
@@ -818,7 +818,7 @@ def _notify_admins_by_email(
 
     body_html = f"""
     <div style="font-family:system-ui,-apple-system,sans-serif;max-width:680px;margin:0 auto;color:#0f172a;">
-      <h2 style="color:#0866ff;margin-bottom:4px;">BluEditor Live Support Escalation · Ticket #{thread.id}</h2>
+      <h2 style="color:#0866ff;margin-bottom:4px;">ProteusFlow Live Support Escalation · Ticket #{thread.id}</h2>
       <p style="margin-top:0;color:#475569;">A customer completed {thread.bot_attempts} bot attempts and clicked <strong>Contact Live Agent</strong> (promised response window: <strong>up to 30 minutes max</strong>).</p>
 
       <h3 style="margin-bottom:6px;border-bottom:1px solid #cbd5e1;padding-bottom:4px;">Customer Information</h3>
@@ -885,18 +885,18 @@ def _open_ticket(
         if reason == "waited":
             intro = (
                 f"✅ **You've been waiting {AGENT_WAIT_MINUTES} minutes, so I've opened a support ticket "
-                f"(#{thread.id}) for you** and sent it to a live BluEditor agent with your account details "
+                f"(#{thread.id}) for you** and sent it to a live ProteusFlow agent with your account details "
                 "and everything you shared above.\n\n"
             )
         else:
             intro = (
-                f"✅ **Ticket #{thread.id} is open — your request has been sent to a live BluEditor agent** "
+                f"✅ **Ticket #{thread.id} is open — your request has been sent to a live ProteusFlow agent** "
                 "along with your account details and everything you shared above.\n\n"
             )
         auto_reply = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluEditor Bot",
+            sender_name="ProteusFlow Bot",
             body=(
                 intro
                 + f"⏱️ **The agent may reply to you from now to {AGENT_WAIT_MINUTES}min Max.**\n\n"
@@ -1047,7 +1047,7 @@ def _get_or_create_thread(db: Session, user: User) -> tuple[SupportThread, list[
         welcome = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluEditor Bot",
+            sender_name="ProteusFlow Bot",
             body=WELCOME_MESSAGE,
             suggestions_json=json.dumps(WELCOME_SUGGESTIONS),
         )
@@ -1101,7 +1101,7 @@ def start_new_support_thread(
     welcome = SupportMessage(
         thread_id=thread.id,
         sender_role="bot",
-        sender_name="BluEditor Bot",
+        sender_name="ProteusFlow Bot",
         body=WELCOME_MESSAGE,
         suggestions_json=json.dumps(WELCOME_SUGGESTIONS),
     )
@@ -1157,7 +1157,7 @@ def post_user_support_message(
         bot_msg = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluEditor Bot",
+            sender_name="ProteusFlow Bot",
             body=bot_reply,
             suggestions_json=json.dumps(suggestions),
         )
@@ -1212,12 +1212,12 @@ def mark_bot_attempt_unsolved(
             reply = (
                 "We've reached **5 attempts** without resolving your issue.\n\n"
                 "👉 **Click the `Contact Live Agent` button below** to send your issue and conversation directly to our team. "
-                "A live BluEditor agent will reply right here in this chat (within **30min Max**)."
+                "A live ProteusFlow agent will reply right here in this chat (within **30min Max**)."
             )
         bot_msg = SupportMessage(
             thread_id=thread.id,
             sender_role="bot",
-            sender_name="BluEditor Bot",
+            sender_name="ProteusFlow Bot",
             body=reply,
             suggestions_json=json.dumps(
                 [
@@ -1246,7 +1246,7 @@ def escalate_to_live_agent(
     if thread.status == "bot" and thread.bot_attempts < MAX_ATTEMPTS_BEFORE_AGENT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Please try asking the BluEditor Bot first ({thread.bot_attempts}/{MAX_ATTEMPTS_BEFORE_AGENT} attempts used).",
+            detail=f"Please try asking the ProteusFlow Bot first ({thread.bot_attempts}/{MAX_ATTEMPTS_BEFORE_AGENT} attempts used).",
         )
 
     _open_ticket(db, user, thread, messages, note=payload.note)
@@ -1516,7 +1516,7 @@ def admin_send_support_message(
     agent_msg = SupportMessage(
         thread_id=thread.id,
         sender_role="agent",
-        sender_name=admin.display_name or "BluEditor Support Agent",
+        sender_name=admin.display_name or "ProteusFlow Support Agent",
         body=body,
         attachment_url=payload.attachment_url,
         attachment_name=payload.attachment_name,

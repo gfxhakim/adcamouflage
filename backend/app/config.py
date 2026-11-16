@@ -1,4 +1,4 @@
-"""Runtime configuration for the AdCamouflage backend.
+"""Runtime configuration for the ProteusFlow backend.
 
 Every value can be overridden through environment variables (or a local
 ``.env`` file) so the same image runs unchanged in dev, staging and prod.
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     )
 
     # --- service identity -------------------------------------------------
-    app_name: str = "AdCamouflage"
+    app_name: str = "ProteusFlow"
     environment: str = "development"
     debug: bool = False
 
@@ -178,7 +178,7 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: SecretStr | None = None
     resend_api_key: SecretStr | None = None
-    email_from: str = "BluCloacking <billing@blucloack.online>"
+    email_from: str = "ProteusFlow <billing@blucloack.online>"
     # Where customer replies go; empty = back to the From address.
     email_reply_to: str = ""
 

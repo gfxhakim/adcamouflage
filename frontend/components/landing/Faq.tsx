@@ -11,13 +11,13 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "How is BluEditor different from a traditional timeline editor like CapCut or Premiere?",
-    a: "Traditional editors require manual cutting, color grading, and exporting one file at a time. BluEditor is an automated creative variation studio: upload your finished video or image once, and our cloud pipeline renders up to 10 studio-polished variations—complete with color grading, framing adjustments, audio mastering, and brand overlays—in under a minute.",
+    q: "How is ProteusFlow different from a traditional timeline editor like CapCut or Premiere?",
+    a: "Traditional editors require manual cutting, color grading, and exporting one file at a time. ProteusFlow is an automated creative variation studio: upload your finished video or image once, and our cloud pipeline renders up to 10 studio-polished variations—complete with color grading, framing adjustments, audio mastering, and brand overlays—in under a minute.",
     tag: "Studio",
   },
   {
     q: "Will generating variations reduce my video or audio quality?",
-    a: "No. BluEditor's 23 studio variation layers are engineered to preserve 1:1 visual sharpness, natural colors, and crystal-clear voiceovers across every export.",
+    a: "No. ProteusFlow's 23 studio variation layers are engineered to preserve 1:1 visual sharpness, natural colors, and crystal-clear voiceovers across every export.",
     tag: "Quality",
   },
   {
@@ -26,13 +26,13 @@ const FAQS = [
     tag: "Privacy",
   },
   {
-    q: "What does BluEditor change across each variation?",
-    a: "Depending on your selected profile (Light, Balanced, Studio Pro, Dynamic, or Max Studio), BluEditor applies a unique combination of 3D LUT color grading, subtle lens and framing adjustments, frame-rate cadence tuning, broadcast audio EQ/phase mastering, brand logo overlays, custom cover frames, and clean export packaging.",
+    q: "What does ProteusFlow change across each variation?",
+    a: "Depending on your selected profile (Light, Balanced, Studio Pro, Dynamic, or Max Studio), ProteusFlow applies a unique combination of 3D LUT color grading, subtle lens and framing adjustments, frame-rate cadence tuning, broadcast audio EQ/phase mastering, brand logo overlays, custom cover frames, and clean export packaging.",
     tag: "Features",
   },
   {
-    q: "Which ad formats and social platforms does BluEditor support?",
-    a: "BluEditor includes built-in export profiles for Meta (Facebook & Instagram Reels/Feed), TikTok, and YouTube Shorts—supporting both vertical/horizontal videos (MP4, MOV, WEBM, MKV) and static images (PNG, JPG, WEBP).",
+    q: "Which ad formats and social platforms does ProteusFlow support?",
+    a: "ProteusFlow includes built-in export profiles for Meta (Facebook & Instagram Reels/Feed), TikTok, and YouTube Shorts—supporting both vertical/horizontal videos (MP4, MOV, WEBM, MKV) and static images (PNG, JPG, WEBP).",
     tag: "Platforms",
   },
   {
@@ -67,7 +67,7 @@ export function Faq() {
             <CmsLink
               k="faq.card.cta"
               href="/login"
-              label="Open BluEditor Studio"
+              label="Open ProteusFlow Studio"
               className="group mt-5 inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white"
             >
               {(label) => (

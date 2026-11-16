@@ -515,7 +515,7 @@ def notify_test(admin: User = Depends(require_admin)) -> NotifyTest:
             detail="Phone alerts are not set up. Add the Telegram or ntfy variables on the api service.",
         )
     results = deliver(
-        "🔔 Test alert from BluCloacking",
+        "🔔 Test alert from ProteusFlow",
         [f"Sent by {admin.email}.", "Plan clicks, checkouts, payments and support tickets will arrive here."],
     )
     return NotifyTest(results=results)

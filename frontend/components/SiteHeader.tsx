@@ -42,7 +42,7 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
           // The landing page shows no logo; this keeps the nav in the centre column.
           <div aria-hidden />
         ) : (
-          <Link href="/" className="flex min-w-0 items-center gap-3 justify-self-start" aria-label="BluEditor home">
+          <Link href="/" className="flex min-w-0 items-center gap-3 justify-self-start" aria-label="ProteusFlow home">
             <BrandLogo
               caption="Creative variation & batch studio"
               captionClassName={cn(

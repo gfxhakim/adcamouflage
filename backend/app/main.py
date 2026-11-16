@@ -1,4 +1,4 @@
-"""AdCamouflage HTTP API."""
+"""ProteusFlow HTTP API."""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AdCamouflage API",
+    title="ProteusFlow API",
     version=__version__,
     description=(
         "Asset camouflage pipeline: micro-crop and resample geometry, inject temporal noise, "
@@ -641,7 +641,7 @@ async def download_archive(
 
     return FileResponse(
         destination,
-        filename=f"adcamouflage_{batch_id}.zip",
+        filename=f"proteusflow_{batch_id}.zip",
         media_type="application/zip",
         background=background,
     )
@@ -677,4 +677,4 @@ async def delete_batch(batch_id: str, user: User = Depends(current_user)) -> dic
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict[str, str]:
-    return {"service": "AdCamouflage API", "version": __version__, "docs": "/api/docs"}
+    return {"service": "ProteusFlow API", "version": __version__, "docs": "/api/docs"}
