@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 interface PricingSectionProps {
   plans: TokenPlanCard[];
-  /** Still passed by the page; the cards show each plan's own top-up rate. */
+  /** Still passed by the page; the cards no longer show top-up rates. */
   topups?: TopupTable;
   currency: string;
   /** Where the plan buttons go: sign-up for visitors, the workspace once signed in. */
@@ -167,16 +167,10 @@ export function PricingSection({ plans: listed, currency, ctaHref, promo }: Pric
                 {number(plan.tokens)} <T k="pricing.tokensWord">tokens</T> · {number(plan.generations)} <T k="pricing.generationsWord">generations</T>
               </p>
 
-              <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs">
+              <dl className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs">
                 <div>
                   <T k="pricing.rollover" as="dt" className="text-white/45">Rollover</T>
                   <dd className="font-semibold text-white">{rolloverText(plan)}</dd>
-                </div>
-                <div>
-                  <T k="pricing.topups" as="dt" className="text-white/45">Top-ups</T>
-                  <dd className="font-semibold text-white">
-                    {plan.topup_rate} tokens per {price(1, currency)}
-                  </dd>
                 </div>
               </dl>
 

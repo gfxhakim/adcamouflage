@@ -126,10 +126,6 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                   <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                   {rolloverLine(plan)}
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                  Top-ups at {plan.topup_rate} tokens per {formatMoney(1, currency)}
-                </li>
                 {/* Features this plan does not include go last. */}
                 {PLAN_FEATURE_IDS.filter((feature) => !planIncludes(plan, feature)).map((feature) => (
                   <li key={feature} className="flex items-center gap-1.5 text-ink-faint">
