@@ -315,7 +315,7 @@ export default function EmailsCard() {
               <div className="flex items-center gap-3">
                 <div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl" style={{ background: style.header_color }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={style.logo_url || "/brand/blucloacking-mark-email.png"} alt="" className="max-h-16 max-w-16" />
+                  <img src={style.logo_url || "/brand/proteusflow-mark-email.png"} alt="" className="max-h-16 max-w-16" />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <input
@@ -334,7 +334,7 @@ export default function EmailsCard() {
                     Upload logo
                   </button>
                   <button type="button" className="btn-ghost !text-xs" onClick={() => patchStyle({ logo_url: "" })}>
-                    Use the ProteusFlow shield
+                    Use the ProteusFlow logo
                   </button>
                 </div>
               </div>
@@ -343,7 +343,7 @@ export default function EmailsCard() {
                 <input
                   className="field mt-1"
                   maxLength={1000}
-                  placeholder="Empty = the ProteusFlow shield with white glow"
+                  placeholder="Empty = the ProteusFlow logo on a white tile"
                   value={style.logo_url}
                   onChange={(e) => patchStyle({ logo_url: e.target.value })}
                 />

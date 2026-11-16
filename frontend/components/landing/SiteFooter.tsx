@@ -104,7 +104,7 @@ export function SiteFooter() {
               <BrandLogo onDark />
             </Link>
             <T k="footer.tagline" long as="p" className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
-              Creative Variation & Batch Video Studio for Modern Marketing Teams.
+              Seamless adaptation. Peak efficiency.
             </T>
             <CmsLink
               k="footer.cta"

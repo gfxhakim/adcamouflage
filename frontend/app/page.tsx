@@ -7,6 +7,7 @@ import BeforeAfter from "@/components/landing/BeforeAfter";
 import ClosingCta from "@/components/landing/ClosingCta";
 import CursorRing from "@/components/landing/CursorRing";
 import Faq from "@/components/landing/Faq";
+import OurStory from "@/components/landing/OurStory";
 import Hero from "@/components/landing/Hero";
 import ReviewsSection from "@/components/landing/ReviewsSection";
 import SiteFooter from "@/components/landing/SiteFooter";
@@ -203,6 +204,8 @@ export default async function LandingPage() {
             { id: "get-started", label: "Closing call to action", node: <ClosingCta startHref={startHref} /> },
           ]}
         />
+        {/* Outside the ordered list, so it shows even when a section order was already saved in Admin. */}
+        <OurStory />
       </main>
       <SiteFooter />
     </ContentProvider>

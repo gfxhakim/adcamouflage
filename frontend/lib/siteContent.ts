@@ -6,6 +6,8 @@
  * exactly as shipped, and "reset" in the editor just deletes the override.
  */
 
+import { cleanSiteContent } from "@/lib/legacyWording";
+
 export type Namespace = "landing" | "workspace";
 
 export interface TextStyle {
@@ -307,7 +309,7 @@ export async function loadPublishedContent(namespace: Namespace): Promise<SiteCo
     });
     if (!response.ok) return {};
     const data = (await response.json()) as { content?: unknown };
-    return data.content && typeof data.content === "object" ? (data.content as SiteContent) : {};
+    return data.content && typeof data.content === "object" ? cleanSiteContent(data.content as SiteContent) : {};
   } catch {
     return {};
   }

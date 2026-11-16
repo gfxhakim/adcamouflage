@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { MARK_GLOW_ON_DARK } from "@/components/BrandLogo";
 import { useCms } from "@/components/cms/ContentProvider";
 import { ICONS } from "@/components/cms/icons";
 import { signOut, type UserProfile } from "@/lib/auth";
@@ -37,8 +38,8 @@ const ITEMS: NavItem[] = [
   { href: "/app/plan", label: "My plan", icon: Crown },
 ];
 
-/** The ProteusFlow shield mark, sitting at the top of the rail. */
-const BRAND_MARK = "/brand/blucloacking-mark.png";
+/** The ProteusFlow mark, sitting at the top of the rail. */
+const BRAND_MARK = "/brand/proteusflow-mark.png";
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/app") return pathname === "/app";
@@ -67,7 +68,7 @@ export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }
   const pathname = usePathname() ?? "";
   // Admin > Workspace can rename, re-icon, reorder or hide each item.
   const cms = useCms();
-  const brandMark = cms.media("brand.mark", { src: BRAND_MARK, kind: "image", alt: "" }, "Logo shield").src || BRAND_MARK;
+  const brandMark = cms.media("brand.mark", { src: BRAND_MARK, kind: "image", alt: "" }, "Logo mark").src || BRAND_MARK;
   const items = cms.list("rail.nav", ITEMS, "Navigation items", ITEMS.map((i) => i.label)).map(({ item, key }) => {
     const icon = cms.iconName(`${key}.icon`, "");
     return { ...item, icon: (icon && ICONS[icon]) || item.icon };
@@ -140,7 +141,7 @@ export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }
             alt="ProteusFlow"
             width={28}
             height={28}
-            className="h-7 w-7 drop-shadow-[0_0_10px_rgba(51,133,255,0.5)]"
+            className={clsx("h-7 w-7 object-contain", onDark ? MARK_GLOW_ON_DARK : "drop-shadow-[0_0_10px_rgba(51,133,255,0.5)]")}
           />
           <span
             className={clsx(
@@ -275,7 +276,7 @@ export function DeckRail({ onDark = true, user, onOpenHelp, helpUnread = false }
             alt="ProteusFlow"
             width={24}
             height={24}
-            className="h-6 w-6 drop-shadow-[0_0_8px_rgba(51,133,255,0.5)]"
+            className={clsx("h-6 w-6 object-contain", onDark ? MARK_GLOW_ON_DARK : "drop-shadow-[0_0_8px_rgba(51,133,255,0.5)]")}
           />
         </Link>
         <span className={clsx("mx-0.5 h-7 w-px self-center", onDark ? "bg-white/10" : "bg-black/10")} aria-hidden />

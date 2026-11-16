@@ -256,8 +256,8 @@ colours.
 
 Under **Custom logo** pick **Volet.com logo + Merchant logo** (customers see
 both who they are paying and who processes it) and upload
-`frontend/public/brand/blucloacking-mark.png` (256 x 256, transparent) or,
-if Volet wants a wide image, `blucloacking-wordmark.png` (720 x 120). The
+`frontend/public/brand/proteusflow-mark.png` (340 x 400, transparent) or,
+if Volet wants a wide image, `proteusflow-wordmark.png` (720 x 92). The
 accepted file types and sizes: **check in your Volet account**. Save, then
 open a test checkout (section 5) in both the light and the dark setting of
 your browser to see the result.

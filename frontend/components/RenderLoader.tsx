@@ -9,14 +9,14 @@ interface RenderLoaderProps {
   className?: string;
 }
 
-const MARK = "/brand/blucloacking-mark.png";
+const MARK = "/brand/proteusflow-mark.png";
 
 /**
  * A compact, presentational loading indicator built from the ProteusFlow
- * shield, recoloured in the app's Meta-blue. It is pure decoration shown while
+ * mark, recoloured in the app's Meta-blue. It is pure decoration shown while
  * a render runs — it does not drive or reflect any real job state on its own.
  *
- * The shield silhouette is painted twice through a CSS mask of the logo: a
+ * The logo silhouette is painted twice through a CSS mask of the logo: a
  * steady blue base that breathes, and a brighter band that sweeps across it,
  * so the mark reads as actively "working". Honours reduced-motion (the global
  * rule freezes the sweep; the base simply holds its colour).
@@ -31,17 +31,17 @@ export function RenderLoader({ size = 30, label, className }: RenderLoaderProps)
       aria-live="polite"
     >
       <span className="relative shrink-0" style={box} aria-hidden>
-        {/* Soft blue halo that pulses behind the shield. */}
+        {/* Soft blue halo that pulses behind the logo. */}
         <span
           className="absolute -inset-1 animate-render-pulse rounded-full"
           style={{ background: "radial-gradient(circle, rgb(8 102 255 / 0.45), transparent 70%)" }}
         />
-        {/* Steady blue shield. */}
+        {/* Steady blue logo. */}
         <span
           className="absolute inset-0 animate-render-pulse"
           style={{ WebkitMask: mask, mask, background: "var(--meta-500)" }}
         />
-        {/* Brighter band sweeping across the shield. */}
+        {/* Brighter band sweeping across the logo. */}
         <span
           className="absolute inset-0 animate-render-scan"
           style={{

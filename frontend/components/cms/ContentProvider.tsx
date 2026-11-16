@@ -33,6 +33,7 @@ import {
   type SiteContent,
   type TextStyle,
 } from "@/lib/siteContent";
+import { cleanSiteContent } from "@/lib/legacyWording";
 
 export interface ListItem<T> {
   id: string;
@@ -119,51 +120,13 @@ function pageGroup(path: string): string {
   return PAGE_NAMES[path] ?? `Texts on ${path}`;
 }
 
-/**
- * Old brand names and wording that may still sit in text saved from Admin
- * before the ProteusFlow rebrand. Saved text overrides the code defaults, so we
- * clean it here on every render.
- */
-// Not inside an address or link (support@blucloack.online, /brand/blucloacking-mark.png).
-const NOT_IN_LINK = String.raw`(?<![@/.\w-])`;
-const NOT_DOMAIN = String.raw`(?![\w.-]*\.(?:online|com|png|jpg|svg)\b)(?!\w)`;
-const oldName = (name: string) => new RegExp(NOT_IN_LINK + name + NOT_DOMAIN, "gi");
-
-const LEGACY_WORDING: [RegExp, string][] = [
-  [oldName(String.raw`Blu[\s-]?Clo(?:a)?c?k(?:ing)?`), "ProteusFlow"],
-  [oldName(String.raw`Blu[\s-]?Editor`), "ProteusFlow"],
-  [oldName(String.raw`Blu[\s-]?Camouflage`), "ProteusFlow"],
-  [oldName(String.raw`Ad[\s-]?Camouflage`), "ProteusFlow"],
-  [/\bcamouflaged\b/gi, "refreshed"],
-  [/\bcamouflage\b/gi, "variation"],
-  [/\bcloaked\b/gi, "refreshed"],
-  [/\bcloaking\b/gi, "variation"],
-  [/\bbypass(?:ing|es|ed)?\b/gi, "refresh"],
-  [/\bundetectable\b/gi, "seamless"],
-];
-
-export function cleanLegacyWording(value: string): string {
-  let out = value;
-  for (const [pattern, replacement] of LEGACY_WORDING) out = out.replace(pattern, replacement);
-  return out;
-}
-
-function cleanContent(content: SiteContent): SiteContent {
-  if (!content.text) return content;
-  const text: Record<string, string> = {};
-  for (const [key, value] of Object.entries(content.text)) {
-    text[key] = typeof value === "string" ? cleanLegacyWording(value) : value;
-  }
-  return { ...content, text } as SiteContent;
-}
-
 function buildApi(
   namespace: Namespace,
   rawContent: SiteContent,
   preview: boolean,
   register: (field: FieldInfo) => void,
 ): CmsApi {
-  const content = cleanContent(rawContent);
+  const content = cleanSiteContent(rawContent);
   const hide = content.hide ?? {};
   return {
     namespace,
