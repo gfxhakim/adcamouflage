@@ -37,7 +37,9 @@ import {
   FONT_CHOICES,
   PREVIEW_PARAM,
   contentAdmin,
+  currentReviews,
   isVideoUrl,
+  newReviewId,
   type ContentRecord,
   type FieldInfo,
   type LinkValue,
@@ -983,12 +985,12 @@ function ReviewsPanel({
     onChange(next);
   };
   const add = () => {
-    const id = Math.random().toString(36).slice(2, 10);
+    const id = newReviewId();
     onChange([...reviews, { id, name: "", handle: "", body: "" }]);
     setOpenId(id);
   };
   const loadPresets = () => {
-    if (reviews.length > 0 && !window.confirm("Replace current reviews list with the 10 default ProteusFlow reviews?")) return;
+    if (reviews.length > 0 && !window.confirm("Replace current reviews list with the 20 default reviews?")) return;
     onChange(DEFAULT_REVIEWS.map((r) => ({ ...r })));
   };
   // Pictures already used on other reviews, to pick again with one click.
@@ -1009,7 +1011,7 @@ function ReviewsPanel({
         className="btn-ghost w-full justify-center !border-meta-500/40 !bg-meta-500/10 !py-2 text-xs !text-meta-200 hover:!bg-meta-500/20"
         onClick={loadPresets}
       >
-        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Load 10 default ProteusFlow reviews
+        <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Load 20 default reviews
       </button>
 
       {reviews.map((review, i) => {
@@ -1459,7 +1461,7 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
               </div>
             ) : panel === "reviews" ? (
               <ReviewsPanel
-                reviews={draft.reviews ?? []}
+                reviews={currentReviews(draft.reviews)}
                 tickerHidden={!!draft.hide?.["reviews.ticker"]}
                 onChange={(reviews) => update((d) => { d.reviews = reviews.length ? reviews : undefined; })}
                 onTickerHidden={(hidden) =>

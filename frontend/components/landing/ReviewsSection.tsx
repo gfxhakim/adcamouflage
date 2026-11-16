@@ -6,7 +6,7 @@ import { CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { Reveal } from "@/components/landing/primitives";
 import TestimonialMarquee from "@/components/ui/marquee-01";
-import { DEFAULT_REVIEWS } from "@/lib/siteContent";
+import { currentReviews } from "@/lib/siteContent";
 
 interface LiveActivity {
   active_now: number;
@@ -62,7 +62,7 @@ export function ReviewsSection() {
   const cms = useCms();
   const live = useLiveActivity();
 
-  const sourceReviews = cms.content.reviews?.length ? cms.content.reviews : DEFAULT_REVIEWS;
+  const sourceReviews = currentReviews(cms.content.reviews);
   const reviews = sourceReviews.filter((r) => !r.hidden && r.name?.trim() && r.body?.trim());
   const subscribedText = cms.text("reviews.ticker.subscribed", "New {plan} subscriber · {ago}", "text", "Ticker: new subscriber ({plan}, {ago})");
   const activeText = cms.text("reviews.ticker.active", "{n} people batching right now", "text", "Ticker: people batching ({n})");

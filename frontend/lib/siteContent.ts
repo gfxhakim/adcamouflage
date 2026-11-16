@@ -103,66 +103,144 @@ export interface ReviewItem {
   hidden?: boolean;
 }
 
+/**
+ * Bump when the default reviews are replaced. Reviews saved in Admin before
+ * this version (ids without the prefix) are ignored so the new set shows.
+ */
+export const REVIEWS_VERSION = "v2";
+const REVIEW_ID_PREFIX = `${REVIEWS_VERSION}-`;
+
+/** A fresh id for a review added in Admin, tied to the current version. */
+export function newReviewId(): string {
+  return `${REVIEW_ID_PREFIX}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Saved reviews if they belong to the current set, otherwise the defaults. */
+export function currentReviews(saved: ReviewItem[] | undefined): ReviewItem[] {
+  if (saved?.length && saved.some((r) => typeof r.id === "string" && r.id.startsWith(REVIEW_ID_PREFIX))) return saved;
+  return DEFAULT_REVIEWS;
+}
+
 export const DEFAULT_REVIEWS: ReviewItem[] = [
   {
-    id: "rev-1",
-    name: "Samir K.",
-    handle: "Cosmetic Brand Owner",
-    body: "We used to spend two days re-cutting product videos for new campaigns. With ProteusFlow we generate 10 studio-grade variations in under a minute.",
+    id: "v2-1",
+    name: "Karim B.",
+    handle: "Media Buyer · Meta & TikTok",
+    body: "I used to wait two days on the editor for new versions. Now I upload the winner, pick 10 variations, and launch fresh ad sets the same afternoon.",
   },
   {
-    id: "rev-2",
-    name: "Marcus Vance",
-    handle: "Senior Meta Media Buyer",
-    body: "Managing $15k/day in ad spend means we need constant creative volume. ProteusFlow delivers clean, independent exports for every campaign.",
+    id: "v2-2",
+    name: "Laura M.",
+    handle: "Skincare Brand Owner",
+    body: "I'm not technical at all. Upload, choose Meta, press render. My product videos come out looking exactly like the original, just in more versions.",
   },
   {
-    id: "rev-3",
-    name: "Mohamed A.",
-    handle: "E-Commerce Brand Founder",
-    body: "Instead of spending hours in CapCut exporting variations one by one, I drop our master creative into ProteusFlow and get a full batch in seconds.",
+    id: "v2-3",
+    name: "Daniel R.",
+    handle: "Creative Strategist · DTC Agency",
+    body: "We test hooks and angles weekly. ProteusFlow gives us clean variations of each concept, so my team spends time on ideas instead of exports.",
   },
   {
-    id: "rev-4",
-    name: "Elena Rostova",
-    handle: "Creative Strategist · DTC",
-    body: "Zero visual quality loss and the voiceover stays crystal clear. The 3D LUT color grading and audio mastering layers save our team hours every week.",
+    id: "v2-4",
+    name: "Aditya S.",
+    handle: "Freelance Video Editor",
+    body: "Clients always want 'five more versions'. I deliver the main cut, run it through ProteusFlow, and send a ZIP of variations in minutes. Huge time saver.",
   },
   {
-    id: "rev-5",
-    name: "Sami B.",
-    handle: "Direct Response Media Buyer",
-    body: "The built-in logo watermark and first-second cover frame tools alone replaced three steps in our daily creative production workflow.",
+    id: "v2-5",
+    name: "Lucas F.",
+    handle: "Senior Media Buyer",
+    body: "Creative fatigue was killing my scaling. Having 10 fresh versions of the same winning ad ready on day one changed how I plan my campaigns.",
   },
   {
-    id: "rev-6",
-    name: "Imad T.",
-    handle: "Performance Agency Owner",
-    body: "Been using ProteusFlow for 2 months straight. We produce 10 fresh variations per winning concept and our creative testing velocity has tripled.",
+    id: "v2-6",
+    name: "Reem A.",
+    handle: "Supplements E-Com Founder",
+    body: "I run my store and ads alone. The logo watermark and cover frame tools mean every video goes out branded without opening another app.",
   },
   {
-    id: "rev-7",
-    name: "Devon Brooks",
-    handle: "TikTok & Reels Ad Buyer",
-    body: "Keeping short-form creatives fresh across Reels, TikTok, and Shorts is effortless now. One upload gives us a full ZIP of ready-to-launch files.",
+    id: "v2-7",
+    name: "Sofia G.",
+    handle: "Creative Strategist",
+    body: "What sold me is the quality. Captions stay sharp, colors stay true, the voiceover sounds natural. I can't tell the variations apart from the master.",
   },
   {
-    id: "rev-8",
-    name: "Yassine M.",
-    handle: "E-Commerce Growth Lead",
-    body: "Best tool in my creative stack. Fast cloud rendering, clean metadata packaging, and consistent broadcast quality across every video export.",
+    id: "v2-8",
+    name: "Miguel T.",
+    handle: "Video Editor · UGC Studio",
+    body: "I edit 30+ UGC videos a week. Batch rendering 20 files at once and downloading one ZIP saves me hours of exporting one by one in Premiere.",
   },
   {
-    id: "rev-9",
-    name: "Chloe Lindqvist",
-    handle: "Head of Paid Social",
-    body: "Our media buyers can spin up localized batches with custom brand overlays and cover frames without waiting on the video editing queue.",
+    id: "v2-9",
+    name: "Hamza Q.",
+    handle: "Performance Media Buyer",
+    body: "Support actually answers. I had a question about presets, the bot walked me through it, and an agent followed up in under 20 minutes.",
   },
   {
-    id: "rev-10",
-    name: "Tariq H.",
-    handle: "Digital Marketing Director",
-    body: "Studio Pro mode keeps our burned-in captions razor sharp while giving every exported variation its own clean encoding and audio polish.",
+    id: "v2-10",
+    name: "Nadia K.",
+    handle: "Cosmetics Brand Owner",
+    body: "Our launches need lots of creatives fast. One master video becomes a full set for Reels, TikTok and Shorts. My small team feels like a big studio.",
+  },
+  {
+    id: "v2-11",
+    name: "Tom W.",
+    handle: "Head of Creative · E-Com Brand",
+    body: "We built a simple routine: edit once, generate variations in ProteusFlow, hand them to the buyers. Production bottlenecks basically disappeared.",
+  },
+  {
+    id: "v2-12",
+    name: "Priya N.",
+    handle: "Freelance Motion Editor",
+    body: "I was skeptical about quality loss, so I compared frame by frame. Clean encode, no banding, audio untouched to my ears. Now it's in my workflow.",
+  },
+  {
+    id: "v2-13",
+    name: "Ahmed E.",
+    handle: "Media Buyer · E-Com",
+    body: "Platform presets are the best part. I choose TikTok or Meta and it sets things up for me. No more guessing settings before every launch.",
+  },
+  {
+    id: "v2-14",
+    name: "Carla D.",
+    handle: "Parapharmacy Store Owner",
+    body: "Simple pricing with tokens, and failed renders refund automatically. I like knowing exactly what I pay for each batch of videos.",
+  },
+  {
+    id: "v2-15",
+    name: "Jonas H.",
+    handle: "Creative Strategist · Paid Social",
+    body: "For creative testing, volume matters. ProteusFlow lets us test more versions of every idea without hiring another editor. Easy decision for us.",
+  },
+  {
+    id: "v2-16",
+    name: "Rizal P.",
+    handle: "Video Editor · Agency",
+    body: "The live preview for logo placement is great. Drag it where you want, set the size and fade, done. Every export matches the brand guidelines.",
+  },
+  {
+    id: "v2-17",
+    name: "Fatima Z.",
+    handle: "Fashion E-Com Founder",
+    body: "Before, every new campaign meant paying for new edits. Now I reuse my best videos in fresh versions and keep my ad budget for actual ads.",
+  },
+  {
+    id: "v2-18",
+    name: "Bruno C.",
+    handle: "Media Buying Team Lead",
+    body: "My buyers don't wait for the creative team anymore. They generate the versions they need, download, and launch. Team seats made it easy to share.",
+  },
+  {
+    id: "v2-19",
+    name: "Elif Y.",
+    handle: "Creative Strategist · Beauty",
+    body: "The guided tour and help bot got my whole team using it in one day. Nobody needed training, which never happens with new tools.",
+  },
+  {
+    id: "v2-20",
+    name: "Owen L.",
+    handle: "Freelance Editor & Media Buyer",
+    body: "I edit and run ads for my clients. ProteusFlow sits right between those two jobs: finish the cut, generate versions, launch. It just fits.",
   },
 ];
 
