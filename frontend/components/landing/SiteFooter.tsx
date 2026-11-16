@@ -12,13 +12,14 @@ import { EASE } from "@/components/landing/primitives";
 
 const NAME = "BluEditor";
 
-const COLUMNS = [
+const COLUMNS: { title: string; links: ({ label: string; href: string } | null)[] }[] = [
   {
     title: "Main pages",
     links: [
       { label: "Home", href: "#home" },
-      { label: "Features", href: "#features" },
-      { label: "How it works", href: "#how-it-works" },
+      // Removed sections keep their slot (null) so saved link lists still line up.
+      null, // was "Features"
+      null, // was "How it works"
       { label: "Pricing", href: "#pricing" },
     ],
   },
@@ -140,9 +141,9 @@ export function SiteFooter() {
   );
 }
 
-function FooterColumn({ k, title, links }: { k: string; title: string; links: { label: string; href: string }[] }) {
+function FooterColumn({ k, title, links }: { k: string; title: string; links: ({ label: string; href: string } | null)[] }) {
   const cms = useCms();
-  const items = cms.list(`${k}.links`, links, `${title} links`, links.map((l) => l.label));
+  const items = cms.list(`${k}.links`, links, `${title} links`, links.map((l) => l?.label ?? ""));
   return (
     <div>
       <T k={`${k}.title`} as="p" className="text-sm font-semibold text-white">

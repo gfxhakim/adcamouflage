@@ -641,7 +641,10 @@ function ListEditor({
   onToggle: (id: string) => void;
 }) {
   const count = field.count ?? 0;
-  const list = entries ?? Array.from({ length: count }, (_, i) => ({ id: String(i), from: i }));
+  const retired = new Set(field.retired ?? []);
+  const list = (entries ?? Array.from({ length: count }, (_, i) => ({ id: String(i), from: i }))).filter(
+    (entry) => !retired.has(entry.from),
+  );
   const name = (entry: ListEntry) => {
     const base = field.items?.[entry.from] ?? `Item ${entry.from + 1}`;
     return /^\d+$/.test(entry.id) ? base : `${base} (copy)`;

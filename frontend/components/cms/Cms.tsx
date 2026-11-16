@@ -344,9 +344,9 @@ export function CmsSection({
 }
 
 /** Renders blocks in the order (and with the visibility) the admin chose. */
-export function CmsOrder({ k, label, items }: { k: string; label?: string; items: { id: string; label?: string; node: ReactNode }[] }) {
+export function CmsOrder({ k, label, items }: { k: string; label?: string; items: ({ id: string; label?: string; node: ReactNode } | null)[] }) {
   const cms = useCms();
-  const ordered = cms.list(k, items, label, items.map((item) => item.label ?? item.id), true);
+  const ordered = cms.list(k, items, label, items.map((item) => item?.label ?? item?.id ?? ""), true);
   return (
     <>
       {ordered.map(({ item, id }) => (

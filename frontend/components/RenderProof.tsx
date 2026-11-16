@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import NeonCard from "@/components/NeonCard";
+import { cn } from "@/lib/utils";
 
 /** How long each simulated render stays on screen. */
 const CYCLE_MS = 3200;
@@ -98,7 +99,7 @@ function ShutterValue({ text, delay }: { text: string; delay: number }) {
  * keep re-rolling, one simulated render after another, and each new value
  * flies in with the intro's shutter.
  */
-export function RenderProof() {
+export function RenderProof({ dark = false }: { dark?: boolean } = {}) {
   const reduceMotion = useReducedMotion();
   const [render, setRender] = useState(1);
   const [values, setValues] = useState(FIRST);
@@ -113,10 +114,18 @@ export function RenderProof() {
   }, [reduceMotion]);
 
   return (
-    <NeonCard glow padding="lg" radius="xl" className="w-full lg:max-w-md lg:justify-self-end">
+    <NeonCard
+      glow
+      padding="lg"
+      radius="xl"
+      className="w-full lg:max-w-md lg:justify-self-end"
+      // `dark`: a black card with light text (the surface reads --surface).
+      style={dark ? ({ "--surface": "0 0 0" } as CSSProperties) : undefined}
+      innerClassName={dark ? "text-white [outline-color:rgb(255_255_255/0.08)]" : undefined}
+    >
       <div className="flex items-center justify-between gap-3">
-        <p className="label">What changes on every render</p>
-        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums text-meta-600">
+        <p className={cn("label", dark && "!text-white/60")}>What changes on every render</p>
+        <span className={cn("inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums", dark ? "text-meta-400" : "text-meta-600")}>
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-500" aria-hidden />
           copy #{String(render).padStart(3, "0")}
         </span>
@@ -125,13 +134,13 @@ export function RenderProof() {
       <dl className="mt-4 space-y-3.5">
         {ROWS.map(({ label, before }, i) => (
           <div key={label}>
-            <dt className="text-xs font-medium text-ink-subtle">{label}</dt>
+            <dt className={cn("text-xs font-medium", dark ? "text-white/60" : "text-ink-subtle")}>{label}</dt>
             <dd className="mt-1 flex items-center gap-2 font-mono text-[13px]">
-              <span className="truncate text-ink-faint line-through decoration-red-400/70">
+              <span className={cn("truncate line-through decoration-red-400/70", dark ? "text-white/45" : "text-ink-faint")}>
                 {before}
               </span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-              <span className="relative min-w-0 overflow-hidden font-semibold text-meta-700">
+              <span className={cn("relative min-w-0 overflow-hidden font-semibold", dark ? "text-meta-300" : "text-meta-700")}>
                 <span className="sr-only">{values[i]}</span>
                 <AnimatePresence mode="wait" initial={false}>
                   <ShutterValue key={`${render}-${i}`} text={values[i]} delay={i * 0.08} />
@@ -142,7 +151,7 @@ export function RenderProof() {
         ))}
       </dl>
 
-      <p className="mt-5 border-t border-black/10 pt-4 text-[11px] leading-relaxed text-ink-faint">
+      <p className={cn("mt-5 border-t pt-4 text-[11px] leading-relaxed", dark ? "border-white/10 text-white/50" : "border-black/10 text-ink-faint")}>
         A live preview: every variation you render gets its own studio parameters. Each job ships with a full report
         of export checksums, studio layers applied, and clean metadata status.
       </p>
