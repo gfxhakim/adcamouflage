@@ -34,6 +34,8 @@ from .broadcast import router as group_email_router
 from .meta_capi import router as meta_router
 from .notify import router as notify_router
 from .telegram_approve import router as telegram_approve_router
+from .guides import admin_router as guides_admin_router
+from .guides import public_router as guides_router
 from .site_content import admin_router as site_content_admin_router
 from .site_content import public_router as site_content_router
 from .ffmpeg import ffmpeg_available, ffmpeg_version
@@ -121,6 +123,8 @@ app.include_router(billing_router)
 app.include_router(team_router)
 app.include_router(site_content_router)
 app.include_router(site_content_admin_router)
+app.include_router(guides_router)
+app.include_router(guides_admin_router)
 app.include_router(live_activity_router)
 app.include_router(meta_router)
 app.include_router(notify_router)

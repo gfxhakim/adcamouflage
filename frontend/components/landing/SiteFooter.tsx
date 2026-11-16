@@ -125,6 +125,7 @@ export function SiteFooter() {
             </p>
             {/* Fixed links: Meta and Google expect these on every page that runs ads. */}
             <nav aria-label="Legal" className="flex gap-4">
+              <Link href="/guides" className="hover:text-white">Guides</Link>
               <Link href="/privacy" className="hover:text-white">Privacy</Link>
               <Link href="/terms" className="hover:text-white">Terms</Link>
               <button type="button" onClick={openCookieSettings} className="hover:text-white">

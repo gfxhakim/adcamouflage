@@ -5,6 +5,7 @@ import {
   AppWindow,
   ArrowLeft,
   BarChart3,
+  BookOpen,
   Bell,
   CircleDollarSign,
   Headset,
@@ -20,6 +21,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
+import GuidesTab from "@/components/admin/GuidesTab";
 import ContentEditor from "@/components/admin/ContentEditor";
 import OverviewTab from "@/components/admin/OverviewTab";
 import SalesTab from "@/components/admin/SalesTab";
@@ -45,6 +47,7 @@ const TABS = [
   { id: "settings", label: "Settings", icon: Settings2 },
   { id: "landing", label: "Landing page", icon: PanelsTopLeft },
   { id: "workspace", label: "Workspace", icon: AppWindow },
+  { id: "guides", label: "Guides (SEO)", icon: BookOpen },
 ] as const;
 
 const WORKSPACE_PAGES = [
@@ -407,6 +410,8 @@ export default function AdminPage() {
             <ContentEditor key="landing" namespace="landing" pages={[{ path: "/", label: "Landing page" }]} />
           ) : tab === "workspace" ? (
             <ContentEditor key="workspace" namespace="workspace" pages={WORKSPACE_PAGES} />
+          ) : tab === "guides" ? (
+            <GuidesTab />
           ) : (
             <SettingsTab plans={plans} onPlansChanged={refreshAll} />
           )}

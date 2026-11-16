@@ -74,7 +74,9 @@ export function Headline({
                         ) : null}
                         <motion.span
                           className={cn("relative inline-block", marked && "text-white")}
-                          initial={{ y: "0.5em", opacity: 0 }}
+                          // The page's h1 is painted at once (only slides) so it doesn't hold back
+                          // Largest Contentful Paint; other headlines still fade in on scroll.
+                          initial={{ y: "0.5em", opacity: Tag === "h1" ? 1 : 0 }}
                           animate={show ? { y: 0, opacity: 1 } : {}}
                           transition={{ duration: 0.7, delay: i * 0.06, ease: EASE }}
                         >

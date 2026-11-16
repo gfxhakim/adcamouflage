@@ -1,34 +1,32 @@
 /**
- * The site's public address, used for canonical links, the sitemap, robots.txt
- * and social previews. Set SITE_URL on the Railway `web` service (for example
- * https://blucloack.online). When set, visits to www.<host> are sent to it with
- * a permanent redirect so Google sees one site, not two.
+ * Fallback public address. The real one comes from SITE_URL on the Railway
+ * `web` service (or the request's host); see siteUrl() in lib/seo.ts. When
+ * SITE_URL is set, visits to www.<host> are sent to it with a permanent
+ * redirect so Google sees one site, not two.
  */
 export const DEFAULT_SITE_URL = "https://blucloack.online";
-
-export function siteUrl(): string {
-  return (process.env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "");
-}
 
 export const SITE_NAME = "ProteusFlow";
 export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
-// Honest, keyword-focused description used for search results and link previews.
-export const SITE_TITLE = `ProteusFlow — ${SITE_SLOGAN} Creative Variation Studio for Meta, TikTok & YouTube`;
+// Search results and link previews. Honest and specific: say what the product
+// does, in the words people search with. Google shows about 60 characters of a
+// title and 155 of a description.
+export const SITE_TITLE = "ProteusFlow: Ad Creative Variations & Batch Video Studio";
 export const SITE_DESCRIPTION =
-  `${SITE_SLOGAN} ` +
-  "Upload a finished video or image ad and get platform-ready versions in minutes: reframe for Reels, TikTok and YouTube Shorts, add brand overlays, pick a cover frame and export in high quality. Plans from $37.50 a month.";
+  "Turn one winning video or image ad into up to 10 polished, branded variations in minutes. " +
+  "Color grading, logo overlays and cover frames for Meta, TikTok and YouTube ads.";
 
 export const SITE_KEYWORDS = [
-  "video ad editor",
-  "ad creative tool",
   "ad creative variations",
-  "resize video for Instagram Reels",
-  "TikTok video resizer",
-  "YouTube Shorts converter",
-  "brand logo overlay on video",
-  "video cover frame picker",
-  "batch video export",
+  "video ad variations",
+  "creative testing tool",
+  "batch video editing",
+  "video ad editor",
+  "add logo to video",
+  "video cover frame",
+  "Meta ad creatives",
+  "TikTok ad creatives",
   "media buyer tools",
 ];
 

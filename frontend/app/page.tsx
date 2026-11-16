@@ -15,13 +15,17 @@ import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
 import { loadPublishedContent } from "@/lib/siteContent";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, siteUrl } from "@/lib/site";
+import { publishedFaqs } from "@/components/landing/faqData";
+import { jsonLd, siteUrl } from "@/lib/seo";
+import type { SiteContent } from "@/lib/siteContent";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_SLOGAN, SITE_TITLE } from "@/lib/site";
 import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 
 const METADATA: Metadata = {
   title: { absolute: SITE_TITLE },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: { type: "website", siteName: SITE_NAME, locale: "en_US", url: "/", title: SITE_TITLE, description: SITE_DESCRIPTION },
 };
 
 // Admin > Landing can override the tab title, description and icon.
@@ -114,31 +118,44 @@ async function loadPricing(): Promise<PublicPricing> {
   return FALLBACK_PRICING;
 }
 
-function structuredData(pricing: PublicPricing): string {
+function structuredData(pricing: PublicPricing, content: SiteContent): string {
   const base = siteUrl();
-  const graph = [
+  const faqs = publishedFaqs(content);
+  const graph: Record<string, unknown>[] = [
     {
       "@type": "Organization",
       "@id": `${base}/#org`,
       name: SITE_NAME,
-      url: base,
-      logo: `${base}/brand/icon-512.png`,
+      url: `${base}/`,
+      slogan: SITE_SLOGAN,
+      logo: { "@type": "ImageObject", url: `${base}/brand/proteusflow-mark.png` },
     },
     {
       "@type": "WebSite",
       "@id": `${base}/#website`,
       name: SITE_NAME,
-      url: base,
+      url: `${base}/`,
+      inLanguage: "en",
       publisher: { "@id": `${base}/#org` },
     },
     {
       "@type": "SoftwareApplication",
+      "@id": `${base}/#app`,
       name: SITE_NAME,
-      url: base,
+      url: `${base}/`,
       applicationCategory: "MultimediaApplication",
-      operatingSystem: "Web",
+      applicationSubCategory: "Video ad creative tool",
+      operatingSystem: "Web browser",
       description: SITE_DESCRIPTION,
       publisher: { "@id": `${base}/#org` },
+      featureList: [
+        "Up to 10 creative variations from one video or image",
+        "Color grading and framing polish",
+        "Brand logo overlays",
+        "Cover frame picker",
+        "Cloud batch rendering",
+      ],
+      // Real prices only; no ratings or reviews markup (Google requires those to be genuine and verifiable).
       offers: pricing.plans.map((plan) => ({
         "@type": "Offer",
         name: `${plan.label} plan`,
@@ -151,8 +168,18 @@ function structuredData(pricing: PublicPricing): string {
       })),
     },
   ];
-  // Escape "<" so content can never close the script tag.
-  return JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replace(/</g, "\\u003c");
+  if (faqs.length) {
+    graph.push({
+      "@type": "FAQPage",
+      "@id": `${base}/#faq`,
+      mainEntity: faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    });
+  }
+  return jsonLd({ "@context": "https://schema.org", "@graph": graph });
 }
 
 export default async function LandingPage() {
@@ -166,7 +193,7 @@ export default async function LandingPage() {
       <script
         type="application/ld+json"
         // Structured data: lets Google show the product, its prices and the brand.
-        dangerouslySetInnerHTML={{ __html: structuredData(pricing) }}
+        dangerouslySetInnerHTML={{ __html: structuredData(pricing, content) }}
       />
       <SiteHeader floating nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />

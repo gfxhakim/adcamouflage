@@ -612,3 +612,27 @@ export const purgeUsers = (confirm: string, expectedUsers: number) =>
     method: "POST",
     body: JSON.stringify({ confirm, expected_users: expectedUsers }),
   });
+
+// --- guides (Admin > Guides) --------------------------------------------------
+
+export interface GuideEdit {
+  title: string;
+  description: string;
+  body: string;
+  category: string;
+  cover: string;
+  cover_alt: string;
+  published: boolean;
+}
+
+export interface SavedGuide extends GuideEdit {
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const listSavedGuides = () => call<{ guides: SavedGuide[] }>("/guides");
+export const saveGuide = (slug: string, guide: GuideEdit) =>
+  call<SavedGuide>(`/guides/${encodeURIComponent(slug)}`, { method: "PUT", body: JSON.stringify(guide) });
+export const deleteSavedGuide = (slug: string) =>
+  call<void>(`/guides/${encodeURIComponent(slug)}`, { method: "DELETE" });

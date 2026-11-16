@@ -1,46 +1,15 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import { CmsIcon, CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { CmsHeadline, EASE, PillArrow } from "@/components/landing/primitives";
+import { FAQS } from "@/components/landing/faqData";
 import { cn } from "@/lib/utils";
 
-const FAQS = [
-  {
-    q: "How is ProteusFlow different from a traditional timeline editor like CapCut or Premiere?",
-    a: "Traditional editors require manual cutting, color grading, and exporting one file at a time. ProteusFlow is an automated creative variation studio: upload your finished video or image once, and our cloud pipeline renders up to 10 studio-polished variations—complete with color grading, framing adjustments, audio mastering, and brand overlays—in under a minute.",
-    tag: "Studio",
-  },
-  {
-    q: "Will generating variations reduce my video or audio quality?",
-    a: "No. ProteusFlow's 23 studio variation layers are engineered to preserve 1:1 visual sharpness, natural colors, and crystal-clear voiceovers across every export.",
-    tag: "Quality",
-  },
-  {
-    q: "Are my uploaded creatives private and secure?",
-    a: "Yes. Your media is processed inside an isolated, encrypted cloud workspace used solely to render your requested variations and let you download the outputs. Files are automatically purged on a rolling schedule.",
-    tag: "Privacy",
-  },
-  {
-    q: "What does ProteusFlow change across each variation?",
-    a: "Depending on your selected profile (Light, Balanced, Studio Pro, Dynamic, or Max Studio), ProteusFlow applies a unique combination of 3D LUT color grading, subtle lens and framing adjustments, frame-rate cadence tuning, broadcast audio EQ/phase mastering, brand logo overlays, custom cover frames, and clean export packaging.",
-    tag: "Features",
-  },
-  {
-    q: "Which ad formats and social platforms does ProteusFlow support?",
-    a: "ProteusFlow includes built-in export profiles for Meta (Facebook & Instagram Reels/Feed), TikTok, and YouTube Shorts—supporting both vertical/horizontal videos (MP4, MOV, WEBM, MKV) and static images (PNG, JPG, WEBP).",
-    tag: "Platforms",
-  },
-  {
-    q: "Can I generate multiple variations from a single upload?",
-    a: "Yes. You can generate from 1 to 10 distinct variations per upload and download them all in a single ZIP archive, making it effortless to organize creative testing across multiple campaigns and ad sets.",
-    tag: "Batching",
-  },
-];
 
 export function Faq() {
   const cms = useCms();
@@ -100,6 +69,7 @@ export function Faq() {
                   )}
                   onClick={() => setOpen(on ? -1 : i)}
                   aria-expanded={on}
+                  aria-controls={`faq-answer-${id}`}
                 >
                   <span className="font-mono text-[11px] text-ink-faint">0{i + 1}</span>
                   <T k={`${key}.q`} className="min-w-0 flex-1 text-base font-semibold tracking-tight text-black sm:text-lg">{item.q}</T>
@@ -115,19 +85,18 @@ export function Faq() {
                     <CmsIcon k="faq.toggle.icon" fallback={Plus} className="h-4 w-4" aria-hidden />
                   </span>
                 </button>
-                <AnimatePresence initial={false}>
-                  {on ? (
-                    <motion.div
-                      className="overflow-hidden"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.45, ease: EASE }}
-                    >
-                      <T k={`${key}.a`} long as="p" className="max-w-2xl pb-6 pl-12 pr-4 text-sm leading-relaxed text-ink-muted sm:pl-14 sm:pr-6">{item.a}</T>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
+                {/* Always in the page (collapsed when closed) so search engines and
+                    screen-reader "find" see every answer, not only the open one. */}
+                <motion.div
+                  id={`faq-answer-${id}`}
+                  className="overflow-hidden"
+                  initial={false}
+                  animate={on ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+                  transition={{ duration: 0.45, ease: EASE }}
+                  aria-hidden={!on}
+                >
+                  <T k={`${key}.a`} long as="p" className="max-w-2xl pb-6 pl-12 pr-4 text-sm leading-relaxed text-ink-muted sm:pl-14 sm:pr-6">{item.a}</T>
+                </motion.div>
               </li>
             );
           })}
