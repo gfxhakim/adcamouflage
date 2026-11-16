@@ -208,7 +208,7 @@ export function WhyRadar() {
             className="text-4xl sm:text-5xl lg:text-6xl"
           />
           <T k="why.lede" long as="p" className="mt-6 max-w-xl text-base leading-relaxed text-ink-muted">
-            High-velocity marketing teams need more creative variations every week. BluEditor automates color grading, framing refinement, audio mastering, and clean export packaging so you can turn one master file into ten ready-to-launch assets in seconds.
+            High-velocity marketing teams need more creative variations every week. ProteusFlow automates color grading, framing refinement, audio mastering, and clean export packaging so you can turn one master file into ten ready-to-launch assets in seconds.
           </T>
           <ul className="mt-10 divide-y divide-black/10 border-y border-black/10">
             {why.map(({ item: { icon: Icon, title, body }, key, id }, i) => (

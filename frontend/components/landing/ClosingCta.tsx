@@ -66,7 +66,7 @@ export function ClosingCta({ startHref }: { startHref: string }) {
             <CmsLink
               k="cta.primary"
               href={startHref}
-              label="Start Creating in BluEditor"
+              label="Start Creating in ProteusFlow"
               className="group inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white transition hover:bg-meta-600"
             >
               {(label) => (

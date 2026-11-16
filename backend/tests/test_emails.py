@@ -64,7 +64,7 @@ def test_welcome_email_once_per_account(outbox):
     _signed_in(email)
     mine = _mine(outbox, email)
     assert len(mine) == 1
-    assert mine[0]["subject"] == "Welcome to BluCloacking"
+    assert mine[0]["subject"] == "Welcome to ProteusFlow"
     assert "https://shop.example.test/app/plan" in mine[0]["text"]
     assert 'href="https://shop.example.test/app/plan"' in mine[0]["html"]
     assert any(d.startswith("Welcome sent") for d in _activity(email, "email"))

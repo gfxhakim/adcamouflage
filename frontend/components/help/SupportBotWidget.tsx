@@ -330,7 +330,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-label="Open BluEditor Assistant & Live Support"
+          aria-label="Open ProteusFlow Assistant & Live Support"
           className={clsx(
             "group relative flex items-center gap-2.5 rounded-full border px-4 py-3 text-xs font-semibold shadow-[0_14px_38px_-10px_rgb(8_102_255/0.65)] transition-all",
             isAgentMode
@@ -343,7 +343,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
           ) : (
             <Bot className="h-4 w-4" aria-hidden />
           )}
-          <span>{isAgentMode ? "Live Support Chat" : "BluEditor AI Bot"}</span>
+          <span>{isAgentMode ? "Live Support Chat" : "ProteusFlow AI Bot"}</span>
           {unreadCount > 0 ? (
             <span className="grid h-5 min-w-[20px] place-items-center rounded-full bg-red-500 px-1.5 font-mono text-[10px] font-bold text-white">
               {unreadCount}
@@ -358,7 +358,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
       {open ? (
         <div
           role="dialog"
-          aria-label="BluEditor AI Bot and Live Agent Support"
+          aria-label="ProteusFlow AI Bot and Live Agent Support"
           className="fixed bottom-20 right-4 z-50 flex h-[min(660px,calc(100vh-6.5rem))] w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-black/10 bg-white shadow-[0_25px_70px_-15px_rgb(0_0_0/0.45)] dark:border-white/15 dark:bg-[#0b1220]"
         >
           {/* Header */}
@@ -381,7 +381,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="truncate font-display text-sm font-semibold">
-                    {isAgentMode ? "BluEditor Live Support" : "BluEditor AI Assistant"}
+                    {isAgentMode ? "ProteusFlow Live Support" : "ProteusFlow AI Assistant"}
                   </p>
                   <span className="rounded-full bg-white/15 px-2 py-0.5 font-mono text-[10px]">
                     {thread?.status === "agent_active"
@@ -451,7 +451,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
             {loading && !thread ? (
               <div className="flex h-40 items-center justify-center text-xs text-slate-400">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                Loading BluEditor Assistant…
+                Loading ProteusFlow Assistant…
               </div>
             ) : null}
 
@@ -482,7 +482,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
                       <>
                         <Sparkles className="h-3 w-3 text-meta-500" aria-hidden />
                         <span className="font-semibold text-meta-600 dark:text-meta-400">
-                          BluEditor AI Bot
+                          ProteusFlow AI Bot
                         </span>
                       </>
                     )}
@@ -586,7 +586,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
                     Still need help after {thread?.bot_attempts} attempts?
                   </p>
                   <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80">
-                    Send your conversation &amp; account info to a live BluEditor agent (reply in ≤30min Max).
+                    Send your conversation &amp; account info to a live ProteusFlow agent (reply in ≤30min Max).
                   </p>
                 </div>
                 <button
@@ -719,7 +719,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
                 placeholder={
                   isAgentMode
                     ? "Message live agent or attach screenshot/video…"
-                    : "Ask BluEditor AI or paste a screenshot…"
+                    : "Ask ProteusFlow AI or paste a screenshot…"
                 }
                 className="max-h-24 min-h-[36px] flex-1 resize-none rounded-xl border border-black/10 bg-slate-50 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-meta-500 focus:outline-none dark:border-white/10 dark:bg-slate-900/90 dark:text-slate-100"
               />

@@ -1,4 +1,4 @@
-# Deploying AdCamouflage
+# Deploying ProteusFlow
 
 The stack is Caddy (TLS) in front of Next.js and FastAPI, with Postgres for
 accounts and Redis for the render queue. Everything runs from one Compose file.

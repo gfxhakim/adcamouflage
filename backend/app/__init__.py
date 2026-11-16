@@ -1,3 +1,3 @@
-"""AdCamouflage backend package."""
+"""ProteusFlow backend package."""
 
 __version__ = "1.0.0"
