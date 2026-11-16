@@ -280,6 +280,17 @@ def test_admin_preview_shows_the_new_brand_name(outbox, admin):
     assert "BluEditor" not in data["html"] and "Thanks for joining ProteusFlow." in data["html"]
 
 
+def test_sender_name_set_before_the_rename_is_replaced(monkeypatch, admin):
+    """A From value still holding the old name sends under the new one; the address is kept."""
+
+    monkeypatch.setattr(settings, "email_from", "BluCloacking <billing@blucloack.online>")
+    assert mailer.sender() == "ProteusFlow <billing@blucloack.online>"
+    assert admin.get("/api/v1/admin/emails").json()["from"] == "ProteusFlow <billing@blucloack.online>"
+    for untouched in ("billing@blucloack.online", "Acme Video <hello@example.test>"):
+        monkeypatch.setattr(settings, "email_from", untouched)
+        assert mailer.sender() == untouched
+
+
 def test_footer_saved_before_the_slogan_follows_the_default(admin):
     """A design saved before the slogan existed gets the slogan line; a footer the admin chooses is kept."""
 

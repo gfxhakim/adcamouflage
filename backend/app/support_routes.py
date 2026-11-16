@@ -836,7 +836,7 @@ def _notify_admins_by_email(
         role_label = {
             "user": f"Customer ({html.escape(user.email)})",
             "bot": "ProteusFlow Bot",
-            "agent": f"Agent ({html.escape(m.sender_name or 'Admin')})",
+            "agent": f"Agent ({html.escape(rebrand(m.sender_name or '') or 'Admin')})",
             "system": "System",
         }.get(m.sender_role, m.sender_role)
         attachment_html = ""

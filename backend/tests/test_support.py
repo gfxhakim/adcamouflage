@@ -162,6 +162,28 @@ def test_ticket_from_legacy_account_shows_in_admin(admin):
     assert detail.status_code == 200, detail.text
 
 
+def test_email_to_admins_names_old_agent_replies_with_the_new_name(admin, monkeypatch):
+    """The ticket email labels an agent reply saved before the rename with the new name."""
+
+    sent: list[str] = []
+    monkeypatch.setattr("app.support_routes.send_email", lambda to, subject, body: sent.append(body))
+    customer = _signed_in(address("oldagent"))
+    tid = None
+    for i in range(5):
+        r = customer.post("/api/v1/support/thread/message", json={"body": f"my export failed {i}"})
+        assert r.status_code == 200, r.text
+        tid = r.json()["id"]
+    with get_session_factory()() as db:
+        db.add(SupportMessage(thread_id=tid, sender_role="agent", sender_name="BluEditor Support Agent", body="BluEditor was our old name."))
+        db.commit()
+    r = customer.post("/api/v1/support/thread/escalate", json={"note": "please help"})
+    assert r.status_code == 200, r.text
+    assert sent, "no email was built"
+    assert "Agent (ProteusFlow Support Agent)" in sent[0]
+    # What the agent typed is never changed.
+    assert "BluEditor was our old name." in sent[0]
+
+
 def test_old_brand_name_in_saved_bot_messages_is_replaced(admin):
     """Chats saved before the rename show the new name; typed text is never changed."""
 

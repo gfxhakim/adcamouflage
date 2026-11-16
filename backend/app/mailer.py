@@ -488,6 +488,13 @@ def configured() -> bool:
     return bool(transport())
 
 
+def sender() -> str:
+    """The From value of every email. An old brand name in the display name is
+    replaced; the address itself is never changed."""
+
+    return rebrand(settings.email_from)
+
+
 def _html_to_text(html: str) -> str:
     stripped = re.sub(r"<br\s*/?>", "\n", html)
     stripped = re.sub(r"</p>", "\n\n", stripped)
@@ -496,7 +503,7 @@ def _html_to_text(html: str) -> str:
 
 def _send_smtp(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     message = EmailMessage()
-    message["From"] = settings.email_from
+    message["From"] = sender()
     message["To"] = to
     message["Subject"] = subject
     if settings.email_reply_to.strip():
@@ -533,7 +540,7 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str, headers: dict[s
 
 def _send_resend(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     payload: dict[str, Any] = {
-        "from": settings.email_from,
+        "from": sender(),
         "to": [to],
         "subject": subject,
         "html": html,
@@ -869,7 +876,7 @@ router = APIRouter(prefix="/api/v1/admin/emails", tags=["emails"], dependencies=
 def _status(db: Session) -> dict[str, Any]:
     return {
         "transport": transport(),
-        "from": settings.email_from,
+        "from": sender(),
         "public_url_set": bool(_base_url()),
         "placeholders": PLACEHOLDERS,
         "templates": get_templates(db),
