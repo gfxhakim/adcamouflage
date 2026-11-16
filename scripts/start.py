@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch AdCamouflage on Windows, macOS or Linux with one command.
+"""Launch ProteusFlow on Windows, macOS or Linux with one command.
 
     python scripts/start.py
 
@@ -304,7 +304,7 @@ def start_redis_if_available() -> subprocess.Popen | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Launch AdCamouflage locally.")
+    parser = argparse.ArgumentParser(description="Launch ProteusFlow locally.")
     parser.add_argument("--api-port", type=int, default=int(os.environ.get("API_PORT", 8000)))
     parser.add_argument("--web-port", type=int, default=int(os.environ.get("WEB_PORT", 3000)))
     parser.add_argument(
@@ -459,7 +459,7 @@ def main() -> int:
 
         print(
             f"""
-  {_paint('1', 'AdCamouflage is up')}
+  {_paint('1', 'ProteusFlow is up')}
 
     Web UI     {_paint('36', web_url if not args.no_web else '(not started)')}
     API docs   {_paint('36', api_url + '/api/docs')}

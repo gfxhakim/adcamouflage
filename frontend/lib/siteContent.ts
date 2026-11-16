@@ -108,19 +108,19 @@ export const DEFAULT_REVIEWS: ReviewItem[] = [
     id: "rev-1",
     name: "Samir K.",
     handle: "Cosmetic Brand Owner",
-    body: "We used to spend two days re-cutting product videos for new campaigns. With BluEditor we generate 10 studio-grade variations in under a minute.",
+    body: "We used to spend two days re-cutting product videos for new campaigns. With ProteusFlow we generate 10 studio-grade variations in under a minute.",
   },
   {
     id: "rev-2",
     name: "Marcus Vance",
     handle: "Senior Meta Media Buyer",
-    body: "Managing $15k/day in ad spend means we need constant creative volume. BluEditor delivers clean, independent exports for every campaign.",
+    body: "Managing $15k/day in ad spend means we need constant creative volume. ProteusFlow delivers clean, independent exports for every campaign.",
   },
   {
     id: "rev-3",
     name: "Mohamed A.",
     handle: "E-Commerce Brand Founder",
-    body: "Instead of spending hours in CapCut exporting variations one by one, I drop our master creative into BluEditor and get a full batch in seconds.",
+    body: "Instead of spending hours in CapCut exporting variations one by one, I drop our master creative into ProteusFlow and get a full batch in seconds.",
   },
   {
     id: "rev-4",
@@ -138,7 +138,7 @@ export const DEFAULT_REVIEWS: ReviewItem[] = [
     id: "rev-6",
     name: "Imad T.",
     handle: "Performance Agency Owner",
-    body: "Been using BluEditor for 2 months straight. We produce 10 fresh variations per winning concept and our creative testing velocity has tripled.",
+    body: "Been using ProteusFlow for 2 months straight. We produce 10 fresh variations per winning concept and our creative testing velocity has tripled.",
   },
   {
     id: "rev-7",

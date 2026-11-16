@@ -1,10 +1,10 @@
 import type { MetadataRoute } from "next";
 
-// Lets phones add the app to the home screen with the BluEditor shield.
+// Lets phones add the app to the home screen with the ProteusFlow shield.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "BluEditor",
-    short_name: "BluEditor",
+    name: "ProteusFlow",
+    short_name: "ProteusFlow",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",

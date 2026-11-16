@@ -67,7 +67,7 @@ export function Hero({ startHref }: { startHref: string }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.5, ease: EASE }}
         >
-          {"BluEditor turns your finished video and static creatives into fresh, broadcast-ready variations in seconds. Apply studio color grading, subtle framing polish, audio mastering, brand logo overlays, and clean export packaging for Meta, TikTok, and YouTube without opening a timeline editor."}
+          {"ProteusFlow turns your finished video and static creatives into fresh, broadcast-ready variations in seconds. Apply studio color grading, subtle framing polish, audio mastering, brand logo overlays, and clean export packaging for Meta, TikTok, and YouTube without opening a timeline editor."}
         </T>
 
         <motion.div

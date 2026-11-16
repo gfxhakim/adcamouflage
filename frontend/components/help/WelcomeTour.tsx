@@ -134,7 +134,7 @@ export function WelcomeTour({ open, activeStep, onStartTour, onSkip, onJumpStep 
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-meta-300">
               <T k="help.tour.kicker" label="Tour welcome kicker">
-                Welcome to BluEditor
+                Welcome to ProteusFlow
               </T>
             </p>
             <h2

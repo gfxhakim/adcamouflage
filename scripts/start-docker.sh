@@ -48,7 +48,7 @@ done
 
 cat <<BANNER
 
-  ${BOLD}AdCamouflage is up${OFF}
+  ${BOLD}ProteusFlow is up${OFF}
 
     Web UI     ${CYAN}http://localhost:3000${OFF}
     API docs   ${CYAN}http://localhost:8000/api/docs${OFF}

@@ -121,14 +121,19 @@ function pageGroup(path: string): string {
 
 /**
  * Old brand names and wording that may still sit in text saved from Admin
- * before the BluEditor rebrand. Saved text overrides the code defaults, so we
+ * before the ProteusFlow rebrand. Saved text overrides the code defaults, so we
  * clean it here on every render.
  */
+// Not inside an address or link (support@blucloack.online, /brand/blucloacking-mark.png).
+const NOT_IN_LINK = String.raw`(?<![@/.\w-])`;
+const NOT_DOMAIN = String.raw`(?![\w.-]*\.(?:online|com|png|jpg|svg)\b)(?!\w)`;
+const oldName = (name: string) => new RegExp(NOT_IN_LINK + name + NOT_DOMAIN, "gi");
+
 const LEGACY_WORDING: [RegExp, string][] = [
-  [/\bBlu[\s-]?Clo(?:a)?c?king\b/gi, "BluEditor"],
-  [/\bBlu[\s-]?Clo(?:a)?c?k\b/gi, "BluEditor"],
-  [/\bBlu[\s-]?Camouflage\b/gi, "BluEditor"],
-  [/\bAd[\s-]?Camouflage\b/gi, "BluEditor"],
+  [oldName(String.raw`Blu[\s-]?Clo(?:a)?c?k(?:ing)?`), "ProteusFlow"],
+  [oldName(String.raw`Blu[\s-]?Editor`), "ProteusFlow"],
+  [oldName(String.raw`Blu[\s-]?Camouflage`), "ProteusFlow"],
+  [oldName(String.raw`Ad[\s-]?Camouflage`), "ProteusFlow"],
   [/\bcamouflaged\b/gi, "refreshed"],
   [/\bcamouflage\b/gi, "variation"],
   [/\bcloaked\b/gi, "refreshed"],

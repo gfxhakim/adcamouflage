@@ -1066,7 +1066,7 @@ export default function WorkspacePage() {
 
           <CmsSection k="workspace.footer" label="Footer" as="footer" className="mt-6 flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
             <p>
-              BluEditor {health?.version ? `v${health.version}` : ""} · Cloud Creative Studio · FastAPI · Celery · FFmpeg
+              ProteusFlow {health?.version ? `v${health.version}` : ""} · Cloud Creative Studio · FastAPI · Celery · FFmpeg
             </p>
             <p>
               Use only on creatives you own or are licensed to distribute, and within the terms of

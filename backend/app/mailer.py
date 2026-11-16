@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from .accounts import require_admin
 from .app_settings import get_setting, set_setting
+from .brand import BRAND, rebrand
 from .config import settings
 from .db import ActivityEvent, User, get_db
 from .plans import aware
@@ -57,7 +58,6 @@ ENDED_WINDOW_HOURS = 24
 # Any constant works; it only has to be the same for every reminder run.
 REMINDER_LOCK_ID = 7_420_031
 
-BRAND = "BluEditor"
 SIGN_OFF = f"The {BRAND} team"
 
 # --------------------------------------------------------------------------
@@ -163,7 +163,7 @@ DESIGN_FIELDS = ("kicker", "stat", "stat_sub", "headline", "button")
 DESIGN_MAX = 200
 
 # The look shared by every email (Admin > Settings > Customer emails > Design).
-# A blank logo uses the BluCloacking shield from the site's /brand folder.
+# A blank logo uses the ProteusFlow shield from the site's /brand folder.
 DEFAULT_STYLE: dict[str, Any] = {
     "logo_url": "",
     "logo_size": 96,
@@ -203,7 +203,7 @@ def clean_style(raw: Any) -> dict[str, Any]:
         out["logo_size"] = max(24, min(160, size))
     footer = raw.get("footer_text")
     if isinstance(footer, str):
-        out["footer_text"] = footer[:500]
+        out["footer_text"] = rebrand(footer[:500])
     if isinstance(raw.get("show_footer_logo"), bool):
         out["show_footer_logo"] = raw["show_footer_logo"]
     return out
@@ -227,12 +227,12 @@ def get_templates(db: Session) -> dict[str, dict[str, Any]]:
             for field in ("subject", "body"):
                 value = mine.get(field)
                 if isinstance(value, str) and value.strip():
-                    merged[field] = value
+                    merged[field] = rebrand(value)
             # Design text may be saved blank on purpose: blank hides that part.
             for field in DESIGN_FIELDS:
                 value = mine.get(field)
                 if isinstance(value, str):
-                    merged[field] = value
+                    merged[field] = rebrand(value)
             if "days_before" in default and isinstance(mine.get("days_before"), int):
                 merged["days_before"] = max(1, min(14, mine["days_before"]))
         out[kind] = merged

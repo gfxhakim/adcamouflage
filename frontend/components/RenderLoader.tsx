@@ -12,7 +12,7 @@ interface RenderLoaderProps {
 const MARK = "/brand/blucloacking-mark.png";
 
 /**
- * A compact, presentational loading indicator built from the BluCloacking
+ * A compact, presentational loading indicator built from the ProteusFlow
  * shield, recoloured in the app's Meta-blue. It is pure decoration shown while
  * a render runs — it does not drive or reflect any real job state on its own.
  *

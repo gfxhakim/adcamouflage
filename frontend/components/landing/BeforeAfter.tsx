@@ -22,7 +22,7 @@ export function BeforeAfter() {
             <CmsHeadline k="proof.headline" text="Built for Creative Teams. | [Engineered for Quality.]" className="text-4xl sm:text-5xl lg:text-6xl" />
           </div>
           <T k="proof.lede" long as="p" className="text-sm leading-relaxed text-black/65">
-            Manual re-editing takes hours per variation. BluEditor combines color science, subtle framing polish, and audio mastering into a single cloud workflow.
+            Manual re-editing takes hours per variation. ProteusFlow combines color science, subtle framing polish, and audio mastering into a single cloud workflow.
           </T>
         </div>
 

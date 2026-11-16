@@ -322,7 +322,7 @@ class EmailRecipient(Base):
 
 
 class SupportThread(Base):
-    """A conversation between a signed-in user, the BluCloaking AI bot, and a live admin agent."""
+    """A conversation between a signed-in user, the ProteusFlow AI bot, and a live admin agent."""
 
     __tablename__ = "support_threads"
 

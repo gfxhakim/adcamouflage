@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Entrypoint for the AdCamouflage API service on Railway.
+# Entrypoint for the ProteusFlow API service on Railway.
 #
 # Railway attaches a volume to exactly ONE service, but the API writes uploads
 # and serves outputs while the workers write renders - they must see the same

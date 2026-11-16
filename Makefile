@@ -1,4 +1,4 @@
-# AdCamouflage - developer shortcuts.
+# ProteusFlow - developer shortcuts.
 # `make help` lists everything.
 
 SHELL := /bin/bash

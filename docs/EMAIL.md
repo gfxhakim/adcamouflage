@@ -18,7 +18,7 @@ version to your own admin address with sample values.
 
 ## Design and editing
 
-Every email uses the BluCloacking design: a blue header with the shield logo
+Every email uses the ProteusFlow design: a blue header with the shield logo
 (white glow), a small top line, one big text (tokens added, days left), then a
 white card with the headline, your message and one button. In
 **Admin > Settings > Customer emails** you can change, per email: subject,
@@ -60,7 +60,7 @@ ADCAM_SMTP_PORT=587
 ADCAM_SMTP_SECURITY=starttls          # or ssl with port 465
 ADCAM_SMTP_USERNAME=<smtp login>
 ADCAM_SMTP_PASSWORD=<smtp password / key>
-ADCAM_EMAIL_FROM="BluCloacking <billing@blucloack.online>"
+ADCAM_EMAIL_FROM="ProteusFlow <billing@blucloack.online>"
 ADCAM_EMAIL_REPLY_TO=<optional: mailbox that should get customer replies>
 ADCAM_PUBLIC_URL=https://blucloack.online   # already set if billing works; used for the links
 ```

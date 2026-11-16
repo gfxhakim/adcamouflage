@@ -10,7 +10,7 @@ import { CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { EASE } from "@/components/landing/primitives";
 
-const NAME = "BluEditor";
+const NAME = "ProteusFlow";
 
 const COLUMNS: { title: string; links: ({ label: string; href: string } | null)[] }[] = [
   {
@@ -100,7 +100,7 @@ export function SiteFooter() {
 
         <div className="mt-12 grid grid-cols-2 gap-10 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="inline-flex" aria-label="BluEditor home">
+            <Link href="/" className="inline-flex" aria-label="ProteusFlow home">
               <BrandLogo onDark />
             </Link>
             <T k="footer.tagline" long as="p" className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">

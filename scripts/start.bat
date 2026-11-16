@@ -1,6 +1,6 @@
 <<<<<<< HEAD
 @echo off
-REM Launch AdCamouflage on Windows. Double-click this file, or run:
+REM Launch ProteusFlow on Windows. Double-click this file, or run:
 REM    scripts\start.bat
 REM
 REM All the real work lives in start.py so Windows, macOS and Linux run the
@@ -42,7 +42,7 @@ if %ERRORLEVEL% EQU 0 pause
 exit /b %EXITCODE%
 =======
 @echo off
-REM Launch AdCamouflage on Windows. Double-click this file, or run:
+REM Launch ProteusFlow on Windows. Double-click this file, or run:
 REM    scripts\start.bat
 REM
 REM All the real work lives in start.py so Windows, macOS and Linux run the
