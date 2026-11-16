@@ -202,6 +202,8 @@ export interface FieldInfo {
   items?: string[];
   /** For lists whose items cannot be duplicated (page sections). */
   fixed?: boolean;
+  /** For lists: built-in items that were removed from the site (hidden in the editor). */
+  retired?: number[];
   /** Editor heading to list the field under (auto-found labels use their page). */
   group?: string;
   page?: string;

@@ -54,7 +54,11 @@ export interface CmsApi {
   media: (key: string, fallback: MediaValue, label?: string) => MediaValue;
   link: (key: string, fallback: LinkValue, label?: string) => LinkValue;
   iconName: (key: string, fallback: string) => string | undefined;
-  list: <T>(key: string, defaults: T[], label?: string, items?: string[], fixed?: boolean) => ListItem<T>[];
+  /**
+   * A built-in item can be retired by leaving `null` in its slot: the other
+   * items keep their positions, so lists the admin already saved still match.
+   */
+  list: <T>(key: string, defaults: (T | null)[], label?: string, items?: string[], fixed?: boolean) => ListItem<T>[];
   section: (key: string, label?: string) => { hidden: boolean; style: CSSProperties | undefined };
   /** data-cms attribute for click-to-edit in the preview. */
   mark: (key: string) => { "data-cms"?: string };
@@ -185,16 +189,18 @@ function buildApi(
       register({ key, type: "icon", fallback });
       return content.icon?.[key];
     },
-    list<T>(key: string, defaults: T[], label?: string, items?: string[], fixed?: boolean) {
-      register({ key, type: "list", count: defaults.length, label, items, fixed });
+    list<T>(key: string, defaults: (T | null)[], label?: string, items?: string[], fixed?: boolean) {
+      const retired = defaults.flatMap((item, i) => (item === null ? [i] : []));
+      register({ key, type: "list", count: defaults.length, label, items, fixed, ...(retired.length ? { retired } : {}) });
       const entries: ListEntry[] = content.list?.[key] ?? defaults.map((_, i) => ({ id: String(i), from: i }));
+      const fallback = defaults.find((item): item is T => item !== null);
       return entries
-        .filter((entry) => !hide[`${key}.${entry.id}`])
+        .filter((entry) => !hide[`${key}.${entry.id}`] && defaults[entry.from] !== null)
         .map((entry, index) => ({
           id: entry.id,
           index,
           from: entry.from,
-          item: defaults[entry.from] ?? defaults[0],
+          item: (defaults[entry.from] ?? fallback) as T,
           key: `${key}.${entry.id}`,
         }))
         .filter((entry) => entry.item !== undefined);

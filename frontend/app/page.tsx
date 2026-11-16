@@ -7,11 +7,9 @@ import BeforeAfter from "@/components/landing/BeforeAfter";
 import ClosingCta from "@/components/landing/ClosingCta";
 import CursorRing from "@/components/landing/CursorRing";
 import Faq from "@/components/landing/Faq";
-import FeaturePanels from "@/components/landing/FeaturePanels";
 import Hero from "@/components/landing/Hero";
 import ReviewsSection from "@/components/landing/ReviewsSection";
 import SiteFooter from "@/components/landing/SiteFooter";
-import WhyRadar from "@/components/landing/WhyRadar";
 import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
@@ -179,8 +177,9 @@ export default async function LandingPage() {
           label="Sections (order and visibility)"
           items={[
             { id: "hero", label: "Hero", node: <Hero startHref={startHref} /> },
-            { id: "how-it-works", label: "How it works", node: <WhyRadar /> },
-            { id: "features", label: "Features", node: <FeaturePanels /> },
+            // Removed sections keep their slot (null) so saved section orders still line up.
+            null, // was "How it works"
+            null, // was "Features"
             { id: "proof", label: "Media showcase", node: <BeforeAfter /> },
             { id: "reviews", label: "Reviews", node: <ReviewsSection /> },
             {
