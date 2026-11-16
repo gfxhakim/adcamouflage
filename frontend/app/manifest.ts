@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-// Lets phones add the app to the home screen with the ProteusFlow shield.
+// Lets phones add the app to the home screen with the ProteusFlow logo.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "ProteusFlow",

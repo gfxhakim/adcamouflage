@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 BRAND = "ProteusFlow"
+SLOGAN = "Seamless adaptation. Peak efficiency."
 
 # Not inside an address or link (support@blucloack.online, /brand/blucloacking-mark.png).
 _OLD_NAMES = re.compile(

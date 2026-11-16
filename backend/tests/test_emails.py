@@ -212,7 +212,7 @@ def test_branded_design_button_and_logo(outbox):
     assert "https://shop.example.test/app" in body
     # Big number, kicker and headline from the design text.
     assert ">4,500<" in html and "Payment confirmed" in html and ">Your Pro plan is active<" in html
-    assert 'src="https://shop.example.test/brand/blucloacking-mark-email.png"' in html
+    assert 'src="https://shop.example.test/brand/proteusflow-mark-email.png"' in html
 
 
 def test_admin_edits_design_and_style(outbox, admin):
@@ -245,7 +245,7 @@ def test_admin_edits_design_and_style(outbox, admin):
     assert "Account ready" not in html and "Hey there" in html and "Go &rarr;" in html
     assert "background:#111111" in html and "background:#ff0000" in html
     assert 'src="https://shop.example.test/api/v1/site-media/abc.png"' in html
-    assert "Bye &lt;b&gt;" in html and "blucloacking-wordmark" not in html
+    assert "Bye &lt;b&gt;" in html and "proteusflow-wordmark" not in html
 
     bad = {"templates": {}, "style": {**data["style"], "header_color": "red;x:y"}}
     assert admin.put("/api/v1/admin/emails", json=bad).status_code == 422

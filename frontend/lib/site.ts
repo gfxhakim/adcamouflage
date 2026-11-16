@@ -11,10 +11,12 @@ export function siteUrl(): string {
 }
 
 export const SITE_NAME = "ProteusFlow";
+export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
 // Honest, keyword-focused description used for search results and link previews.
-export const SITE_TITLE = "ProteusFlow — Creative Variation & Batch Video Studio for Meta, TikTok & YouTube";
+export const SITE_TITLE = `ProteusFlow — ${SITE_SLOGAN} Creative Variation Studio for Meta, TikTok & YouTube`;
 export const SITE_DESCRIPTION =
+  `${SITE_SLOGAN} ` +
   "Upload a finished video or image ad and get platform-ready versions in minutes: reframe for Reels, TikTok and YouTube Shorts, add brand overlays, pick a cover frame and export in high quality. Plans from $37.50 a month.";
 
 export const SITE_KEYWORDS = [

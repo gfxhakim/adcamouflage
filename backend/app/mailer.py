@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 
 from .accounts import require_admin
 from .app_settings import get_setting, set_setting
-from .brand import BRAND, rebrand
+from .brand import BRAND, SLOGAN, rebrand
 from .config import settings
 from .db import ActivityEvent, User, get_db
 from .plans import aware
@@ -163,7 +163,7 @@ DESIGN_FIELDS = ("kicker", "stat", "stat_sub", "headline", "button")
 DESIGN_MAX = 200
 
 # The look shared by every email (Admin > Settings > Customer emails > Design).
-# A blank logo uses the ProteusFlow shield from the site's /brand folder.
+# A blank logo uses the ProteusFlow logo from the site's /brand folder.
 DEFAULT_STYLE: dict[str, Any] = {
     "logo_url": "",
     "logo_size": 96,
@@ -174,15 +174,15 @@ DEFAULT_STYLE: dict[str, Any] = {
     "text_color": "#1f232a",
     "button_color": "#0b0d12",
     "button_text_color": "#ffffff",
-    "footer_text": f"You get this email because you have a {BRAND} account.",
+    "footer_text": f"{BRAND} · {SLOGAN}\nYou get this email because you have a {BRAND} account.",
     "show_footer_logo": True,
 }
 COLOR_FIELDS = ("header_color", "header_text_color", "page_color", "card_color", "text_color", "button_color", "button_text_color")
 _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _SAFE_URL = re.compile(r"^(?:https://|/)[^\s\"'<>()\\]*$")
-# The shield with a soft white glow baked in (email apps drop CSS shadows).
-LOGO_DEFAULT_PATH = "/brand/blucloacking-mark-email.png"
-WORDMARK_PATH = "/brand/blucloacking-wordmark.png"
+# The logo on a white rounded tile, so it stands out on the blue header.
+LOGO_DEFAULT_PATH = "/brand/proteusflow-mark-email.png"
+WORDMARK_PATH = "/brand/proteusflow-wordmark.png"
 
 
 def clean_style(raw: Any) -> dict[str, Any]:
@@ -197,7 +197,8 @@ def clean_style(raw: Any) -> dict[str, Any]:
             out[field] = value.strip()
     logo = raw.get("logo_url")
     if isinstance(logo, str) and (not logo.strip() or _SAFE_URL.match(logo.strip())):
-        out["logo_url"] = logo.strip()
+        # The old shield file gives way to the current default logo.
+        out["logo_url"] = "" if "blucloacking-" in logo else logo.strip()
     size = raw.get("logo_size")
     if isinstance(size, int) and not isinstance(size, bool):
         out["logo_size"] = max(24, min(160, size))
