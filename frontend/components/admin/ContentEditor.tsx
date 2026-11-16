@@ -53,6 +53,7 @@ import {
   type TextStyle,
   type ThemeValue,
 } from "@/lib/siteContent";
+import { SITE_DESCRIPTION, SITE_TITLE } from "@/lib/site";
 
 // --------------------------------------------------------------------------
 // helpers
@@ -942,15 +943,21 @@ function ThemePanel({ namespace, theme, onChange }: { namespace: Namespace; them
   );
 }
 
-function PagePanel({ meta, onChange }: { meta: NonNullable<SiteContent["meta"]>; onChange: (m: SiteContent["meta"]) => void }) {
+function PagePanel({ namespace, meta, onChange }: { namespace: Namespace; meta: NonNullable<SiteContent["meta"]>; onChange: (m: SiteContent["meta"]) => void }) {
   const set = (patch: Partial<NonNullable<SiteContent["meta"]>>) => onChange(cleanObject({ ...meta, ...patch }));
+  // The landing page is the one people share, so its title and description
+  // are also what a link preview shows. Empty fields use the built-in text.
+  const shared = namespace === "landing";
   return (
     <div className="space-y-3">
-      <Row label="Browser tab title">
-        <input className="field" value={meta.title ?? ""} placeholder="Built-in title" onChange={(e) => set({ title: e.target.value || undefined })} />
+      <Row label={shared ? "Browser tab and link preview title" : "Browser tab title"}>
+        <input className="field" value={meta.title ?? ""} placeholder={shared ? SITE_TITLE : "Built-in title"} onChange={(e) => set({ title: e.target.value || undefined })} />
       </Row>
-      <Row label="Search / share description">
-        <textarea className="field min-h-[90px] resize-y" value={meta.description ?? ""} placeholder="Built-in description" onChange={(e) => set({ description: e.target.value || undefined })} />
+      <Row
+        label={shared ? "Search and link preview description" : "Search / share description"}
+        hint={shared ? "Shown under the title in Google and when the link is shared (WhatsApp, Facebook, X). Keep it under about 150 characters so it is not cut off." : undefined}
+      >
+        <textarea className="field min-h-[90px] resize-y" value={meta.description ?? ""} placeholder={shared ? SITE_DESCRIPTION : "Built-in description"} onChange={(e) => set({ description: e.target.value || undefined })} />
       </Row>
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
@@ -1475,7 +1482,7 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
             ) : panel === "theme" ? (
               <ThemePanel namespace={namespace} theme={draft.theme ?? {}} onChange={(theme) => update((d) => { d.theme = theme; })} />
             ) : (
-              <PagePanel meta={draft.meta ?? {}} onChange={(meta) => update((d) => { d.meta = meta; })} />
+              <PagePanel namespace={namespace} meta={draft.meta ?? {}} onChange={(meta) => update((d) => { d.meta = meta; })} />
             )}
           </div>
         </aside>

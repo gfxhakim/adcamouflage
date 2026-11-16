@@ -264,6 +264,35 @@ def test_admin_preview(outbox, admin):
     assert data["subject"].startswith("Ends ") and ">4 days<" in data["html"] and "Renew plan &rarr;" in data["html"]
 
 
+def test_admin_preview_shows_the_new_brand_name(outbox, admin):
+    style = admin.get("/api/v1/admin/emails").json()["style_defaults"]
+    response = admin.post(
+        "/api/v1/admin/emails/preview",
+        json={
+            "kind": "welcome",
+            "template": {"subject": "Welcome to BluEditor", "body": "Thanks for joining BluEditor.\n\n{app_url}", "kicker": "BluEditor", "stat": "Hi", "button": "Open BluEditor"},
+            "style": style,
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["subject"] == "Welcome to ProteusFlow"
+    assert "BluEditor" not in data["html"] and "Thanks for joining ProteusFlow." in data["html"]
+
+
+def test_footer_saved_before_the_slogan_follows_the_default():
+    default = mailer.DEFAULT_STYLE["footer_text"]
+    assert "Seamless adaptation. Peak efficiency." in default
+    for old in (
+        "You get this email because you have a BluEditor account.",
+        "You get this email because you have a ProteusFlow account.\n",
+    ):
+        assert mailer.clean_style({"footer_text": old})["footer_text"] == default
+    # A footer the admin wrote is kept, with only the old name replaced.
+    assert mailer.clean_style({"footer_text": "BluEditor, Algiers"})["footer_text"] == "ProteusFlow, Algiers"
+    assert mailer.clean_style({"footer_text": ""})["footer_text"] == ""
+
+
 def test_to_html_footer_param_for_group_sends():
     html = mailer.to_html("Hello\n\nhttps://a.example/x", footer='<a href="https://a.example/u">Unsubscribe</a>')
     assert '<a href="https://a.example/u">Unsubscribe</a>' in html

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from .accounts import require_admin
 from .activity import log_activity
 from .app_settings import get_setting, set_setting
+from .brand import rebrand_site_content
 from .config import settings
 from .db import User, get_db
 
@@ -93,8 +94,9 @@ def _load(db: Session, namespace: str) -> dict[str, Any]:
             if field in stored:
                 record[field] = stored[field]
     for field in ("draft", "published"):
-        if not isinstance(record[field], dict):
-            record[field] = {}
+        # Names from before a rename are replaced as the document is read, so
+        # the site, the editor and the next save all carry the current name.
+        record[field] = rebrand_site_content(record[field]) if isinstance(record[field], dict) else {}
     return record
 
 
@@ -151,7 +153,8 @@ def read_record(namespace: str, db: Session = Depends(get_db)) -> dict[str, Any]
 def save_draft(namespace: str, document: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
     _check_namespace(namespace)
     record = _load(db, namespace)
-    record["draft"] = _validated(document)
+    # An editor tab opened before a rename still holds the old name in its copy.
+    record["draft"] = rebrand_site_content(_validated(document))
     record["draft_updated_at"] = _now()
     set_setting(db, _key(namespace), record)
     db.commit()

@@ -177,6 +177,7 @@ DEFAULT_STYLE: dict[str, Any] = {
     "footer_text": f"{BRAND} · {SLOGAN}\nYou get this email because you have a {BRAND} account.",
     "show_footer_logo": True,
 }
+_FOOTER_BEFORE_SLOGAN = f"You get this email because you have a {BRAND} account."
 COLOR_FIELDS = ("header_color", "header_text_color", "page_color", "card_color", "text_color", "button_color", "button_text_color")
 _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _SAFE_URL = re.compile(r"^(?:https://|/)[^\s\"'<>()\\]*$")
@@ -203,7 +204,9 @@ def clean_style(raw: Any) -> dict[str, Any]:
     if isinstance(size, int) and not isinstance(size, bool):
         out["logo_size"] = max(24, min(160, size))
     footer = raw.get("footer_text")
-    if isinstance(footer, str):
+    # The footer from before the slogan was added counts as "not changed", so
+    # it picks up the current default instead of staying frozen.
+    if isinstance(footer, str) and rebrand(footer).strip() != _FOOTER_BEFORE_SLOGAN:
         out["footer_text"] = rebrand(footer[:500])
     if isinstance(raw.get("show_footer_logo"), bool):
         out["show_footer_logo"] = raw["show_footer_logo"]
@@ -932,13 +935,14 @@ def preview_email(payload: EmailPreviewIn, admin: User = Depends(require_admin))
         raise HTTPException(status_code=422, detail="Unknown email.")
     default = DEFAULT_TEMPLATES[payload.kind]
     t = payload.template
+    # Same cleaning as get_templates, so the preview shows what would be sent.
     template: dict[str, Any] = {
-        "subject": t.subject if t.subject.strip() else default["subject"],
-        "body": t.body if t.body.strip() else default["body"],
+        "subject": rebrand(t.subject) if t.subject.strip() else default["subject"],
+        "body": rebrand(t.body) if t.body.strip() else default["body"],
     }
     for field in DESIGN_FIELDS:
         value = getattr(t, field)
-        template[field] = default.get(field, "") if value is None else value
+        template[field] = default.get(field, "") if value is None else rebrand(value)
     values = _sample_values(admin, payload.kind, t.days_before or int(default.get("days_before") or ENDING_SOON_DAYS))
     subject = " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
     body = fill(template["body"], values)

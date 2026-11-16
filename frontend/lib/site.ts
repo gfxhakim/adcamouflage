@@ -1,10 +1,14 @@
+import type { Metadata } from "next";
+
 /**
  * The site's public address, used for canonical links, the sitemap, robots.txt
- * and social previews. Set SITE_URL on the Railway `web` service (for example
- * https://blucloack.online). When set, visits to www.<host> are sent to it with
- * a permanent redirect so Google sees one site, not two.
+ * and link previews. Set SITE_URL on the Railway `web` service to the address
+ * customers use (for example https://proteusflow.com). When set, visits to the
+ * other spelling (www or not) are sent to it with a permanent redirect so
+ * Google sees one site, not two. Without it this default is used and nothing
+ * is redirected.
  */
-export const DEFAULT_SITE_URL = "https://blucloack.online";
+export const DEFAULT_SITE_URL = "https://www.proteusflow.com";
 
 export function siteUrl(): string {
   return (process.env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, "");
@@ -13,11 +17,20 @@ export function siteUrl(): string {
 export const SITE_NAME = "ProteusFlow";
 export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
-// Honest, keyword-focused description used for search results and link previews.
-export const SITE_TITLE = `ProteusFlow — ${SITE_SLOGAN} Creative Variation Studio for Meta, TikTok & YouTube`;
+// The title and description shown in the browser tab, in search results and
+// in link previews (WhatsApp, Facebook, X). The description is one short line
+// so previews show it whole. Admin > Landing > Page can replace both.
+export const SITE_TITLE = "ProteusFlow — Creative Variation & Batch Video Studio for Meta, TikTok & YouTube";
 export const SITE_DESCRIPTION =
-  `${SITE_SLOGAN} ` +
-  "Upload a finished video or image ad and get platform-ready versions in minutes: reframe for Reels, TikTok and YouTube Shorts, add brand overlays, pick a cover frame and export in high quality. Plans from $37.50 a month.";
+  "Upload one ad, get versions for Reels, TikTok and Shorts in minutes. Software that adapts to your business, not the other way around.";
+
+/** The link-preview tags for a page's title and description. */
+export function sharePreview(title: string, description: string): Pick<Metadata, "openGraph" | "twitter"> {
+  return {
+    openGraph: { type: "website", siteName: SITE_NAME, title, description, url: siteUrl(), locale: "en_US" },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 export const SITE_KEYWORDS = [
   "video ad editor",

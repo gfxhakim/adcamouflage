@@ -77,6 +77,43 @@ def test_draft_stays_private_until_published(admin):
     assert reverted["draft"] == document
 
 
+def test_old_brand_names_are_replaced_for_editor_site_and_storage(admin):
+    """Text saved before the rename shows the new name everywhere and is stored with it."""
+
+    from app.app_settings import get_setting, set_setting
+    from app.db import get_session_factory
+
+    old = {
+        "text": {"hero.badge": "Welcome to BluEditor"},
+        "meta": {"title": "BluEditor — Creative Variation & Batch Video Studio", "description": "BluCloacking studio"},
+        "link": {"hero.cta": {"label": "Open BluEditor", "href": "https://blucloack.online/app"}},
+    }
+    new = {
+        "text": {"hero.badge": "Welcome to ProteusFlow"},
+        "meta": {"title": "ProteusFlow — Creative Variation & Batch Video Studio", "description": "ProteusFlow studio"},
+        "link": {"hero.cta": {"label": "Open ProteusFlow", "href": "https://blucloack.online/app"}},
+    }
+    # A row written before the rename: the old name is in the database itself.
+    with get_session_factory()() as db:
+        set_setting(db, "site_content:workspace", {"draft": old, "published": old, "draft_updated_at": None, "published_at": "2026-11-01T00:00:00+00:00"})
+        db.commit()
+
+    assert TestClient(app).get("/api/v1/site-content/workspace").json()["content"] == new
+    record = admin.get("/api/v1/admin/site-content/workspace").json()
+    assert record["draft"] == new and record["published"] == new
+
+    # An editor tab opened before the rename saves its stale copy: stored clean.
+    saved = admin.put("/api/v1/admin/site-content/workspace/draft", json=old)
+    assert saved.status_code == 200 and saved.json()["draft"] == new
+    admin.post("/api/v1/admin/site-content/workspace/publish")
+    with get_session_factory()() as db:
+        stored = get_setting(db, "site_content:workspace", None)
+    assert stored["draft"] == new and stored["published"] == new
+
+    admin.put("/api/v1/admin/site-content/workspace/draft", json={})
+    admin.post("/api/v1/admin/site-content/workspace/publish")
+
+
 def test_rejects_non_object_and_oversized_documents(admin):
     assert admin.put("/api/v1/admin/site-content/landing/draft", json=[1, 2]).status_code == 422
     huge = {"css": "x" * (600 * 1024)}

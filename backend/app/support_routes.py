@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from .accounts import current_user, is_admin, require_admin
 from .activity import log_activity
+from .brand import rebrand
 from .config import settings
 from .db import BatchRecord, SupportMessage, SupportThread, User, get_db, utcnow
 from .mailer import send_email
@@ -652,12 +653,18 @@ def _serialize_message(msg: SupportMessage) -> SupportMessageOut:
                 suggestions = [str(item) for item in parsed]
         except Exception:
             suggestions = []
+    # Bot replies and sender labels saved before a rename carry the old name
+    # ("BluEditor Bot"). What a customer or an agent typed is never changed.
+    by_bot = msg.sender_role == "bot"
+    by_person = msg.sender_role == "user"
+    if by_bot:
+        suggestions = [rebrand(item) for item in suggestions]
     return SupportMessageOut(
         id=msg.id,
         thread_id=msg.thread_id,
         sender_role=msg.sender_role,
-        sender_name=msg.sender_name,
-        body=msg.body,
+        sender_name=msg.sender_name if by_person or msg.sender_name is None else rebrand(msg.sender_name),
+        body=rebrand(msg.body) if by_bot and msg.body else msg.body,
         attachment_url=msg.attachment_url,
         attachment_name=msg.attachment_name,
         attachment_type=msg.attachment_type,

@@ -160,3 +160,37 @@ def test_ticket_from_legacy_account_shows_in_admin(admin):
     assert admin.get("/api/v1/admin/support/notifications").status_code == 200
     detail = admin.get(f"/api/v1/admin/support/threads/{tid}")
     assert detail.status_code == 200, detail.text
+
+
+def test_old_brand_name_in_saved_bot_messages_is_replaced():
+    """Chats saved before the rename show the new name; typed text is never changed."""
+
+    customer = _signed_in(address("oldchat"))
+    r = customer.post("/api/v1/support/thread/message", json={"body": "is BluEditor down?"})
+    assert r.status_code == 200, r.text
+    tid = r.json()["id"]
+    with get_session_factory()() as db:
+        db.add_all(
+            [
+                SupportMessage(
+                    thread_id=tid,
+                    sender_role="bot",
+                    sender_name="BluEditor Bot",
+                    body="Welcome to BluEditor. Mail support@blucloack.online",
+                    suggestions_json='["What is BluEditor?"]',
+                ),
+                SupportMessage(thread_id=tid, sender_role="agent", sender_name="BluEditor Support Agent", body="BluEditor was our old name."),
+            ]
+        )
+        db.commit()
+
+    messages = customer.get("/api/v1/support/thread").json()["messages"]
+    typed = next(m for m in messages if m["sender_role"] == "user")
+    assert typed["body"] == "is BluEditor down?"
+    old_bot = next(m for m in messages if m["body"].startswith("Welcome to"))
+    assert old_bot["sender_name"] == "ProteusFlow Bot"
+    assert old_bot["body"] == "Welcome to ProteusFlow. Mail support@blucloack.online"
+    assert old_bot["suggestions"] == ["What is ProteusFlow?"]
+    agent = next(m for m in messages if m["sender_role"] == "agent")
+    assert agent["sender_name"] == "ProteusFlow Support Agent"
+    assert agent["body"] == "BluEditor was our old name."
