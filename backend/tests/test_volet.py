@@ -36,7 +36,7 @@ SCI_SECRET = "sci-password-placeholder"
 PUBLIC_URL = "https://app.example.test"
 CHECKOUT = "/api/v1/billing/checkout"
 STATUS_PATH = "/api/v1/billing/volet/status"
-PAID_STARTER = "Paid $37.5 for Starter period (Volet)"
+PAID_STARTER = "Paid $37 for Starter period (Volet)"
 # One of the three sender addresses in Volet's SCI document (the app's default allow-list).
 VOLET_IP = "50.7.115.5"
 
@@ -182,7 +182,7 @@ def _form_fields(page: str) -> dict[str, str]:
 def _notification(
     order_id: str,
     *,
-    amount: str = "37.50",
+    amount: str = "37.00",
     merchant_currency: str | None = None,
     state: str = "COMPLETED",
     transfer: str | None = None,
@@ -226,8 +226,8 @@ def _mock_btcpay(monkeypatch, handler):
 
 
 def test_sign_payment_follows_the_documented_formula():
-    expected = hashlib.sha256(b"m@x.com:shop:37.50:USD:pw:order1").hexdigest()
-    assert volet.sign_payment("m@x.com", "shop", "37.50", "USD", "order1", "pw") == expected
+    expected = hashlib.sha256(b"m@x.com:shop:37.00:USD:pw:order1").hexdigest()
+    assert volet.sign_payment("m@x.com", "shop", "37.00", "USD", "order1", "pw") == expected
 
 
 def test_status_hash_follows_the_documented_formula():
@@ -238,11 +238,11 @@ def test_status_hash_follows_the_documented_formula():
         "ac_src_wallet": "U123",
         "ac_dest_wallet": "U456",
         "ac_order_id": "order1",
-        "ac_amount": "37.50",
+        "ac_amount": "37.00",
         "ac_merchant_currency": "USD",
         "ac_buyer_email": "not@hashed.test",  # extra fields do not take part
     }
-    expected = hashlib.sha256(b"t1:2026-10-30 12:00:00:shop:U123:U456:order1:37.50:USD:pw").hexdigest()
+    expected = hashlib.sha256(b"t1:2026-10-30 12:00:00:shop:U123:U456:order1:37.00:USD:pw").hexdigest()
     assert volet.status_hash(fields, "pw") == expected
     # A field Volet left out hashes as empty rather than failing.
     assert volet.status_hash({"ac_transfer": "t1"}, "pw") == hashlib.sha256(b"t1" + b":" * 8 + b"pw").hexdigest()
@@ -256,7 +256,7 @@ def test_verify_status_unit():
         "ac_src_wallet": "U123",
         "ac_dest_wallet": "U456",
         "ac_order_id": "order1",
-        "ac_amount": "37.50",
+        "ac_amount": "37.00",
         "ac_merchant_currency": "USD",
     }
     fields["ac_hash"] = volet.status_hash(fields, "pw")
@@ -278,7 +278,7 @@ def test_checkout_with_only_volet_serves_a_signed_pay_page(volet_env):
     client = _signed_in(email)
     body = _checkout(client, "starter")
     order_id = body["order_id"]
-    assert body["provider"] == "volet" and body["amount"] == 37.5 and body["tokens"] == 1500
+    assert body["provider"] == "volet" and body["amount"] == 37.0 and body["tokens"] == 1500
     assert body["checkout_url"] == f"/api/v1/billing/orders/{order_id}/pay"
     assert client.get("/api/v1/auth/subscription").json()["payment_providers"] == [{"id": "volet", "label": "Volet"}]
 
@@ -288,14 +288,14 @@ def test_checkout_with_only_volet_serves_a_signed_pay_page(volet_env):
     assert page.headers["cache-control"] == "no-store"
     assert f'<form method="POST" action="{settings.volet_sci_url}">' in page.text
     assert "Continue to Volet" in page.text and "document.forms[0].submit()" in page.text
-    assert "37.50" in page.text and "Starter" in page.text
+    assert "37.00" in page.text and "Starter" in page.text
 
     code = _currency().upper()
     fields = _form_fields(page.text)
     assert fields["ac_account_email"] == SCI_EMAIL and fields["ac_sci_name"] == SCI_NAME
-    assert fields["ac_amount"] == "37.50" and fields["ac_currency"] == code
+    assert fields["ac_amount"] == "37.00" and fields["ac_currency"] == code
     assert fields["ac_order_id"] == order_id
-    signed = f"{SCI_EMAIL}:{SCI_NAME}:37.50:{code}:{SCI_SECRET}:{order_id}".encode("utf-8")
+    signed = f"{SCI_EMAIL}:{SCI_NAME}:37.00:{code}:{SCI_SECRET}:{order_id}".encode("utf-8")
     assert fields["ac_sign"] == hashlib.sha256(signed).hexdigest()
     assert fields["ac_status_url"] == f"{PUBLIC_URL}/api/v1/billing/volet/status"
     assert fields["ac_status_url_method"] == "POST"
@@ -525,7 +525,7 @@ def test_notification_for_a_different_amount_is_set_aside(volet_env):
     assert _balances(email) == (0, 0)
     assert _activity(email) == [f"Volet notification for order {order_id} ignored: amount or currency differs"]
     # Formatting differences are not a mismatch.
-    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="37.5")).text == "OK"
+    assert _volet().post(STATUS_PATH, data=_notification(order_id, amount="37")).text == "OK"
     assert _balances(email) == (1500, 0)
 
 

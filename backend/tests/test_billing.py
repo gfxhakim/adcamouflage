@@ -182,7 +182,7 @@ def test_topup_totals_are_exact(plan_id, amount, total):
 
 @pytest.mark.parametrize(
     ("plan_id", "price", "tokens", "per_generation", "generations", "cap"),
-    [("starter", 37.5, 1500, 100, 15, 0), ("pro", 89, 4500, 90, 50, 4500), ("max", 149, 9600, 80, 120, 19200)],
+    [("starter", 37.0, 1500, 100, 15, 0), ("pro", 89, 4500, 90, 50, 4500), ("max", 149, 9600, 80, 120, 19200)],
 )
 def test_plan_cards(plan_id, price, tokens, per_generation, generations, cap):
     plan = DEFAULT_PLANS[plan_id]

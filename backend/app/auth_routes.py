@@ -27,7 +27,7 @@ from .accounts import (
     validate_password,
     verify_password,
 )
-from . import mailer, meta_capi
+from . import affiliates, mailer, meta_capi
 from .activity import log_activity
 from .app_settings import announcement, registration_open
 from .db import BatchRecord, User, get_db
@@ -160,6 +160,15 @@ class BatchSummary(BaseModel):
 # --------------------------------------------------------------------------
 
 
+def _fingerprint(request: Request) -> tuple[str, str]:
+    """Hashed browser id and network of this request, for the self-referral check."""
+
+    return (
+        affiliates.device_hash(request.headers.get("x-device-id")),
+        affiliates.ip_hash(meta_capi._client_ip(request)),
+    )
+
+
 @router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
 def register(
     payload: RegisterRequest, request: Request, response: Response, db: Session = Depends(get_db)
@@ -200,6 +209,9 @@ def register(
     except Exception:  # noqa: BLE001 - tracking must never block a sign-up
         logger.exception("Meta CompleteRegistration for user %s failed", user.id)
     mailer.welcome(db, user)
+    device, ip = _fingerprint(request)
+    affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
+    affiliates.remember_device(db, user, device, ip)
     return UserProfile.of(user, db)
 
 
@@ -231,6 +243,7 @@ def login(
 
     set_session_cookie(response, create_session_token(user))
     log_activity(db, user.id, "login", "Signed in")
+    affiliates.remember_device(db, user, *_fingerprint(request))
     return UserProfile.of(user, db)
 
 

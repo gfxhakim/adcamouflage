@@ -52,7 +52,7 @@ def _public_plan(plan_id: str) -> dict:
 def test_running_offer_shows_launch_and_regular_prices():
     ends = datetime.now(timezone.utc) + timedelta(days=2)
     _offer(ends)
-    for plan_id, launch, regular in (("starter", 37.5, 59), ("pro", 89, 129), ("max", 149, 199)):
+    for plan_id, launch, regular in (("starter", 37.0, 59), ("pro", 89, 129), ("max", 149, 199)):
         plan = _public_plan(plan_id)
         assert plan["price"] == launch and plan["regular_price"] == regular
         assert plan["launch_price"] == launch
@@ -74,12 +74,12 @@ def test_ended_offer_switches_to_regular_prices():
 def test_switched_off_offer_keeps_the_typed_prices():
     _offer(datetime.now(timezone.utc) - timedelta(days=1), enabled=False)
     plan = _public_plan("starter")
-    assert plan["price"] == 37.5 and plan["regular_price"] is None
+    assert plan["price"] == 37.0 and plan["regular_price"] is None
 
 
 def test_regular_price_not_above_launch_price_is_no_offer():
     _offer(datetime.now(timezone.utc) + timedelta(days=1), regular={"starter": 30, "pro": 129, "max": 149})
-    assert _public_plan("starter")["regular_price"] is None and _public_plan("starter")["price"] == 37.5
+    assert _public_plan("starter")["regular_price"] is None and _public_plan("starter")["price"] == 37.0
     assert _public_plan("max")["regular_price"] is None and _public_plan("max")["price"] == 149
     assert _public_plan("pro")["regular_price"] == 129
 
@@ -104,7 +104,7 @@ def test_checkout_bills_the_shown_price_before_and_after(btcpay_env, monkeypatch
     early = _signed_in(address("promo-early"))
     response = early.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter"})
     assert response.status_code == 201, response.text
-    assert response.json()["amount"] == 37.5 and sent[-1]["amount"] == "37.50"
+    assert response.json()["amount"] == 37.0 and sent[-1]["amount"] == "37.00"
 
     _offer(datetime.now(timezone.utc) - timedelta(seconds=1))
     late = _signed_in(address("promo-late"))
@@ -115,8 +115,8 @@ def test_checkout_bills_the_shown_price_before_and_after(btcpay_env, monkeypatch
 
     # The earlier order keeps the price it was quoted.
     with _session() as db:
-        orders = db.query(Order).filter(Order.amount_usd.in_([37.5, 59])).all()
-        assert sorted(o.amount_usd for o in orders if o.plan_id == "starter")[-2:] == [37.5, 59]
+        orders = db.query(Order).filter(Order.amount_usd.in_([37.0, 59])).all()
+        assert sorted(o.amount_usd for o in orders if o.plan_id == "starter")[-2:] == [37.0, 59]
 
 
 def test_admin_edits_the_offer(admin):
