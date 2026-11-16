@@ -27,10 +27,13 @@ const METADATA: Metadata = {
 // Admin > Landing can override the tab title, description and icon.
 export async function generateMetadata(): Promise<Metadata> {
   const meta = (await loadPublishedContent("landing")).meta ?? {};
+  const legacyMeta = /fingerprint|hash|cloak|camouflage|bypass|mutate|duplicate|scanner|algorithm|\$37\.50|variation/i;
+  const cleanTitle = meta.title && !legacyMeta.test(meta.title) ? meta.title : undefined;
+  const cleanDesc = meta.description && !legacyMeta.test(meta.description) ? meta.description : undefined;
   return {
     ...METADATA,
-    ...(meta.title ? { title: { absolute: meta.title } } : {}),
-    ...(meta.description ? { description: meta.description } : {}),
+    ...(cleanTitle ? { title: { absolute: cleanTitle } } : {}),
+    ...(cleanDesc ? { description: cleanDesc } : {}),
     ...(meta.favicon ? { icons: { icon: meta.favicon } } : {}),
   };
 }

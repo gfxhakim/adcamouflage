@@ -8,7 +8,7 @@ export type PlanFeatureId = "full_engine" | "metadata_wipe";
 
 export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyof MutationOptions)[] }> = {
   full_engine: {
-    label: "Full 23-Layer Studio Variation Suite",
+    label: "Pro Color Grading & Broadcast Audio Mastering",
     fields: [
       "elastic_mesh_warp",
       "dct_jnd_perturbation",
@@ -23,7 +23,7 @@ export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyo
     ],
   },
   metadata_wipe: {
-    label: "Automatic Metadata Privacy Clean-Up",
+    label: "Clean Container & Project Tag Export",
     fields: ["strip_metadata"],
   },
 };
@@ -32,8 +32,8 @@ export const PLAN_FEATURE_IDS = Object.keys(PLAN_FEATURES) as PlanFeatureId[];
 
 /** Which feature a pricing line describes, matched loosely so edited wording still maps. */
 export function featureForLine(line: string): PlanFeatureId | null {
-  if (/probe|mutate|scrub\s*engine|23[- ]*layer|studio\s*variation|gen[- ]*4/i.test(line)) return "full_engine";
-  if (/metadata|hash\s*wipe/i.test(line)) return "metadata_wipe";
+  if (/probe|mutate|scrub\s*engine|23[- ]*layer|studio\s*variation|gen[- ]*4|pro\s*color\s*grading/i.test(line)) return "full_engine";
+  if (/metadata|hash\s*wipe|clean\s*container/i.test(line)) return "metadata_wipe";
   return null;
 }
 

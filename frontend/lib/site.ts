@@ -14,10 +14,10 @@ export const SITE_NAME = "ProteusFlow";
 export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
 // Honest, keyword-focused description used for search results and link previews.
-export const SITE_TITLE = `ProteusFlow — ${SITE_SLOGAN} Creative Variation Studio for Meta, TikTok & YouTube`;
+export const SITE_TITLE = `ProteusFlow — ${SITE_SLOGAN} Online Video Formatter, Brand Overlay & Batch Export Studio`;
 export const SITE_DESCRIPTION =
   `${SITE_SLOGAN} ` +
-  "Upload a finished video or image ad and get platform-ready versions in minutes: reframe for Reels, TikTok and YouTube Shorts, add brand overlays, pick a cover frame and export in high quality. Plans from $37.50 a month.";
+  "Resize and format videos and images for Instagram Reels, TikTok, and YouTube Shorts, add brand logo watermarks and custom cover frames, apply studio color grading and broadcast audio leveling, and export in batches.";
 
 export const SITE_KEYWORDS = [
   "video ad editor",
