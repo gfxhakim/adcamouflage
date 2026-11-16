@@ -1268,11 +1268,12 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
     setBusy("publish");
     try {
       const sent = prune(draftRef.current);
-      await contentAdmin.saveDraft(namespace, sent);
+      const saved = await contentAdmin.saveDraft(namespace, sent);
       dirty.current = false;
       const r = await contentAdmin.publish(namespace);
       setRecord(r);
-      showStored(sent, r.draft);
+      // Compare with this save's own answer, never with a draft another tab saved in between.
+      showStored(sent, saved.draft);
       setStatus("saved");
       setStatusText("");
     } catch (err) {
