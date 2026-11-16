@@ -23,8 +23,8 @@ import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 // Facebook, X), so a shared link never shows different text from the tab.
 export async function generateMetadata(): Promise<Metadata> {
   const meta = (await loadPublishedContent("landing")).meta ?? {};
-  const title = saved(meta.title) || SITE_TITLE;
-  const description = saved(meta.description) || SITE_DESCRIPTION;
+  const title = savedMeta(meta.title) || SITE_TITLE;
+  const description = savedMeta(meta.description) || SITE_DESCRIPTION;
   return {
     title: { absolute: title },
     description,
@@ -37,6 +37,15 @@ export async function generateMetadata(): Promise<Metadata> {
 /** A value saved in Admin, or "" when the field was left empty. */
 function saved(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+// A title or description saved before the studio cleanup is ignored, so the
+// built-in text shows instead.
+const LEGACY_META = /fingerprint|hash|cloak|camouflage|bypass|mutate|duplicate|scanner|algorithm|\$37\.50|variation/i;
+
+function savedMeta(value: unknown): string {
+  const text = saved(value);
+  return text && !LEGACY_META.test(text) ? text : "";
 }
 
 // Shown only if the API cannot be reached or sends a price list this page
@@ -170,7 +179,7 @@ export default async function LandingPage() {
       <script
         type="application/ld+json"
         // Structured data: lets Google show the product, its prices and the brand.
-        dangerouslySetInnerHTML={{ __html: structuredData(pricing, saved(content.meta?.description) || SITE_DESCRIPTION) }}
+        dangerouslySetInnerHTML={{ __html: structuredData(pricing, savedMeta(content.meta?.description) || SITE_DESCRIPTION) }}
       />
       <SiteHeader floating nav={<LandingNav variant="header" />} />
       <LandingNav variant="dock" />

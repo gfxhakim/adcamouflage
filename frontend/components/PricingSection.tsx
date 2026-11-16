@@ -27,16 +27,16 @@ interface PricingSectionProps {
 const POPULAR = "pro";
 
 const BLURBS: Record<string, string> = {
-  starter: "For solo media buyers refreshing a handful of creatives a month.",
-  pro: "For daily media buyers who launch new variations every week.",
-  max: "For teams and agencies producing creatives at volume.",
+  starter: "For solo creators and editors formatting a handful of projects each month.",
+  pro: "For marketing teams and editors producing social videos and static creatives weekly.",
+  max: "For agencies and production studios exporting client batches at scale.",
 };
 
 const INCLUDED = [
-  "Full 23-Layer Studio Variation Suite",
-  "Video & Static Image Support",
-  "Automatic Metadata Privacy Clean-Up",
-  "Standard Processing Queue",
+  "Pro Color Grading & Broadcast Audio Mastering",
+  "Video & Static Image Batch Export",
+  "Clean Container & Project Tag Export",
+  "Brand Watermark & Custom Cover Frame Studio",
 ];
 
 function price(amount: number, currency: string, digits?: number) {
@@ -88,7 +88,7 @@ export function PricingSection({ plans: listed, currency, ctaHref, promo }: Pric
   const bestSaving = Math.max(0, ...plans.map((plan) => (plan.regular_price ? savePercent(plan.price, plan.regular_price) : 0)));
   const popularId = cms.text("pricing.popularPlan", POPULAR, "text", "Highlighted plan id (starter, pro, max)").trim();
   const included = cms
-    .list("pricing.included", INCLUDED, "Included in every plan", INCLUDED)
+    .list("pricing.studioIncluded", INCLUDED, "Included in every plan", INCLUDED)
     .filter(({ item }) => !SEAT_LINE.test(item));
 
   return (
@@ -96,16 +96,15 @@ export function PricingSection({ plans: listed, currency, ctaHref, promo }: Pric
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-end">
         <div>
           <CmsHeadline
-            k="pricing.headline"
+            k="pricing.studioHeadline"
             dark
-            text="Flexible Plans Built for Creative Velocity."
+            text="Simple Studio Plans for Every Production Volume."
             className="text-4xl sm:text-5xl lg:text-6xl"
           />
         </div>
-        <T k="pricing.lede" long as="p" className="text-sm leading-relaxed text-white/65">
-          Pick the volume that matches your ad spend. Every plan is a paid 30-day period of tokens: one output
-          file is one generation. No contracts, nothing renews on its own, and you can switch plans whenever you
-          like.
+        <T k="pricing.studioLede" long as="p" className="text-sm leading-relaxed text-white/65">
+          Pick the monthly export capacity that fits your workflow. Every plan gives you a 30-day allowance of studio
+          render tokens—no long-term contracts, nothing renews automatically, and you can upgrade or switch plans anytime.
         </T>
       </div>
 

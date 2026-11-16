@@ -11,58 +11,58 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "How is ProteusFlow different from a traditional timeline editor like CapCut or Premiere?",
-    a: "Traditional editors require manual cutting, color grading, and exporting one file at a time. ProteusFlow is an automated creative variation studio: upload your finished video or image once, and our cloud pipeline renders up to 10 studio-polished variations—complete with color grading, framing adjustments, audio mastering, and brand overlays—in under a minute.",
-    tag: "Studio",
+    q: "What does ProteusFlow do and how does it fit into my editing workflow?",
+    a: "ProteusFlow is a browser-based batch production studio that sits right after your main edit. Once you finish cutting a video or designing an image in Premiere, CapCut, or Figma, upload it to ProteusFlow to format it for Reels, TikTok, and YouTube Shorts, apply consistent Rec.709 color grading and broadcast audio leveling (−14 LUFS), burn in your brand watermark and cover frame, and export your full batch in minutes.",
+    tag: "Workflow",
   },
   {
-    q: "Will generating variations reduce my video or audio quality?",
-    a: "No. ProteusFlow's 23 studio variation layers are engineered to preserve 1:1 visual sharpness, natural colors, and crystal-clear voiceovers across every export.",
+    q: "Does exporting through ProteusFlow preserve my original video and audio quality?",
+    a: "Yes. Every export is rendered using broadcast-grade H.264/H.265 encoding that preserves crisp on-screen captions, accurate product colors, natural skin tones, and clean −14 LUFS stereo audio across every file in your batch.",
     tag: "Quality",
   },
   {
-    q: "Are my uploaded creatives private and secure?",
-    a: "Yes. Your media is processed inside an isolated, encrypted cloud workspace used solely to render your requested variations and let you download the outputs. Files are automatically purged on a rolling schedule.",
-    tag: "Privacy",
+    q: "How do the Brand Logo Overlay and Cover Frame tools work?",
+    a: "In Step 03 of the studio, you can upload a transparent PNG or WebP watermark, drag it anywhere on the live video preview, and set its size, opacity, and fade-in/out timing. You can also scrub to any frame in your video—or upload a custom cover image—to embed as the thumbnail.",
+    tag: "Branding",
   },
   {
-    q: "What does ProteusFlow change across each variation?",
-    a: "Depending on your selected profile (Light, Balanced, Studio Pro, Dynamic, or Max Studio), ProteusFlow applies a unique combination of 3D LUT color grading, subtle lens and framing adjustments, frame-rate cadence tuning, broadcast audio EQ/phase mastering, brand logo overlays, custom cover frames, and clean export packaging.",
-    tag: "Features",
+    q: "Which file formats and social platforms are supported?",
+    a: "ProteusFlow accepts MP4, MOV, WEBM, and MKV videos as well as PNG, JPG, and WEBP images (up to 500 MB per file). Built-in presets format your exports for Instagram Reels & Feed, TikTok, YouTube Shorts, Snapchat, and Google video/display placements.",
+    tag: "Formats",
   },
   {
-    q: "Which ad formats and social platforms does ProteusFlow support?",
-    a: "ProteusFlow includes built-in export profiles for Meta (Facebook & Instagram Reels/Feed), TikTok, and YouTube Shorts—supporting both vertical/horizontal videos (MP4, MOV, WEBM, MKV) and static images (PNG, JPG, WEBP).",
-    tag: "Platforms",
-  },
-  {
-    q: "Can I generate multiple variations from a single upload?",
-    a: "Yes. You can generate from 1 to 10 distinct variations per upload and download them all in a single ZIP archive, making it effortless to organize creative testing across multiple campaigns and ad sets.",
+    q: "How many files can I batch-process at once?",
+    a: "You can drop up to 20 videos or images into a single batch and generate up to 10 formatted exports per upload, then download individual files or grab the entire batch in one organized ZIP archive.",
     tag: "Batching",
+  },
+  {
+    q: "How do plans, render tokens, and team seats work?",
+    a: "Each plan gives you a 30-day allowance of studio render tokens with no long-term contracts. Unused tokens roll over on Pro and Max plans when you renew on time, any failed or canceled render is automatically refunded to your balance, and the Max plan includes up to 5 team seats.",
+    tag: "Billing",
   },
 ];
 
 export function Faq() {
   const cms = useCms();
-  const faqs = cms.list("faq.items", FAQS, "Questions", FAQS.map((f) => f.q));
+  const faqs = cms.list("faq.studioItems", FAQS, "Questions", FAQS.map((f) => f.q));
   const [open, setOpen] = useState(0);
 
   return (
     <CmsSection k="faq" label="FAQ" id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <CmsHeadline k="faq.headline" text="Everything You Need to Know Before You Upload." className="text-4xl sm:text-5xl lg:text-6xl" />
+          <CmsHeadline k="faq.studioHeadline" text="Frequently Asked Questions." className="text-4xl sm:text-5xl lg:text-6xl" />
 
           <CmsSection k="faq.card" label="Help card" as="div" className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-white/60">
               <span className="h-1.5 w-1.5 rounded-full bg-meta-400" />
-              <T k="faq.card.kicker">Ready to try it?</T>
+              <T k="faq.card.studioKicker">Ready to try it?</T>
             </p>
-            <T k="faq.card.title" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
-              Render your first creative batch in under a minute.
+            <T k="faq.card.studioTitle" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
+              Export your first branded video batch in minutes.
             </T>
-            <T k="faq.card.body" long as="p" className="mt-2 text-sm text-white/60">
-              Create an account, drop in your master video or image, and export studio-ready variations in seconds.
+            <T k="faq.card.studioBody" long as="p" className="mt-2 text-sm text-white/60">
+              Create an account, drop in your master video or image, add your brand watermark and cover frame, and download your batch.
             </T>
             <CmsLink
               k="faq.card.cta"

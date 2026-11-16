@@ -18,11 +18,11 @@ export const SITE_NAME = "ProteusFlow";
 export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
 // The title and description shown in the browser tab, in search results and
-// in link previews (WhatsApp, Facebook, X). The description is one short line
-// so previews show it whole. Admin > Landing page > Tab & SEO can replace both.
-export const SITE_TITLE = "ProteusFlow — Creative Variation & Batch Video Studio for Meta, TikTok & YouTube";
+// in link previews (WhatsApp, Facebook, X). Both are kept short so previews
+// show them whole. Admin > Landing page > Tab & SEO can replace both.
+export const SITE_TITLE = "ProteusFlow — Online Video Formatter, Brand Overlay & Batch Export Studio";
 export const SITE_DESCRIPTION =
-  "Upload one ad, get versions for Reels, TikTok and Shorts in minutes. Software that adapts to your business, not the other way around.";
+  "Format, brand and export your videos for Reels, TikTok and Shorts in minutes. Software that adapts to your business, not the other way around.";
 
 /**
  * The link-preview tags for a page's title and description. Pass the page's

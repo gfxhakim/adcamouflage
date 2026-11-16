@@ -96,7 +96,7 @@ def _load(db: Session, namespace: str) -> dict[str, Any]:
     for field in ("draft", "published"):
         # Names from before a rename are replaced as the document is read, so
         # the site, the editor and the next save all carry the current name.
-        record[field] = rebrand_site_content(record[field]) if isinstance(record[field], dict) else {}
+        record[field] = _renamed(record[field]) if isinstance(record[field], dict) else {}
     return record
 
 
@@ -108,8 +108,61 @@ def _validated(document: Any) -> dict[str, Any]:
     return document
 
 
+_LEGACY_TEXT_RE = re.compile(
+    r"\b(?:fingerprint|phash|dhash|perceptual\s*hash|hash\s*wipe|hashes|algorithm|scanner|scanners|"
+    r"duplicate|mutat(?:e|es|ed|ing|ion)|cloak(?:ing|ed)?|camouflag(?:e|ed|ing)|bypass(?:ing|es|ed)?|"
+    r"evad(?:e|ing)|evasion|undetectable|scrub(?:s|bed|bing)?|23[- ]*layer|micro[- ]*crop|sub[- ]*pixel|"
+    r"inaudible|signature|shadowban|flagged|rejected|disapproved|checksum|spoof(?:ing|ed)?|adversarial|"
+    r"perturbation|stealth|nuclear|blu[\s-]?clo(?:a)?c?k|ad[\s-]?camouflage)\b",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_document(doc: dict[str, Any]) -> dict[str, Any]:
+    """Strip pre-rebrand or policy-sensitive text/meta overrides so clean defaults show."""
+    if not isinstance(doc, dict):
+        return {}
+    out = dict(doc)
+    raw_text = out.get("text")
+    if isinstance(raw_text, dict):
+        out["text"] = {
+            k: v
+            for k, v in raw_text.items()
+            if not str(k).startswith("faq.items")
+            and not (isinstance(v, str) and _LEGACY_TEXT_RE.search(v))
+        }
+    raw_meta = out.get("meta")
+    if isinstance(raw_meta, dict):
+        meta = dict(raw_meta)
+        for field in ("title", "description"):
+            val = meta.get(field)
+            if isinstance(val, str) and (_LEGACY_TEXT_RE.search(val) or "$37.50" in val):
+                meta.pop(field, None)
+        out["meta"] = meta
+    return out
+
+
+def _renamed(document: dict[str, Any]) -> dict[str, Any]:
+    """``document`` with old brand names replaced by the current one.
+
+    A text or tab title/description that ``_sanitize_document`` keeps off the
+    site is left exactly as saved, so replacing a name never brings a hidden
+    entry back onto the site.
+    """
+
+    cleaned = rebrand_site_content(document)
+    for bucket, fields in (("text", None), ("meta", ("title", "description"))):
+        saved, out = document.get(bucket), cleaned.get(bucket)
+        if not isinstance(saved, dict) or not isinstance(out, dict):
+            continue
+        for key, value in saved.items():
+            if (fields is None or key in fields) and isinstance(value, str) and _LEGACY_TEXT_RE.search(value):
+                out[key] = value
+    return cleaned
+
+
 def published_content(db: Session, namespace: str) -> dict[str, Any]:
-    return _load(db, namespace)["published"]
+    return _sanitize_document(_load(db, namespace)["published"])
 
 
 # --------------------------------------------------------------------------
@@ -121,7 +174,7 @@ def published_content(db: Session, namespace: str) -> dict[str, Any]:
 def read_published(namespace: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     _check_namespace(namespace)
     record = _load(db, namespace)
-    return {"content": record["published"], "published_at": record["published_at"]}
+    return {"content": _sanitize_document(record["published"]), "published_at": record["published_at"]}
 
 
 @public_router.get("/site-media/{name}")
@@ -154,7 +207,7 @@ def save_draft(namespace: str, document: dict[str, Any], db: Session = Depends(g
     _check_namespace(namespace)
     record = _load(db, namespace)
     # An editor tab opened before a rename still holds the old name in its copy.
-    record["draft"] = rebrand_site_content(_validated(document))
+    record["draft"] = _renamed(_validated(document))
     record["draft_updated_at"] = _now()
     set_setting(db, _key(namespace), record)
     db.commit()

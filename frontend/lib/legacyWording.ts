@@ -60,6 +60,14 @@ const LEGACY_WORDING: [RegExp, string][] = [
 /** Old logo image files (the BluCloacking shield). */
 const OLD_LOGO = /blucloacking-(?:mark|wordmark|logo)/i;
 
+// Any saved text entry from before the studio cleanup that still talks about
+// hashes, fingerprints, algorithms, duplicate scanners, or ad-review evasion is
+// dropped completely so the clean built-in default shows instead.
+const DISCARD_SAVED_TEXT =
+  /\b(?:fingerprint|phash|dhash|perceptual\s*hash|hash\s*wipe|hashes|algorithm|scanner|scanners|duplicate|mutat(?:e|es|ed|ing|ion)|cloak(?:ing|ed)?|camouflag(?:e|ed|ing)|bypass(?:ing|es|ed)?|evad(?:e|ing)|evasion|undetectable|scrub(?:s|bed|bing)?|23[- ]*layer|micro[- ]*crop|sub[- ]*pixel|inaudible|signature|shadowban|flagged|rejected|disapproved|checksum|spoof(?:ing|ed)?|adversarial|perturbation|stealth|nuclear|blu[\s-]?clo(?:a)?c?k|ad[\s-]?camouflage)\b/i;
+// A saved tab title or description with the old price or the old positioning is dropped too.
+const DISCARD_SAVED_META = /\$37\.50|variation/i;
+
 /** Only the brand name: an old name becomes ProteusFlow. */
 export function cleanOldBrandName(value: string): string {
   return value.replace(OLD_NAME, "$1ProteusFlow");
@@ -91,14 +99,22 @@ export function cleanSiteContent(content: SiteContent): SiteContent {
   if (isRecord(content.text)) {
     const text: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(content.text)) {
-      text[key] = typeof value === "string" ? cleanLegacyWording(value) : value;
+      if (key.startsWith("faq.items")) continue;
+      if (typeof value === "string") {
+        if (DISCARD_SAVED_TEXT.test(value)) continue;
+        text[key] = cleanLegacyWording(value);
+      }
     }
     out.text = text as SiteContent["text"];
   }
   if (isRecord(content.meta)) {
     const meta = { ...content.meta };
-    if (typeof meta.title === "string") meta.title = cleanLegacyWording(meta.title);
-    if (typeof meta.description === "string") meta.description = cleanLegacyWording(meta.description);
+    for (const field of ["title", "description"] as const) {
+      const value = meta[field];
+      if (typeof value !== "string") continue;
+      if (DISCARD_SAVED_TEXT.test(value) || DISCARD_SAVED_META.test(value)) delete meta[field];
+      else meta[field] = cleanLegacyWording(value);
+    }
     // A tab icon pointing at the old logo gives way to the built-in ProteusFlow icon.
     if (typeof meta.favicon === "string" && OLD_LOGO.test(meta.favicon)) delete meta.favicon;
     out.meta = meta;

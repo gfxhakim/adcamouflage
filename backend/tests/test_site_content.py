@@ -114,6 +114,28 @@ def test_old_brand_names_are_replaced_for_editor_site_and_storage(admin):
     admin.post("/api/v1/admin/site-content/workspace/publish")
 
 
+def test_renaming_never_brings_a_hidden_text_back(admin):
+    """A saved text the public filter hides stays hidden: its old name is not replaced."""
+
+    document = {
+        "text": {"hero.old": "BluCloak hides your ads", "hero.fine": "Made by BluEditor"},
+        "meta": {"title": "Ad Camouflage studio", "description": "BluEditor studio"},
+    }
+    saved = admin.put("/api/v1/admin/site-content/workspace/draft", json=document)
+    assert saved.status_code == 200, saved.text
+    # The editor still shows the hidden entries as saved; the rest carries the current name.
+    assert saved.json()["draft"] == {
+        "text": {"hero.old": "BluCloak hides your ads", "hero.fine": "Made by ProteusFlow"},
+        "meta": {"title": "Ad Camouflage studio", "description": "ProteusFlow studio"},
+    }
+    admin.post("/api/v1/admin/site-content/workspace/publish")
+    live = TestClient(app).get("/api/v1/site-content/workspace").json()["content"]
+    assert live == {"text": {"hero.fine": "Made by ProteusFlow"}, "meta": {"description": "ProteusFlow studio"}}
+
+    admin.put("/api/v1/admin/site-content/workspace/draft", json={})
+    admin.post("/api/v1/admin/site-content/workspace/publish")
+
+
 def test_rejects_non_object_and_oversized_documents(admin):
     assert admin.put("/api/v1/admin/site-content/landing/draft", json=[1, 2]).status_code == 422
     huge = {"css": "x" * (600 * 1024)}

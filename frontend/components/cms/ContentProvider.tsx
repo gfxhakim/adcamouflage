@@ -120,6 +120,8 @@ function pageGroup(path: string): string {
   return PAGE_NAMES[path] ?? `Texts on ${path}`;
 }
 
+export { cleanLegacyWording, cleanSiteContent } from "@/lib/legacyWording";
+
 function buildApi(
   namespace: Namespace,
   rawContent: SiteContent,
