@@ -15,25 +15,57 @@ from typing import Any
 BRAND = "ProteusFlow"
 SLOGAN = "Seamless adaptation. Peak efficiency."
 
-# An old name standing on its own as a word, with or without a space, dash or
-# underscore inside it. Left alone when it is part of an address, a link or a
-# file name: support@blucloack.online, blucloack@mail.com, blucloack.io,
-# /brand/blucloacking-mark.png, ?ref=blucloack, adcamouflage.db.
-# Keep in step with frontend/lib/legacyWording.ts: the two must agree, and
-# re.ASCII makes \w mean the same here as in JavaScript.
-_GAP = r"[ \t\r\n\u00a0_-]{0,2}"
+
+def _any_case(word: str) -> str:
+    return "".join(f"[{letter.upper()}{letter.lower()}]" for letter in word)
+
+
+# Every earlier product name, in any mix of capitals, with or without a space,
+# dash or underscore inside it (never a line break: "…your ad" at the end of
+# one paragraph and "Camouflage…" at the start of the next are two words).
+_GAP = r"[ \t\u00a0_-]{0,2}"
+_BLU, _AD, _CAMOUFLAGE = _any_case("Blu"), _any_case("Ad"), _any_case("Camouflage")
+_NAME = "|".join(
+    (
+        f"{_BLU}{_GAP}{_any_case('Clo')}[Aa]?[Cc]?[Kk](?:{_any_case('ing')})?",
+        f"{_BLU}{_GAP}{_any_case('Editor')}",
+        f"{_BLU}{_GAP}{_CAMOUFLAGE}",
+        f"{_AD}{_GAP}{_CAMOUFLAGE}",
+    )
+)
+# Endings that mark a web address or a file even when typed in capitals.
+_KNOWN_ENDINGS = "|".join(
+    _any_case(ending)
+    for ending in ("online", "com", "net", "org", "io", "co", "app", "ai", "png", "jpg", "jpeg", "svg", "webp", "gif", "mp4", "pdf", "zip")
+)
+
+# A name is replaced only where it stands as a word in a sentence. Inside an
+# address, a link or a file name it is left exactly as written, so cleaning
+# text never breaks one: support@blucloack.online, blucloack+news@mail.com,
+# blucloack.online, BLUCLOACK.ONLINE, /brand/blucloacking-mark.png,
+# ?ref=blucloack, #blueditor, adcamouflage/backend, blueditor-1.2.zip.
+# "BluEditor.All rights reserved" is a sentence with a missing space, not a
+# web address, so it is replaced.
+#
+# Keep in step with frontend/lib/legacyWording.ts: the two are built the same
+# way and must give the same result (re.ASCII makes \w mean what it means in
+# JavaScript). The character before the name is captured and put back, not
+# checked with a look-behind, because old Safari cannot run one.
 _OLD_NAMES = re.compile(
-    r"(?<![@/.=\w-])"
-    rf"(?:Blu{_GAP}Clo(?:a)?c?k(?:ing)?|Blu{_GAP}Editor|Blu{_GAP}Camouflage|Ad{_GAP}Camouflage)"
-    r"(?![\w.-]*@)(?![\w-]*\.[a-z0-9]{2})(?!\w)",
-    re.IGNORECASE | re.ASCII,
+    r"(^|[^\w@/\\.=?&#+-])"  # not straight after a character that puts it inside an address
+    rf"(?:{_NAME})"
+    r"(?![\w.+-]*[@/\\])"  # not the start of an e-mail address or of a path
+    r"(?![\w-]*(?:\.[\w-]+)*\.[a-z][a-z0-9])"  # not a web address or a file name
+    rf"(?![\w-]*(?:\.[\w-]+)*\.(?:{_KNOWN_ENDINGS})\b)"  # the same, typed in capitals
+    r"(?!\w)",
+    re.ASCII,
 )
 
 
 def rebrand(text: str) -> str:
     """``text`` with any earlier product name replaced by :data:`BRAND`."""
 
-    return _OLD_NAMES.sub(BRAND, text)
+    return _OLD_NAMES.sub(rf"\g<1>{BRAND}", text)
 
 
 def _clean(value: Any) -> Any:
@@ -44,7 +76,8 @@ def rebrand_site_content(document: dict[str, Any]) -> dict[str, Any]:
     """A copy of an Admin site-content document with old names replaced.
 
     Only the wording people read is touched: page text, the tab title and
-    search/share description, button labels, image alt text and reviews.
+    search/share description, button labels, image captions and alt text, and
+    reviews.
     Links, image and icon addresses, colours, CSS and layout are left exactly
     as saved.
     """
@@ -65,7 +98,9 @@ def rebrand_site_content(document: dict[str, Any]) -> dict[str, Any]:
     media = document.get("media")
     if isinstance(media, dict):
         out["media"] = {
-            key: {**value, "alt": _clean(value["alt"])} if isinstance(value, dict) and "alt" in value else value
+            key: {**value, **{field: _clean(value[field]) for field in ("alt", "caption") if field in value}}
+            if isinstance(value, dict)
+            else value
             for key, value in media.items()
         }
     reviews = document.get("reviews")

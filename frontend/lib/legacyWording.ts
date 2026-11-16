@@ -5,22 +5,46 @@
  */
 import type { SiteContent } from "@/lib/siteContent";
 
+const anyCase = (word: string) => word.replace(/[a-z]/gi, (letter) => `[${letter.toUpperCase()}${letter.toLowerCase()}]`);
+
 /**
- * Every earlier brand name, with or without a space, dash or underscore in
- * it. Keep in step with backend/app/brand.py.
- *
- * A name inside an address, a link or a file name is left alone
- * (support@blucloack.online, /brand/blucloacking-mark.png, ?ref=blucloack),
- * so cleaning text never breaks a link. The character before the name is
- * captured and put back rather than checked with a look-behind, because
- * iPhones on Safari older than 16.4 cannot load a script that has one.
+ * Every earlier brand name, in any mix of capitals, with or without a space,
+ * dash or underscore inside it (never a line break).
  */
-const GAP = String.raw`[ \t\r\n\u00a0_-]{0,2}`;
+const GAP = String.raw`[ \t\u00a0_-]{0,2}`;
+const BLU = anyCase("Blu");
+const AD = anyCase("Ad");
+const CAMOUFLAGE = anyCase("Camouflage");
+const NAME = [
+  `${BLU}${GAP}${anyCase("Clo")}[Aa]?[Cc]?[Kk](?:${anyCase("ing")})?`,
+  `${BLU}${GAP}${anyCase("Editor")}`,
+  `${BLU}${GAP}${CAMOUFLAGE}`,
+  `${AD}${GAP}${CAMOUFLAGE}`,
+].join("|");
+/** Endings that mark a web address or a file even when typed in capitals. */
+const KNOWN_ENDINGS = ["online", "com", "net", "org", "io", "co", "app", "ai", "png", "jpg", "jpeg", "svg", "webp", "gif", "mp4", "pdf", "zip"]
+  .map(anyCase)
+  .join("|");
+
+/**
+ * A name is replaced only where it stands as a word in a sentence. Inside an
+ * address, a link or a file name it is left exactly as written, so cleaning
+ * text never breaks one: support@blucloack.online, blucloack.online,
+ * /brand/blucloacking-mark.png, ?ref=blucloack, adcamouflage/backend.
+ *
+ * Keep in step with backend/app/brand.py: the two are built the same way and
+ * must give the same result. The character before the name is captured and
+ * put back rather than checked with a look-behind, because iPhones on Safari
+ * older than 16.4 cannot load a script that has one.
+ */
 const OLD_NAME = new RegExp(
-  String.raw`(^|[^@/.=\w-])` +
-    `(?:Blu${GAP}Clo(?:a)?c?k(?:ing)?|Blu${GAP}Editor|Blu${GAP}Camouflage|Ad${GAP}Camouflage)` +
-    String.raw`(?![\w.-]*@)(?![\w-]*\.[a-z0-9]{2})(?!\w)`,
-  "gi",
+  String.raw`(^|[^\w@/\\.=?&#+-])` + // not straight after a character that puts it inside an address
+    `(?:${NAME})` +
+    String.raw`(?![\w.+-]*[@/\\])` + // not the start of an e-mail address or of a path
+    String.raw`(?![\w-]*(?:\.[\w-]+)*\.[a-z][a-z0-9])` + // not a web address or a file name
+    String.raw`(?![\w-]*(?:\.[\w-]+)*\.(?:` + KNOWN_ENDINGS + String.raw`)\b)` + // the same, typed in capitals
+    String.raw`(?!\w)`,
+  "g",
 );
 
 /** Old wording that may still sit in text saved from Admin before the rebrand. */
@@ -83,7 +107,7 @@ export function cleanSiteContent(content: SiteContent): SiteContent {
     const media = { ...content.media };
     for (const [key, value] of Object.entries(media)) {
       if (value && typeof value.src === "string" && OLD_LOGO.test(value.src)) delete media[key];
-      else media[key] = withCleanNames(value, ["alt"]);
+      else media[key] = withCleanNames(value, ["alt", "caption"]);
     }
     out.media = media;
   }

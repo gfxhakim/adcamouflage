@@ -138,7 +138,7 @@ default address. After changing it, redeploy the `web` service. On `api`, set
 match.
 
 The title and description in a link preview are the same as the browser tab
-title and the search description: change them in **Admin > Landing > Page**.
+title and the search description: change them in **Admin > Landing page > Tab & SEO**.
 Chat apps keep the old preview of a link they have already seen for a while, so
 after a change test with a fresh link such as `https://www.yourdomain.com/?v=2`.
 

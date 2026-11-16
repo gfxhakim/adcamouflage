@@ -280,14 +280,45 @@ def test_admin_preview_shows_the_new_brand_name(outbox, admin):
     assert "BluEditor" not in data["html"] and "Thanks for joining ProteusFlow." in data["html"]
 
 
-def test_footer_saved_before_the_slogan_follows_the_default():
+def test_footer_saved_before_the_slogan_follows_the_default(admin):
+    """A design saved before the slogan existed gets the slogan line; a footer the admin chooses is kept."""
+
     default = mailer.DEFAULT_STYLE["footer_text"]
     assert "Seamless adaptation. Peak efficiency." in default
-    for old in (
-        "You get this email because you have a BluEditor account.",
-        "You get this email because you have a ProteusFlow account.\n",
-    ):
-        assert mailer.clean_style({"footer_text": old})["footer_text"] == default
+    old_footer = "You get this email because you have a BluEditor account."
+    one_line = "You get this email because you have a ProteusFlow account."
+    with _session() as db:
+        before = mailer.get_setting(db, "email_style", None)
+        # Saved before the slogan (and before the rename): no marker on it.
+        mailer.set_setting(db, "email_style", {"footer_text": old_footer, "header_color": "#123456"})
+        db.commit()
+    try:
+        with _session() as db:
+            style = mailer.get_style(db)
+        assert style["footer_text"] == default and style["header_color"] == "#123456"
+        assert "footer_rev" not in style
+        shown = admin.get("/api/v1/admin/emails").json()["style"]
+        assert shown["footer_text"] == default
+
+        # The admin removes the slogan line on purpose: it is saved and it stays.
+        saved = admin.put("/api/v1/admin/emails", json={"templates": {}, "style": {**shown, "footer_text": one_line}})
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["style"]["footer_text"] == one_line
+        assert admin.get("/api/v1/admin/emails").json()["style"]["footer_text"] == one_line
+        with _session() as db:
+            assert mailer.get_style(db)["footer_text"] == one_line
+        # The preview shows what was typed too.
+        preview = admin.post(
+            "/api/v1/admin/emails/preview",
+            json={"kind": "welcome", "template": {"subject": "", "body": ""}, "style": {**shown, "footer_text": one_line}},
+        )
+        assert preview.status_code == 200, preview.text
+        assert "Peak efficiency" not in preview.json()["html"]
+    finally:
+        with _session() as db:
+            mailer.set_setting(db, "email_style", before if before is not None else {})
+            db.commit()
+
     # A footer the admin wrote is kept, with only the old name replaced.
     assert mailer.clean_style({"footer_text": "BluEditor, Algiers"})["footer_text"] == "ProteusFlow, Algiers"
     assert mailer.clean_style({"footer_text": ""})["footer_text"] == ""

@@ -38,23 +38,82 @@ def test_rebrand_handles_punctuation_around_the_name():
 @pytest.mark.parametrize(
     "text",
     [
+        # e-mail addresses
         "Mail support@blucloack.online or visit https://blucloack.online",
         "blucloack@gmail.com",
         "blu.editor@example.io",
+        "blucloack+news@gmail.com",
+        "blueditor+billing@gmail.com",
+        # web addresses, also typed in capitals
         "blucloack.io",
         "www.blueditor.com",
-        "/brand/blucloacking-mark.png",
-        "blucloacking-mark.webp",
-        "adcamouflage.db",
+        "BluCloack.online",
+        "VISIT BLUCLOACK.ONLINE TODAY",
+        "blueditor.co.uk",
+        # links and their parts
         "https://example.com/?ref=blucloack",
         "utm_source=adcamouflage",
         "https://example.com/my-blueditor-review",
+        "https://example.com/?blueditor",
+        "https://example.com/?a=1&blueditor=1",
+        "https://example.com/page#BluEditor",
+        "https://example.com/search?q=what+is+blueditor",
+        # files and folders
+        "/brand/blucloacking-mark.png",
+        "blucloacking-mark.webp",
+        "adcamouflage.db",
         "adcamouflage_42.zip",
+        "blueditor-1.2.3.tgz",
+        "AdCamouflage-v1.2.zip",
+        "blueditor/config.json",
+        "cd adcamouflage/backend",
+        "C:\\files\\blueditor\\x",
+        "git@github.com:blueditor/app.git",
+        # ordinary words
         "Blue editor",
+        "BluEditors",
+        # two words that only meet across a line break
+        "Upload your ad\nCamouflage it in seconds",
+        "Upload your ad\n\nCamouflage it in seconds",
+        "Upload your ad\r\nCamouflage it in seconds",
     ],
 )
 def test_rebrand_leaves_addresses_links_and_files_alone(text):
     assert rebrand(text) == text
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # A full stop with no space after it is still a sentence, not a web address.
+        ("© 2025 BluEditor.All rights reserved.", "© 2025 ProteusFlow.All rights reserved."),
+        ("Chat with BluEditor.We reply fast", "Chat with ProteusFlow.We reply fast"),
+        ("BluEditor-v1.20 is out", "ProteusFlow-v1.20 is out"),
+        ("BluEditor...and more", "ProteusFlow...and more"),
+        # Markup and markdown around the name.
+        ("[BluEditor](https://blueditor.com)", "[ProteusFlow](https://blueditor.com)"),
+        ("<b>BluEditor</b>", "<b>ProteusFlow</b>"),
+        ("Hi! I'm the **BluEditor AI Assistant**.", "Hi! I'm the **ProteusFlow AI Assistant**."),
+        ("Welcome to bLuEdItOr", "Welcome to ProteusFlow"),
+        ("Blu\u00a0Editor", "ProteusFlow"),
+        # The name is replaced, the address beside it is not.
+        (
+            "Contact BluEditor at support@blucloack.online or https://blucloack.online/app?x=BluEditor",
+            "Contact ProteusFlow at support@blucloack.online or https://blucloack.online/app?x=BluEditor",
+        ),
+    ],
+)
+def test_rebrand_in_sentences(text, expected):
+    assert rebrand(text) == expected
+
+
+def test_rebrand_is_fast_on_long_awkward_text():
+    import time
+
+    started = time.monotonic()
+    for text in ("BluEditor" + ".a" * 100_000, "BluEditor:" * 20_000, " BluEditor" + ".ab" * 70_000 + "!", "BluEditor" + "+a" * 100_000 + "@"):
+        rebrand(text)
+    assert time.monotonic() - started < 2
 
 
 def test_rebrand_is_stable_when_run_twice():
@@ -71,7 +130,7 @@ def test_site_content_cleans_wording_only():
             "favicon": "/api/v1/site-media/BluEditor.png",
         },
         "link": {"cta": {"label": "Open BluEditor", "href": "https://example.com/BluEditor"}},
-        "media": {"hero": {"src": "/api/v1/site-media/BluEditor.png", "alt": "BluEditor logo"}},
+        "media": {"hero": {"src": "/api/v1/site-media/BluEditor.png", "alt": "BluEditor logo", "caption": "Made with BluEditor"}},
         "reviews": [{"id": "1", "name": "Sam", "handle": "BluEditor user", "body": "I love BluEditor", "avatar": "https://example.com/BluEditor"}],
         "theme": {"css": ".BluEditor { color: red }"},
         "list": {"page.sections": [{"id": "0", "from": 0}]},
@@ -85,7 +144,9 @@ def test_site_content_cleans_wording_only():
         "favicon": "/api/v1/site-media/BluEditor.png",
     }
     assert cleaned["link"] == {"cta": {"label": "Open ProteusFlow", "href": "https://example.com/BluEditor"}}
-    assert cleaned["media"] == {"hero": {"src": "/api/v1/site-media/BluEditor.png", "alt": "ProteusFlow logo"}}
+    assert cleaned["media"] == {
+        "hero": {"src": "/api/v1/site-media/BluEditor.png", "alt": "ProteusFlow logo", "caption": "Made with ProteusFlow"}
+    }
     assert cleaned["reviews"] == [
         {"id": "1", "name": "Sam", "handle": "ProteusFlow user", "body": "I love ProteusFlow", "avatar": "https://example.com/BluEditor"}
     ]

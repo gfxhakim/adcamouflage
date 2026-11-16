@@ -177,7 +177,11 @@ DEFAULT_STYLE: dict[str, Any] = {
     "footer_text": f"{BRAND} · {SLOGAN}\nYou get this email because you have a {BRAND} account.",
     "show_footer_logo": True,
 }
+# The default footer before the slogan line was added. A design saved back
+# then stored it as if the admin had typed it. Saves made since carry
+# FOOTER_REV, so a footer the admin really chose is never replaced.
 _FOOTER_BEFORE_SLOGAN = f"You get this email because you have a {BRAND} account."
+FOOTER_REV = 2
 COLOR_FIELDS = ("header_color", "header_text_color", "page_color", "card_color", "text_color", "button_color", "button_text_color")
 _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _SAFE_URL = re.compile(r"^(?:https://|/)[^\s\"'<>()\\]*$")
@@ -204,9 +208,7 @@ def clean_style(raw: Any) -> dict[str, Any]:
     if isinstance(size, int) and not isinstance(size, bool):
         out["logo_size"] = max(24, min(160, size))
     footer = raw.get("footer_text")
-    # The footer from before the slogan was added counts as "not changed", so
-    # it picks up the current default instead of staying frozen.
-    if isinstance(footer, str) and rebrand(footer).strip() != _FOOTER_BEFORE_SLOGAN:
+    if isinstance(footer, str):
         out["footer_text"] = rebrand(footer[:500])
     if isinstance(raw.get("show_footer_logo"), bool):
         out["show_footer_logo"] = raw["show_footer_logo"]
@@ -214,7 +216,13 @@ def clean_style(raw: Any) -> dict[str, Any]:
 
 
 def get_style(db: Session) -> dict[str, Any]:
-    return clean_style(get_setting(db, "email_style", {}) or {})
+    saved = get_setting(db, "email_style", {}) or {}
+    style = clean_style(saved)
+    # A design saved before the slogan existed follows the current default
+    # footer, until the admin saves the design again.
+    if isinstance(saved, dict) and not saved.get("footer_rev") and style["footer_text"].strip() == _FOOTER_BEFORE_SLOGAN:
+        style["footer_text"] = DEFAULT_STYLE["footer_text"]
+    return style
 
 
 def get_templates(db: Session) -> dict[str, dict[str, Any]]:
@@ -904,7 +912,7 @@ def save_email_settings(payload: EmailSettingsIn, db: Session = Depends(get_db))
         saved[kind] = entry
     set_setting(db, "email_templates", saved)
     if payload.style is not None:
-        set_setting(db, "email_style", _check_style(payload.style))
+        set_setting(db, "email_style", {**_check_style(payload.style), "footer_rev": FOOTER_REV})
     db.commit()
     return _status(db)
 

@@ -19,15 +19,19 @@ export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
 // The title and description shown in the browser tab, in search results and
 // in link previews (WhatsApp, Facebook, X). The description is one short line
-// so previews show it whole. Admin > Landing > Page can replace both.
+// so previews show it whole. Admin > Landing page > Tab & SEO can replace both.
 export const SITE_TITLE = "ProteusFlow — Creative Variation & Batch Video Studio for Meta, TikTok & YouTube";
 export const SITE_DESCRIPTION =
   "Upload one ad, get versions for Reels, TikTok and Shorts in minutes. Software that adapts to your business, not the other way around.";
 
-/** The link-preview tags for a page's title and description. */
-export function sharePreview(title: string, description: string): Pick<Metadata, "openGraph" | "twitter"> {
+/**
+ * The link-preview tags for a page's title and description. Pass the page's
+ * own path where it is known; without one no address is sent and the preview
+ * uses the address of the page that was shared.
+ */
+export function sharePreview(title: string, description: string, path?: string): Pick<Metadata, "openGraph" | "twitter"> {
   return {
-    openGraph: { type: "website", siteName: SITE_NAME, title, description, url: siteUrl(), locale: "en_US" },
+    openGraph: { type: "website", siteName: SITE_NAME, title, description, ...(path ? { url: path } : {}), locale: "en_US" },
     twitter: { card: "summary_large_image", title, description },
   };
 }

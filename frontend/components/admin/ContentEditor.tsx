@@ -1224,15 +1224,28 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
     return () => observer.disconnect();
   }, []);
 
+  // The server can store slightly different text from what was typed: an old
+  // brand name is saved as the current one. Show what was stored, so the
+  // fields match the site and "not live yet" clears after publishing. Skipped
+  // when typing went on while the save was under way.
+  const showStored = useCallback((sent: SiteContent, stored: SiteContent | undefined) => {
+    const sentText = JSON.stringify(sent);
+    if (JSON.stringify(prune(draftRef.current)) !== sentText) return;
+    if (JSON.stringify(prune(stored ?? {})) === sentText) return;
+    setDraft(clone(stored ?? {}));
+  }, []);
+
   // --- autosave ---------------------------------------------------------------
   useEffect(() => {
     if (!dirty.current) return;
     setStatus("saving");
     const id = setTimeout(async () => {
       try {
-        const saved = await contentAdmin.saveDraft(namespace, prune(draftRef.current));
+        const sent = prune(draftRef.current);
+        const saved = await contentAdmin.saveDraft(namespace, sent);
         setRecord(saved);
         dirty.current = false;
+        showStored(sent, saved.draft);
         setStatus("saved");
       } catch (err) {
         setStatus("error");
@@ -1240,7 +1253,7 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
       }
     }, 900);
     return () => clearTimeout(id);
-  }, [draft, namespace]);
+  }, [draft, namespace, showStored]);
 
   const update = useCallback((fn: (d: SiteContent) => void) => {
     setDraft((prev) => {
@@ -1254,10 +1267,12 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
   const publish = async () => {
     setBusy("publish");
     try {
-      await contentAdmin.saveDraft(namespace, prune(draftRef.current));
+      const sent = prune(draftRef.current);
+      await contentAdmin.saveDraft(namespace, sent);
       dirty.current = false;
       const r = await contentAdmin.publish(namespace);
       setRecord(r);
+      showStored(sent, r.draft);
       setStatus("saved");
       setStatusText("");
     } catch (err) {

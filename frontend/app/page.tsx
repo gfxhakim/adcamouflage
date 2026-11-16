@@ -18,7 +18,7 @@ import { loadPublishedContent } from "@/lib/siteContent";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, sharePreview, siteUrl } from "@/lib/site";
 import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 
-// Admin > Landing > Page can replace the title, description and tab icon.
+// Admin > Landing page > Tab & SEO can replace the title, description and tab icon.
 // The same title and description go into the link preview (WhatsApp,
 // Facebook, X), so a shared link never shows different text from the tab.
 export async function generateMetadata(): Promise<Metadata> {
@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { absolute: title },
     description,
     alternates: { canonical: "/" },
-    ...sharePreview(title, description),
+    ...sharePreview(title, description, "/"),
     ...(saved(meta.favicon) ? { icons: { icon: saved(meta.favicon) } } : {}),
   };
 }
