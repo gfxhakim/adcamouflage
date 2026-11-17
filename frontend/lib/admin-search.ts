@@ -70,7 +70,7 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   e("affiliates", "Commission tiers, by paying customers in the month", "percent partners"),
   e("affiliates", "Reward tokens for the referrer, by the friend's plan", "referral bonus invite"),
   e("affiliates", "Plans the coupon works on", "discount code"),
-  e("affiliates", "Creator partners", "affiliates influencers commissions payouts earnings"),
+  e("affiliates", "Affiliate applications & partners", "creator influencers promo code link commissions payouts earnings"),
   e("affiliates", "All referrals", "invites friends"),
 
   // Analytics
