@@ -55,7 +55,7 @@ export function Hero({ startHref }: { startHref: string }) {
           as="h1"
           dark
           text="One Master Video. | [Formatted, Branded &] | [Exported in Minutes.]"
-          className="text-[2.6rem] sm:text-6xl lg:text-[5.4rem]"
+          className="text-[2.15rem] min-[400px]:text-[2.4rem] sm:text-6xl lg:text-[5.4rem]"
         />
 
         <T

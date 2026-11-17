@@ -12,7 +12,7 @@ import { EASE } from "@/components/landing/primitives";
 
 const NAME = "ProteusFlow";
 
-const COLUMNS: { title: string; links: ({ label: string; href: string } | null)[] }[] = [
+const COLUMNS: { title: string; links: ({ label: string; href: string } | null)[]; order?: number[] }[] = [
   {
     title: "Main pages",
     links: [
@@ -21,7 +21,9 @@ const COLUMNS: { title: string; links: ({ label: string; href: string } | null)[
       null, // was "Features"
       null, // was "How it works"
       { label: "Pricing", href: "#pricing" },
+      { label: "How To", href: "#proof" },
     ],
+    order: [0, 4, 3], // Home, How To, Pricing
   },
   {
     title: "Account & help",
@@ -86,7 +88,7 @@ export function SiteFooter() {
   const columns = cms.list("footer.columns", COLUMNS, "Link columns", COLUMNS.map((c) => c.title));
   const name = cms.text("brand.name", NAME, "text", "Brand name");
   return (
-    <CmsSection k="footer" label="Footer" as="footer" className="relative isolate overflow-hidden bg-black pb-28 text-white lg:pb-10">
+    <CmsSection k="footer" label="Footer" as="footer" className="relative isolate overflow-hidden bg-black pb-10 text-white">
       {/* Blue glow rising from the bottom edge */}
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
         <div className="absolute -bottom-1/3 left-1/2 h-[70%] w-[120%] -translate-x-1/2 rounded-[50%] bg-meta-500/35 blur-[120px]" />
@@ -114,7 +116,7 @@ export function SiteFooter() {
             />
           </div>
           {columns.map(({ item: col, key, id }) => (
-            <FooterColumn key={id} k={key} title={col.title} links={col.links} />
+            <FooterColumn key={id} k={key} title={col.title} links={col.links} order={col.order} />
           ))}
         </div>
 
@@ -141,9 +143,19 @@ export function SiteFooter() {
   );
 }
 
-function FooterColumn({ k, title, links }: { k: string; title: string; links: ({ label: string; href: string } | null)[] }) {
+function FooterColumn({
+  k,
+  title,
+  links,
+  order,
+}: {
+  k: string;
+  title: string;
+  links: ({ label: string; href: string } | null)[];
+  order?: number[];
+}) {
   const cms = useCms();
-  const items = cms.list(`${k}.links`, links, `${title} links`, links.map((l) => l?.label ?? ""));
+  const items = cms.list(`${k}.links`, links, `${title} links`, links.map((l) => l?.label ?? ""), false, order);
   return (
     <div>
       <T k={`${k}.title`} as="p" className="text-sm font-semibold text-white">

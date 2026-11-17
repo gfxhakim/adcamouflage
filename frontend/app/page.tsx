@@ -172,7 +172,6 @@ export default async function LandingPage() {
         dangerouslySetInnerHTML={{ __html: structuredData(pricing) }}
       />
       <SiteHeader floating nav={<LandingNav variant="header" />} />
-      <LandingNav variant="dock" />
       <CursorRing />
 
       <main className="overflow-x-clip">

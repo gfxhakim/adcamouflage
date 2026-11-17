@@ -52,6 +52,7 @@ import {
   type SiteContent,
   type TextStyle,
   type ThemeValue,
+  listEntries,
 } from "@/lib/siteContent";
 
 // --------------------------------------------------------------------------
@@ -644,7 +645,7 @@ function ListEditor({
 }) {
   const count = field.count ?? 0;
   const retired = new Set(field.retired ?? []);
-  const list = (entries ?? Array.from({ length: count }, (_, i) => ({ id: String(i), from: i }))).filter(
+  const list = listEntries(entries, count, field.order).filter(
     (entry) => !retired.has(entry.from),
   );
   const name = (entry: ListEntry) => {
