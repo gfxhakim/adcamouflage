@@ -26,6 +26,7 @@ import {
   type FieldInfo,
   type LinkValue,
   type ListEntry,
+  listEntries,
   type MediaValue,
   type Namespace,
   type PreviewMessage,
@@ -59,7 +60,7 @@ export interface CmsApi {
    * A built-in item can be retired by leaving `null` in its slot: the other
    * items keep their positions, so lists the admin already saved still match.
    */
-  list: <T>(key: string, defaults: (T | null)[], label?: string, items?: string[], fixed?: boolean) => ListItem<T>[];
+  list: <T>(key: string, defaults: (T | null)[], label?: string, items?: string[], fixed?: boolean, order?: number[]) => ListItem<T>[];
   section: (key: string, label?: string) => { hidden: boolean; style: CSSProperties | undefined };
   /** data-cms attribute for click-to-edit in the preview. */
   mark: (key: string) => { "data-cms"?: string };
@@ -154,10 +155,10 @@ function buildApi(
       register({ key, type: "icon", fallback });
       return content.icon?.[key];
     },
-    list<T>(key: string, defaults: (T | null)[], label?: string, items?: string[], fixed?: boolean) {
+    list<T>(key: string, defaults: (T | null)[], label?: string, items?: string[], fixed?: boolean, order?: number[]) {
       const retired = defaults.flatMap((item, i) => (item === null ? [i] : []));
-      register({ key, type: "list", count: defaults.length, label, items, fixed, ...(retired.length ? { retired } : {}) });
-      const entries: ListEntry[] = content.list?.[key] ?? defaults.map((_, i) => ({ id: String(i), from: i }));
+      register({ key, type: "list", count: defaults.length, label, items, fixed, ...(retired.length ? { retired } : {}), ...(order ? { order } : {}) });
+      const entries: ListEntry[] = listEntries(content.list?.[key], defaults.length, order);
       const fallback = defaults.find((item): item is T => item !== null);
       return entries
         .filter((entry) => !hide[`${key}.${entry.id}`] && defaults[entry.from] !== null)

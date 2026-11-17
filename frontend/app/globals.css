@@ -803,3 +803,16 @@ html[data-deck-theme="light"] .deck:not(.deck-fixed) {
     transform: translateX(450%) skewX(-12deg);
   }
 }
+
+/* Phones: fixed page backgrounds repaint on every scroll frame and judder on
+   iOS/Android, so they scroll with the page there. */
+@media (max-width: 1023px), (hover: none) {
+  body {
+    background-attachment: scroll;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}

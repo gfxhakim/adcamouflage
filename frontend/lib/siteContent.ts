@@ -74,6 +74,28 @@ export interface ListEntry {
   from: number;
 }
 
+/**
+ * The entries a list shows. With nothing saved, the built-in items in `order`
+ * (default: as declared). A saved list is used as is, except that built-in
+ * items named in `order` which it never mentions (added to the site after the
+ * admin saved the list) are slotted in at their built-in position.
+ */
+export function listEntries(saved: ListEntry[] | undefined, count: number, order?: number[]): ListEntry[] {
+  const base = order ?? Array.from({ length: count }, (_, i) => i);
+  if (!saved) return base.map((i) => ({ id: String(i), from: i }));
+  if (!order) return saved;
+  const out = [...saved];
+  const seen = new Set(saved.map((e) => e.from));
+  order.forEach((from, pos) => {
+    if (seen.has(from)) return;
+    const before = order.slice(0, pos).reverse().find((i) => seen.has(i));
+    const at = before === undefined ? 0 : out.findIndex((e) => e.from === before) + 1;
+    out.splice(at, 0, { id: String(from), from });
+    seen.add(from);
+  });
+  return out;
+}
+
 export interface ThemeValue {
   accent?: string;
   page?: string;
@@ -284,6 +306,8 @@ export interface FieldInfo {
   fixed?: boolean;
   /** For lists: built-in items that were removed from the site (hidden in the editor). */
   retired?: number[];
+  /** For lists: the built-in arrangement, by item number (default: as declared). */
+  order?: number[];
   /** Editor heading to list the field under (auto-found labels use their page). */
   group?: string;
   page?: string;
