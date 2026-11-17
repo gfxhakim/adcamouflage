@@ -29,7 +29,7 @@ from .accounts import (
     verify_password,
 )
 from . import account_security as security
-from . import mailer, meta_capi
+from . import affiliates, mailer, meta_capi
 from .activity import log_activity
 from .app_settings import announcement, registration_open
 from .config import settings
@@ -161,6 +161,15 @@ class BatchSummary(BaseModel):
 # --------------------------------------------------------------------------
 
 
+def _fingerprint(request: Request) -> tuple[str, str]:
+    """Hashed browser id and network of this request, for the self-referral check."""
+
+    return (
+        affiliates.device_hash(request.headers.get("x-device-id")),
+        affiliates.ip_hash(meta_capi._client_ip(request)),
+    )
+
+
 class RegisterPending(BaseModel):
     """Sign-up accepted; the account opens once the emailed code is entered."""
 
@@ -225,6 +234,7 @@ def _sign_in(db: Session, user: User, request: Request, response: Response, *, h
     set_session_cookie(response, create_session_token(user))
     log_activity(db, user.id, "login", how)
     security.note_sign_in(db, user, request)
+    affiliates.remember_device(db, user, *_fingerprint(request))
 
 
 def _welcome_new_account(db: Session, user: User, request: Request) -> None:
@@ -295,6 +305,10 @@ def register(
     db.refresh(user)
     logger.info("registered user %s", user.id)
     log_activity(db, user.id, "signup", f"Signed up on the {user.plan} plan")
+    # Referral credit is decided at sign-up, while the referral cookie is here.
+    device, ip = _fingerprint(request)
+    affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
+    affiliates.remember_device(db, user, device, ip)
     if needs_code:
         _send_code(db, user, security.VERIFY, "verify")
         response.status_code = status.HTTP_202_ACCEPTED

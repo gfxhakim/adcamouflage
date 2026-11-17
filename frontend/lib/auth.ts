@@ -1,5 +1,6 @@
 import type { PlanFeatureId } from "@/lib/plan-features";
 import { API_BASE, ApiError } from "./api";
+import { deviceHeaders } from "./referrals";
 import type { BillingMode, PaymentProviderId, TokenPlanCard, TopupOption } from "./types";
 
 export type { PaymentProviderId };
@@ -89,7 +90,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
       method: "POST",
       credentials: "include",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...deviceHeaders() },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -210,7 +211,9 @@ export interface TokenSubscription {
 export interface TokenBalance {
   subscription_tokens: number;
   topup_tokens: number;
-  /** Subscription + top-up while active; 0 once the period has ended. */
+  /** Reward tokens from inviting friends: spent after subscription tokens, before top-ups. */
+  referral_tokens?: number;
+  /** Everything spendable while active; 0 once the period has ended. */
   usable_tokens: number;
   generations_left: number;
   /** Top-up tokens are kept but unusable while the subscription has lapsed. */
@@ -346,9 +349,12 @@ export function requestPlan(planId: string, note = "") {
 
 export type OrderKind = "subscription" | "topup";
 
-export type OrderStatus = "pending" | "paid" | "expired" | "invalid";
+export type OrderStatus = "pending" | "paid" | "expired" | "invalid" | "refunded";
 
 export interface Order {
+  /** The referral or partner code used, and what it took off the price. */
+  coupon_code?: string | null;
+  discount?: number;
   id: string;
   kind: OrderKind;
   plan_id: string;
@@ -363,12 +369,9 @@ export interface Order {
 
 export interface Checkout {
   order_id: string;
+  /** Whop plan id (`plan_xxx`) passed to `<WhopCheckout />`. */
+  whop_plan: string;
   provider: PaymentProviderId;
-  /**
-   * Where the browser goes to pay: BTCPay's invoice page, or the app's own
-   * /api/v1/billing/orders/{id}/pay page that forwards to Volet. Either way it
-   * comes back to /app/plan with ?order=.
-   */
   checkout_url: string;
   amount: number;
   tokens: number;
@@ -380,8 +383,7 @@ export interface SubscriptionState {
 }
 
 /**
- * Start a checkout for a plan period or a top-up on the current plan. The
- * provider is sent only when given; the server then uses the first one set up.
+ * Start a checkout for a plan period or a top-up on the current plan.
  */
 export function startCheckout(
   kind: OrderKind,
@@ -402,7 +404,7 @@ async function get<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** One order's status; the server also checks BTCPay if a webhook was missed. */
+/** One order's status (used while confirming a Whop payment). */
 export function fetchOrder(orderId: string) {
   return get<Order>(`/api/v1/billing/orders/${encodeURIComponent(orderId)}`);
 }

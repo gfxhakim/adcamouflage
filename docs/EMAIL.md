@@ -5,7 +5,7 @@ The app can email customers automatically:
 | Email | When it goes out | Sent at most |
 | --- | --- | --- |
 | **Welcome** | Right after someone signs up | once per account |
-| **Plan activated** | When a plan payment is applied: Volet, BTCPay, the Admin grant button, or Approve in Telegram | once per paid order |
+| **Plan activated** | When a plan payment is applied: Whop webhook, the Admin grant button, or Approve in Telegram | once per paid order |
 | **Renewal reminder** | A few days (default 3, you choose 1-14) before a plan period ends | once per period |
 | **Plan ended** | Within a day after a period ends without a renewal | once per period |
 
@@ -113,7 +113,7 @@ Change `ADCAM_EMAIL_FROM` only after step 3: Brevo refuses mail from a domain it
 | Google / Apple linked | Google/Apple connected to an existing account | Yes |
 | Plan activated + receipt | Plan payment confirmed or approved | Yes |
 | Top-up receipt | Top-up confirmed or approved | Yes |
-| Payment not completed | Cancelled at Volet, invalid at BTCPay, or rejected by you | Yes |
+| Payment not completed | A payment you reject (Admin or Telegram) | Yes |
 | Renewal reminder | A few days before the period ends | Yes |
 | Plan ended | Within a day after it ends | Yes |
 

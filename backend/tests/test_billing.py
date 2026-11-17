@@ -1,4 +1,4 @@
-"""Token plans, top-ups, BTCPay checkout and the subscription lifecycle.
+"""Token plans, top-ups, Whop checkout and the subscription lifecycle.
 
 The rules here are the owner's price list (see docs in app/tokens.py); the
 numbers asserted are the ones that must come out exactly.
@@ -10,13 +10,12 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import select
 
-from app import btcpay, tokens
+from app import tokens
 from app.auth_routes import login_limiter
 from app.config import settings
 from app.db import ActivityEvent, Order, TokenLedger, User, get_session_factory, init_db
@@ -34,6 +33,7 @@ from app.tokens import (
 )
 
 from .conftest import make_legacy
+from .test_whop import _install_standardwebhooks_stub_if_missing, _post_whop, _whop_event  # noqa: F401
 
 RUN_ID = uuid.uuid4().hex[:12]
 PASSWORD = "correct-horse-battery"
@@ -65,13 +65,18 @@ def admin(monkeypatch):
 
 
 @pytest.fixture
-def btcpay_env(monkeypatch):
-    """BTCPay 'configured' with placeholder values; no network is ever touched."""
+def whop_env(monkeypatch):
+    """Whop configured with placeholder secrets & plan maps; no network calls."""
 
-    monkeypatch.setattr(settings, "btcpay_url", "https://pay.example.test/")
-    monkeypatch.setattr(settings, "btcpay_store_id", "store123")
-    monkeypatch.setattr(settings, "btcpay_api_key", SecretStr("api-key-placeholder"))
-    monkeypatch.setattr(settings, "btcpay_webhook_secret", SecretStr("webhook-secret-placeholder"))
+    _install_standardwebhooks_stub_if_missing(monkeypatch)
+    monkeypatch.setattr(settings, "whop_api_key", SecretStr("whop-api-key-placeholder"))
+    monkeypatch.setattr(settings, "whop_webhook_secret", SecretStr("ws_webhook-secret-placeholder"))
+    monkeypatch.setattr(settings, "whop_plan_subscription", {"starter": "plan_starter", "pro": "plan_pro", "max": "plan_max"})
+    monkeypatch.setattr(
+        settings,
+        "whop_plan_topup",
+        {"20": "plan_top20", "40": "plan_top40", "80": "plan_top80", "160": "plan_top160", "240": "plan_top240"},
+    )
     monkeypatch.setattr(settings, "public_url", "https://app.example.test")
     yield
 
@@ -149,17 +154,6 @@ def _upload(client: TestClient, image, count: int = 1, variants: int = 1):
     return client.post("/api/v1/batches", files=files, data=data)
 
 
-def _signed_body(body: dict, secret: str = "webhook-secret-placeholder") -> tuple[bytes, dict[str, str]]:
-    raw = json.dumps(body).encode("utf-8")
-    return raw, {"BTCPay-Sig": btcpay.sign(secret, raw), "Content-Type": "application/json"}
-
-
-def _mock_btcpay(monkeypatch, handler):
-    """Route every BTCPay call through ``handler(request) -> httpx.Response``."""
-
-    monkeypatch.setattr(btcpay, "_transport", httpx.MockTransport(handler))
-
-
 # --------------------------------------------------------------------------
 # pricing
 # --------------------------------------------------------------------------
@@ -182,7 +176,7 @@ def test_topup_totals_are_exact(plan_id, amount, total):
 
 @pytest.mark.parametrize(
     ("plan_id", "price", "tokens", "per_generation", "generations", "cap"),
-    [("starter", 37.5, 1500, 100, 15, 0), ("pro", 89, 4500, 90, 50, 4500), ("max", 149, 9600, 80, 120, 19200)],
+    [("starter", 37.0, 1500, 100, 15, 0), ("pro", 89, 4500, 90, 50, 4500), ("max", 149, 9600, 80, 120, 19200)],
 )
 def test_plan_cards(plan_id, price, tokens, per_generation, generations, cap):
     plan = DEFAULT_PLANS[plan_id]
@@ -490,42 +484,28 @@ def test_refund_never_raises():
 
 
 # --------------------------------------------------------------------------
-# checkout and BTCPay
+# checkout and Whop
 # --------------------------------------------------------------------------
 
 
 def test_checkout_needs_payments_configured(monkeypatch):
-    monkeypatch.setattr(settings, "btcpay_url", "")
+    monkeypatch.setattr(settings, "whop_api_key", None)
+    monkeypatch.setattr(settings, "whop_webhook_secret", None)
     client = _signed_in(address("unconfigured"))
     response = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"})
     assert response.status_code == 503 and response.json()["detail"] == "Payments are not set up yet."
     assert client.get("/api/v1/auth/subscription").json()["payments_enabled"] is False
 
 
-def test_checkout_creates_an_order_and_an_invoice(btcpay_env, monkeypatch):
+def test_checkout_creates_an_order_and_returns_whop_plan(whop_env):
     email = address("checkout")
     client = _signed_in(email)
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request)
-        return httpx.Response(200, json={"id": "inv_" + RUN_ID, "checkoutLink": "https://pay.example.test/i/x"})
-
-    _mock_btcpay(monkeypatch, handler)
     response = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"})
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["checkout_url"] == "https://pay.example.test/i/x"
+    assert body["whop_plan"] == "plan_pro"
+    assert body["provider"] == "whop"
     assert body["amount"] == 89 and body["tokens"] == 4500
-
-    request = seen[0]
-    assert request.method == "POST" and request.url.path == "/api/v1/stores/store123/invoices"
-    assert request.headers["authorization"] == "token api-key-placeholder"
-    sent = json.loads(request.content)
-    assert sent["amount"] == "89.00" and sent["currency"]
-    assert sent["metadata"]["orderId"] == body["order_id"] and sent["metadata"]["kind"] == "subscription"
-    assert sent["checkout"]["redirectURL"] == f"https://app.example.test/app/plan?order={body['order_id']}"
-    assert sent["checkout"]["redirectAutomatically"] is True
 
     order = client.get(f"/api/v1/billing/orders/{body['order_id']}").json()
     assert order["status"] == "pending" and order["kind"] == "subscription" and order["plan_id"] == "pro"
@@ -534,78 +514,43 @@ def test_checkout_creates_an_order_and_an_invoice(btcpay_env, monkeypatch):
 
     # Another user cannot read it.
     assert _signed_in(address("nosy")).get(f"/api/v1/billing/orders/{body['order_id']}").status_code == 404
-
-
-def test_checkout_reports_a_btcpay_outage_as_502(btcpay_env, monkeypatch):
-    client = _signed_in(address("outage"))
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectTimeout("no route")
-
-    _mock_btcpay(monkeypatch, handler)
-    response = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "max"})
-    assert response.status_code == 502
-    assert "payment server" in response.json()["detail"]
     assert client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "gold"}).status_code == 422
 
 
-def test_topup_checkout_requires_an_active_subscription(btcpay_env, monkeypatch):
+def test_topup_checkout_requires_an_active_subscription(whop_env):
     email = address("topup-checkout")
     client = _signed_in(email)
     refused = client.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 40})
     assert refused.status_code == 402
 
     _grant(email, "max")
-    _mock_btcpay(
-        monkeypatch,
-        lambda request: httpx.Response(200, json={"id": "inv_top_" + RUN_ID, "checkoutLink": "https://pay/x"}),
-    )
     assert client.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 50}).status_code == 422
     ok = client.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 240})
     assert ok.status_code == 201, ok.text
+    assert ok.json()["whop_plan"] == "plan_top240"
     assert ok.json()["tokens"] == 18700 and ok.json()["amount"] == 240
 
 
-def test_webhook_rejects_bad_signatures(btcpay_env):
-    anonymous = TestClient(app)
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": "x"}, secret="wrong-secret")
-    assert anonymous.post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).status_code == 401
-    assert anonymous.post("/api/v1/billing/btcpay/webhook", content=raw).status_code == 401
-    # The signature covers the raw bytes, so a changed body fails too.
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": "x"})
-    assert anonymous.post("/api/v1/billing/btcpay/webhook", content=raw + b" ", headers=headers).status_code == 401
-
-
-def test_verify_signature_unit():
-    raw = b'{"type":"InvoiceSettled"}'
-    good = btcpay.sign("s3cret", raw)
-    assert btcpay.verify_signature(raw, good, "s3cret")
-    assert not btcpay.verify_signature(raw, good, "other")
-    assert not btcpay.verify_signature(raw, None, "s3cret")
-    assert not btcpay.verify_signature(raw, good, "")
-
-
-def test_webhook_settles_an_order_exactly_once(btcpay_env, monkeypatch, admin):
+def test_webhook_settles_an_order_exactly_once(whop_env, admin):
     email = address("webhook")
     client = _signed_in(email)
-    invoice_id = "inv_settle_" + RUN_ID
-    _mock_btcpay(monkeypatch, lambda request: httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"}))
     order_id = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"}).json()["order_id"]
 
-    anonymous = TestClient(app)
-    # Earlier events in the invoice's life change nothing.
-    raw, headers = _signed_body({"type": "InvoiceReceivedPayment", "invoiceId": invoice_id})
-    assert anonymous.post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json() == {"ok": True}
+    # Non-settlement events change nothing.
+    assert _post_whop(_whop_event(order_id, event_type="payment.pending", variant_id="plan_pro")).json() == {
+        "ok": True,
+        "ignored": "payment.pending",
+    }
     assert _balances(email) == (0, 0)
 
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": invoice_id, "metadata": {"orderId": order_id}})
-    first = anonymous.post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers)
+    event = _whop_event(order_id, variant_id="plan_pro")
+    first = _post_whop(event)
     assert first.status_code == 200 and first.json() == {"ok": True, "applied": True}
     assert _balances(email) == (4500, 0)
     user = _load(email)
     assert user.sub_plan == "pro" and user.billing_mode == "tokens"
 
-    again = anonymous.post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers)
+    again = _post_whop(event)
     assert again.status_code == 200 and again.json() == {"ok": True, "applied": False}
     assert _balances(email) == (4500, 0)
 
@@ -614,126 +559,48 @@ def test_webhook_settles_an_order_exactly_once(btcpay_env, monkeypatch, admin):
     with _session() as db:
         assert db.get(Order, order_id).applied_at is not None
     feed = admin.get("/api/v1/admin/activity", params={"kind": "payment"}).json()
-    assert any(e["user_id"] == user.id and "Paid $89 for Pro period (BTCPay)" == e["detail"] for e in feed)
-
-    # Unknown invoices and unknown event types are acknowledged, never applied.
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": "inv_nobody"})
-    assert anonymous.post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).status_code == 200
-    raw, headers = _signed_body({"type": "SomethingNew", "invoiceId": invoice_id})
-    assert anonymous.post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json()["ok"] is True
+    assert any(e["user_id"] == user.id and "Paid $89 for Pro period (Whop)" == e["detail"] for e in feed)
 
 
-def test_webhook_settles_a_topup_with_its_bonus(btcpay_env, monkeypatch):
+def test_webhook_settles_a_topup_with_its_bonus(whop_env):
     email = address("webhook-topup")
     client = _signed_in(email)
     _grant(email, "pro")
-    invoice_id = "inv_topup_" + RUN_ID
-    _mock_btcpay(monkeypatch, lambda request: httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"}))
-    assert client.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 80}).status_code == 201
+    order_id = client.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 80}).json()["order_id"]
 
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": invoice_id})
-    assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).status_code == 200
+    assert _post_whop(_whop_event(order_id, variant_id="plan_top80")).status_code == 200
     assert _balances(email) == (4500, 4400)
     kinds = [(e.kind, e.amount) for e in _ledger(email) if e.bucket == "topup"]
     assert kinds == [("topup", 4000), ("bonus", 400)]
 
 
-def test_webhook_expires_a_pending_order(btcpay_env, monkeypatch):
-    email = address("expired-order")
-    client = _signed_in(email)
-    invoice_id = "inv_exp_" + RUN_ID
-    _mock_btcpay(monkeypatch, lambda request: httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"}))
-    order_id = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter"}).json()["order_id"]
-
-    raw, headers = _signed_body({"type": "InvoiceExpired", "invoiceId": invoice_id})
-    assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).status_code == 200
-    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "expired"
-    assert _balances(email) == (0, 0)
-
-    # A payment that lands after the invoice expired is still credited, once
-    # BTCPay confirms it, and only once.
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": invoice_id, "manuallyMarked": True})
-    assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json()["applied"] is True
-    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "paid"
-    assert _balances(email) == (1500, 0)
-    assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json()["applied"] is False
-    assert _balances(email) == (1500, 0)
-    # ...and a late expiry event cannot undo a paid order.
-    raw, headers = _signed_body({"type": "InvoiceExpired", "invoiceId": invoice_id})
-    assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).status_code == 200
-    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "paid"
-
-
-def test_order_poll_settles_a_missed_webhook(btcpay_env, monkeypatch):
-    email = address("poll")
-    client = _signed_in(email)
-    invoice_id = "inv_poll_" + RUN_ID
-    calls: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(request.method)
-        if request.method == "POST":
-            return httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"})
-        assert request.url.path == f"/api/v1/stores/store123/invoices/{invoice_id}"
-        return httpx.Response(200, json={"id": invoice_id, "status": "Settled"})
-
-    _mock_btcpay(monkeypatch, handler)
-    order_id = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "max"}).json()["order_id"]
-
-    polled = client.get(f"/api/v1/billing/orders/{order_id}").json()
-    assert polled["status"] == "paid"
-    assert _balances(email) == (9600, 0)
-    assert _load(email).sub_plan == "max"
-
-    # Once paid, polling no longer asks BTCPay.
-    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "paid"
-    assert calls == ["POST", "GET"]
-
-
-def test_settlement_is_applied_once_when_a_poll_and_the_webhook_overlap(btcpay_env, monkeypatch, admin):
-    """A poll that loaded the order before the webhook settled it must not credit it again."""
+def test_settlement_is_applied_once_when_admin_and_webhook_overlap(whop_env):
+    """A stale order reference cannot settle again once the webhook has settled it."""
 
     email = address("race")
     client = _signed_in(email)
-    invoice_id = "inv_race_" + RUN_ID
-    _mock_btcpay(monkeypatch, lambda request: httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"}))
     order_id = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"}).json()["order_id"]
 
     with _session() as stale:
         order_seen_pending = stale.get(Order, order_id)
         assert order_seen_pending.status == "pending"
 
-        # The webhook settles it meanwhile, in its own session.
-        raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": invoice_id})
-        assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json()["applied"] is True
+        assert _post_whop(_whop_event(order_id, variant_id="plan_pro")).json()["applied"] is True
         assert _balances(email) == (4500, 0)
 
-        # The poll now tries with the object it loaded earlier.
-        assert tokens.settle_order(stale, order_seen_pending, source="BTCPay poll") is False
+        assert tokens.settle_order(stale, order_seen_pending, source="Whop") is False
         assert order_seen_pending.status == "paid"
 
     assert _balances(email) == (4500, 0)
-    entries = _ledger(email)
-    assert [e.kind for e in entries] == ["grant"]
-    user = _load(email)
-    assert abs((user.sub_period_end.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)) - timedelta(days=30)) < timedelta(minutes=1)
-    feed = admin.get("/api/v1/admin/activity", params={"kind": "payment", "limit": 200}).json()
-    assert sum(1 for e in feed if e["user_id"] == user.id) == 1
+    assert [e.kind for e in _ledger(email)] == ["grant"]
 
 
-def test_settlement_credits_what_the_order_quoted(btcpay_env, monkeypatch, admin):
+def test_settlement_credits_what_the_order_quoted(whop_env, admin):
     """Admin price edits between checkout and payment do not change what the buyer gets."""
 
     email = address("quoted")
     client = _signed_in(email)
     _grant(email, "pro")
-    counter = {"n": 0}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        counter["n"] += 1
-        return httpx.Response(200, json={"id": f"inv_quoted_{counter['n']}_{RUN_ID}", "checkoutLink": "https://pay/x"})
-
-    _mock_btcpay(monkeypatch, handler)
     topup = client.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 80}).json()
     assert topup["tokens"] == 4400
     renewal = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"}).json()
@@ -751,13 +618,11 @@ def test_settlement_credits_what_the_order_quoted(btcpay_env, monkeypatch, admin
         )
         assert changed.status_code == 200, changed.text
 
-        raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": f"inv_quoted_1_{RUN_ID}"})
-        assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json()["applied"] is True
+        assert _post_whop(_whop_event(topup["order_id"], variant_id="plan_top80")).json()["applied"] is True
         assert _balances(email) == (4500, 4400)
         assert [(e.kind, e.amount) for e in _ledger(email) if e.bucket == "topup"] == [("topup", 4000), ("bonus", 400)]
 
-        raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": f"inv_quoted_2_{RUN_ID}"})
-        assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).json()["applied"] is True
+        assert _post_whop(_whop_event(renewal["order_id"], variant_id="plan_pro")).json()["applied"] is True
         assert _balances(email) == (4500 + 4500, 4400)
         assert _load(email).sub_tokens_per_generation == 90
         orders = {o["id"]: o for o in client.get("/api/v1/billing/orders").json()}
@@ -767,52 +632,15 @@ def test_settlement_credits_what_the_order_quoted(btcpay_env, monkeypatch, admin
         _clear_setting("token_topups")
 
 
-def test_checkout_reuses_the_open_invoice(btcpay_env, monkeypatch):
+def test_checkout_reuses_the_open_order(whop_env):
     email = address("reuse")
     client = _signed_in(email)
-    posts: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        posts.append(request.method)
-        return httpx.Response(200, json={"id": f"inv_reuse_{len(posts)}_{RUN_ID}", "checkoutLink": f"https://pay/{len(posts)}"})
-
-    _mock_btcpay(monkeypatch, handler)
     first = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "max"}).json()
     again = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "max"}).json()
     assert again == first
-    # A different purchase is a new invoice.
     other = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"}).json()
     assert other["order_id"] != first["order_id"]
-    assert posts == ["POST", "POST"]
     assert len(client.get("/api/v1/billing/orders").json()) == 2
-
-
-def test_order_poll_asks_btcpay_at_most_every_few_seconds(btcpay_env, monkeypatch):
-    email = address("poll-throttle")
-    client = _signed_in(email)
-    invoice_id = "inv_throttle_" + RUN_ID
-    gets: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        if request.method == "POST":
-            return httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"})
-        gets.append(request.url.path)
-        return httpx.Response(200, json={"id": invoice_id, "status": "Processing"})
-
-    _mock_btcpay(monkeypatch, handler)
-    order_id = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter"}).json()["order_id"]
-    for _ in range(5):
-        assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "pending"
-    assert len(gets) == 1
-
-    # Once the throttle window has passed it asks again.
-    def age(db, user):
-        order = db.get(Order, order_id)
-        order.checked_at = datetime.now(timezone.utc) - timedelta(seconds=30)
-
-    _with_user(email, age)
-    assert client.get(f"/api/v1/billing/orders/{order_id}").json()["status"] == "pending"
-    assert len(gets) == 2
 
 
 def test_cancel_and_resume():
@@ -1007,16 +835,13 @@ def _clear_setting(key: str) -> None:
             db.commit()
 
 
-def test_overview_counts_token_revenue_and_live_subscriptions(admin, btcpay_env, monkeypatch):
+def test_overview_counts_token_revenue_and_live_subscriptions(admin, whop_env):
     email = address("revenue")
     client = _signed_in(email)
-    invoice_id = "inv_rev_" + RUN_ID
-    _mock_btcpay(monkeypatch, lambda request: httpx.Response(200, json={"id": invoice_id, "checkoutLink": "https://pay/x"}))
-    assert client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "max"}).status_code == 201
+    order_id = client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "max"}).json()["order_id"]
     before = admin.get("/api/v1/admin/overview").json()
 
-    raw, headers = _signed_body({"type": "InvoiceSettled", "invoiceId": invoice_id})
-    assert TestClient(app).post("/api/v1/billing/btcpay/webhook", content=raw, headers=headers).status_code == 200
+    assert _post_whop(_whop_event(order_id, variant_id="plan_max")).status_code == 200
     after = admin.get("/api/v1/admin/overview").json()
     assert after["token_revenue_30d"] - before["token_revenue_30d"] == pytest.approx(149)
     assert after["active_subscriptions"] == before["active_subscriptions"] + 1

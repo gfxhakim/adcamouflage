@@ -101,7 +101,7 @@ export function OverviewTab({ overview, refreshKey, onSelectUser, onOpenAnalytic
           icon={Coins}
           label="Token revenue, 30 d"
           value={overview ? formatMoney(overview.token_revenue_30d, overview.currency) : "—"}
-          hint={overview ? "paid orders, BTCPay" : "loading"}
+          hint={overview ? "paid orders, Whop" : "loading"}
           tone="success"
         />
         <StatTile

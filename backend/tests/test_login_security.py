@@ -20,7 +20,7 @@ from app.config import settings
 from app.db import AuthCode, OAuthIdentity, Order, User
 from app.main import app
 from app.tokens import get_token_plans, new_order, settle_order, void_order
-from tests.test_volet import (  # noqa: F401 - fixtures
+from tests.test_whop import (  # noqa: F401 - fixtures
     PASSWORD,
     _database,
     _load,
@@ -425,7 +425,7 @@ def test_id_token_checks(monkeypatch):
 def _order(email: str, kind: str, amount: float, tokens: int) -> Order:
     def make(db, user):
         plan = get_token_plans(db)["pro"]
-        order = new_order(db, user, kind, plan, amount, tokens, provider="volet")
+        order = new_order(db, user, kind, plan, amount, tokens, provider="whop")
         return order.id
 
     order_id = _with_user(email, make)
@@ -440,7 +440,7 @@ def test_receipts_and_failed_payment_emails(outbox):
         order = db.get(Order, _order(email, "subscription", 89, 4500).id)
         assert settle_order(db, order, source="test")
     activated = _to(outbox, email, "plan is active")
-    assert len(activated) == 1 and "$89" in activated[0]["text"] and "Volet" in activated[0]["text"]
+    assert len(activated) == 1 and "$89" in activated[0]["text"] and "Whop" in activated[0]["text"]
 
     with _session() as db:
         order = db.get(Order, _order(email, "topup", 20, 1000).id)

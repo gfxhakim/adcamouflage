@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from app import mailer
 from app.config import settings
-from tests.test_volet import (  # noqa: F401 - fixtures
+from tests.test_whop import (  # noqa: F401 - fixtures
     _database,
     _reset_limiter,
     _activity,

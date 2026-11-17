@@ -16,16 +16,15 @@ from pydantic import SecretStr
 from app import meta_capi
 from app.config import settings
 from app.main import app
-from tests.test_volet import (  # noqa: F401 - fixtures
-    STATUS_PATH,
+from tests.test_whop import (  # noqa: F401 - fixtures
     _checkout,
     _database,
-    _notification,
     _order,
+    _post_whop,
     _reset_limiter,
-    _volet,
+    _whop_event,
     address,
-    volet_env,
+    whop_env,
 )
 
 PASSWORD = "correct-horse-battery"
@@ -94,39 +93,39 @@ def test_signup_sends_complete_registration_with_hashed_email(sent):
     assert email not in json.dumps(event)
 
 
-def test_nothing_is_sent_without_cookie_consent(sent, volet_env):
+def test_nothing_is_sent_without_cookie_consent(sent, whop_env):
     client = _client(consent=False)
     _register(client, address("meta-noconsent"))
     order_id = _checkout(client, "starter")["order_id"]
-    _volet().post(STATUS_PATH, data=_notification(order_id))
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     assert sent == []
 
 
-def test_purchase_is_sent_once_and_only_when_the_payment_is_confirmed(sent, volet_env):
+def test_purchase_is_sent_once_and_only_when_the_payment_is_confirmed(sent, whop_env):
     client = _client(consent=True)
     _register(client, address("meta-buy"))
     order_id = _checkout(client, "starter")["order_id"]
 
     checkout = [e for e in sent if e["event_name"] == "InitiateCheckout"]
     assert len(checkout) == 1 and checkout[0]["event_id"] == f"checkout-{order_id}"
-    assert checkout[0]["custom_data"]["value"] == 37.5
+    assert checkout[0]["custom_data"]["value"] == 37.0
     assert not [e for e in sent if e["event_name"] == "Purchase"]
     assert json.loads(_order(order_id).tracking)["consent"] == meta_capi.GRANTED
 
-    # A pending notification is not a sale.
-    _volet().post(STATUS_PATH, data=_notification(order_id, state="PENDING"))
+    # A non-succeeded event is not a sale.
+    _post_whop(_whop_event(order_id, event_type="payment.pending", variant_id="plan_starter"))
     assert not [e for e in sent if e["event_name"] == "Purchase"]
 
-    fields = _notification(order_id)
-    _volet().post(STATUS_PATH, data=fields)
-    _volet().post(STATUS_PATH, data=fields)  # delivered twice
+    event = _whop_event(order_id, variant_id="plan_starter")
+    _post_whop(event)
+    _post_whop(event)  # delivered twice
     purchases = [e for e in sent if e["event_name"] == "Purchase"]
     assert len(purchases) == 1
     purchase = purchases[0]
     assert purchase["event_id"] == f"purchase-{order_id}"
-    assert purchase["custom_data"]["value"] == 37.5
+    assert purchase["custom_data"]["value"] == 37.0
     assert purchase["custom_data"]["currency"]
-    # Matched to the buyer's browser, not to Volet's server that sent the notification.
+    # Matched to the buyer's browser, not to Whop's server that sent the notification.
     assert purchase["user_data"]["client_ip_address"] == "198.51.100.7"
     assert purchase["user_data"]["fbp"] == "fb.1.1700000000.111"
 
@@ -146,25 +145,25 @@ def test_disabled_without_token(monkeypatch):
     assert meta_capi.enabled() is False
 
 
-def test_checkout_also_sends_add_payment_info_and_keeps_event_ids(sent, volet_env):
+def test_checkout_also_sends_add_payment_info_and_keeps_event_ids(sent, whop_env):
     client = _client(consent=True)
     _register(client, address("meta-payinfo"))
     order_id = _checkout(client, "starter")["order_id"]
     [payinfo] = [e for e in sent if e["event_name"] == "AddPaymentInfo"]
     assert payinfo["event_id"] == f"payinfo-{order_id}"
-    assert payinfo["custom_data"]["payment_method"] == "volet"
+    assert payinfo["custom_data"]["payment_method"] == "whop"
     tracking = json.loads(_order(order_id).tracking)
     assert tracking["purchase_event_id"] == f"purchase-{order_id}"
     assert tracking["fbc"] == "fb.1.1700000000.AbCdEf"
     assert tracking["captured_at"] > 0
 
 
-def test_delayed_purchase_uses_checkout_browser_data_and_records_outcome(sent, volet_env):
+def test_delayed_purchase_uses_checkout_browser_data_and_records_outcome(sent, whop_env):
     client = _client(consent=True)
     _register(client, address("meta-late"))
     order_id = _checkout(client, "starter")["order_id"]
-    # Confirmed later from Volet's server: no cookies, different IP.
-    _volet().post(STATUS_PATH, data=_notification(order_id))
+    # Confirmed later from Whop's server: no cookies, different IP.
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     [purchase] = [e for e in sent if e["event_name"] == "Purchase"]
     assert purchase["user_data"]["fbc"] == "fb.1.1700000000.AbCdEf"
     assert purchase["user_data"]["client_user_agent"] == "pytest-browser"
@@ -174,7 +173,7 @@ def test_delayed_purchase_uses_checkout_browser_data_and_records_outcome(sent, v
     assert meta_capi.purchase_status(_order(order_id)) == "sent"
 
 
-def test_reused_order_picks_up_consent_given_later(sent, volet_env):
+def test_reused_order_picks_up_consent_given_later(sent, whop_env):
     client = _client(consent=False)
     _register(client, address("meta-later-consent"))
     order_id = _checkout(client, "starter")["order_id"]
@@ -182,21 +181,21 @@ def test_reused_order_picks_up_consent_given_later(sent, volet_env):
     client.cookies.set(meta_capi.CONSENT_COOKIE, meta_capi.GRANTED)
     client.cookies.set("_fbc", "fb.1.1700000000.Later")
     assert _checkout(client, "starter")["order_id"] == order_id  # same pending order
-    _volet().post(STATUS_PATH, data=_notification(order_id))
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     [purchase] = [e for e in sent if e["event_name"] == "Purchase"]
     assert purchase["user_data"]["fbc"] == "fb.1.1700000000.Later"
 
 
-def test_no_consent_is_recorded_and_nothing_sent(sent, volet_env):
+def test_no_consent_is_recorded_and_nothing_sent(sent, whop_env):
     client = _client(consent=False)
     _register(client, address("meta-noconsent-status"))
     order_id = _checkout(client, "starter")["order_id"]
-    _volet().post(STATUS_PATH, data=_notification(order_id))
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     assert sent == []
     assert meta_capi.purchase_status(_order(order_id)) == "no consent"
 
 
-def test_purchase_is_retried_then_marked_failed(monkeypatch, volet_env):
+def test_purchase_is_retried_then_marked_failed(monkeypatch, whop_env):
     monkeypatch.setattr(settings, "meta_pixel_id", "1234567890")
     monkeypatch.setattr(settings, "meta_capi_token", SecretStr("capi-token-placeholder"))
     monkeypatch.setattr(meta_capi, "PURCHASE_RETRY_DELAYS", (0, 0))

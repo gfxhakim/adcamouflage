@@ -117,7 +117,7 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
         "stat_sub": "tokens added · until {end_date}",
         "headline": "",
         "button": "Open workspace",
-        "when": "When a plan payment is confirmed or approved (Volet, BTCPay, Admin or Telegram).",
+        "when": "When a plan payment is confirmed or approved (Whop, Admin or Telegram).",
         "enabled": True,
         "subject": "Your {plan} plan is active",
         "body": (
@@ -347,7 +347,7 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
         "stat_sub": "was not charged",
         "headline": "",
         "button": "Try again",
-        "when": "When a payment is cancelled by the provider, marked invalid, or rejected by you.",
+        "when": "When you reject a payment (Admin or Telegram), or an order is marked invalid.",
         "enabled": True,
         "subject": "Your " + BRAND + " payment did not go through",
         "body": (
@@ -894,7 +894,7 @@ def _order_values(db: Session, order: Any) -> dict[str, Any]:
     else:
         money = f"{amount:,.2f} {cur.upper()}".replace(".00", "")
     provider = str(getattr(order, "provider", "") or "")
-    method = {"volet": "Volet", "btcpay": "Crypto (BTCPay)"}.get(provider, provider.capitalize() or "-")
+    method = {"whop": "Whop", "volet": "Volet", "btcpay": "Crypto (BTCPay)"}.get(provider, provider.capitalize() or "-")
     if amount <= 0:
         method = "Added by support"
     paid = aware(getattr(order, "paid_at", None)) or aware(getattr(order, "created_at", None)) or datetime.now(timezone.utc)
@@ -1195,7 +1195,7 @@ def _sample_values(user: User, kind: str, days_before: int) -> dict[str, Any]:
         "code": "482913",
         "amount": "$89",
         "order_id": "BC-7Q2M-K4XD",
-        "method": "Volet",
+        "method": "Whop",
         "paid_date": f"{datetime.now(timezone.utc):%d %B %Y}",
         "device": "Chrome on Windows",
         "ip": "203.0.113.24",

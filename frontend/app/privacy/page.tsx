@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <b>Billing records</b>: your plan, token balance and orders (amount, date, status). Payments are handled by
-          our payment providers (Volet and/or BTCPay Server); we never see or store card numbers or wallet keys.
+          our payment processor (Whop); we never see or store full card numbers or sensitive payment credentials.
         </li>
         <li>
           <b>Technical data</b>: IP address, browser type, pages visited and timestamps, used to keep the service
@@ -44,6 +44,12 @@ export default function PrivacyPage() {
       <p>
         We use a session cookie to keep you signed in and a cookie that remembers your cookie choice. These are needed
         for the site to work.
+      </p>
+      <p>
+        If you arrive through a referral or partner link, a cookie remembers that code for up to 30 days so the
+        discount can be applied when you sign up. To stop people from referring themselves, we keep a scrambled
+        (hashed) form of a random browser id and of your network address with your account. It is used for that check
+        only and is never shared.
       </p>
       <p>
         Only if you click <b>Accept</b> on the cookie banner, we also use the <b>Meta Pixel</b> and Meta&apos;s{" "}
@@ -69,7 +75,7 @@ export default function PrivacyPage() {
 
       <h2>Who we share it with</h2>
       <p>
-        Our hosting provider (Railway), our payment providers (Volet, BTCPay Server), our email provider (Resend) and,
+        Our hosting provider (Railway), our payment processor (Whop), our email provider (Resend) and,
         with your consent, Meta. We do not sell your personal data.
       </p>
 

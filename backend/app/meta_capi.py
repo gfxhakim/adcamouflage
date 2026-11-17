@@ -12,8 +12,7 @@ Event ids are built from ids both sides already know:
 - ``payinfo-<order id>``    AddPaymentInfo (checkout route: the payment method
                             is picked when the order is made)
 - ``purchase-<order id>``   Purchase (sent only when a payment is confirmed:
-                            the Volet notification, the BTCPay webhook or the
-                            BTCPay poll settles the order)
+                            the Whop webhook settles the order)
 - PageView / ViewContent ids are random ones made by the browser, which posts
   them to ``POST /api/v1/meta/event`` so the server copy can be sent.
 
@@ -23,7 +22,7 @@ and nothing is sent for a visitor who declined the cookie banner (the
 Sending runs on a background thread so a slow Graph API never slows a page,
 a sign-up or a payment notification.
 
-Delayed payments (Volet, BTCPay, admin approval) are why the order keeps the
+Delayed payments (Whop, admin approval) are why the order keeps the
 buyer's browser data: the Purchase goes out at the moment the payment is
 confirmed, maybe hours after the click, from a server request that carries
 none of it. Meta matches it to the ad click through the saved fbp / fbc /

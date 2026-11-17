@@ -1,0 +1,190 @@
+"""Whop as a payment provider.
+
+Mirrors the single-provider payment adapter contract: knows whether Whop is set
+up, verifies incoming Standard Webhooks deliveries, maps our internal tiers and
+top-up amounts to Whop plan ids, and extracts order / plan / payment ids from a
+verified event. The order lifecycle (create / settle / void) stays in
+``tokens.py`` and ``billing_routes.py`` so every Whop payment settles through
+``tokens.settle_order`` and is applied once.
+
+Flow
+----
+1. ``POST /api/v1/billing/checkout`` creates a pending ``Order`` and returns
+   ``{order_id, whop_plan}``.
+2. The browser mounts Whop's checkout element for ``whop_plan``, carrying our
+   ``order_id`` as ``metadata.order_id`` (see
+   ``frontend/components/plan/WhopCheckout.tsx``).
+3. The customer pays on Whop. No amount is ever asserted by the browser: the
+   Whop plan fixes the price.
+4. Whop sends ``payment.succeeded`` to ``/api/v1/billing/whop/webhook`` with
+   our ``order_id`` echoed back in ``metadata``. That route verifies the
+   signature here, checks that the paid Whop plan matches the order, and calls
+   ``settle_order``. Fulfilment happens ONLY from the webhook.
+
+Security
+--------
+``verify_webhook`` fails closed: any missing secret, missing SDK, bad signature
+or unreadable body raises ``WhopError`` and the route answers 401, so a forged
+call never settles an order. Verification uses Whop's official SDK helper
+(``whop_sdk.lib.verify_webhook.unwrap``) rather than a hand-rolled HMAC.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any
+
+from .config import settings
+
+logger = logging.getLogger(__name__)
+
+PROVIDER = "whop"
+
+# payment.succeeded is the only event that grants access. Everything else is
+# acknowledged and ignored (refunds/disputes are handled by hand for now).
+SETTLED_EVENT = "payment.succeeded"
+
+
+class WhopError(Exception):
+    """Whop is not set up, or a webhook could not be trusted."""
+
+
+def configured() -> bool:
+    """True when both the API key and the webhook secret are set.
+
+    The plan-id map is checked per purchase in ``plan_id_for`` so a missing
+    mapping surfaces as a clear 503 at checkout rather than hiding the whole
+    provider.
+    """
+
+    return settings.whop_configured
+
+
+def plan_id_for(kind: str, plan_id: str, amount: float) -> str:
+    """The Whop plan id (``plan_xxx``) that charges for one of our orders.
+
+    * subscription -> the Whop plan for that tier (starter / pro / max)
+    * topup        -> the Whop plan for that dollar amount (20 / 40 / 80 / ...)
+
+    The maps live in config (``ADCAM_WHOP_PLAN_SUBSCRIPTION`` /
+    ``ADCAM_WHOP_PLAN_TOPUP``) and are filled with the plan ids copied from the
+    Whop dashboard. A missing entry raises so checkout fails loudly instead of
+    sending the customer to the wrong plan.
+    """
+
+    if kind == "subscription":
+        mapped = settings.whop_plan_subscription.get(plan_id.strip().lower())
+    elif kind == "topup":
+        mapped = settings.whop_plan_topup.get(str(int(round(amount))))
+    else:
+        mapped = None
+    if not mapped:
+        who = plan_id if kind == "subscription" else str(int(round(amount)))
+        raise WhopError(f"No Whop plan is configured for {kind} '{who}'.")
+    return mapped.strip()
+
+
+def verify_webhook(raw_body: bytes, headers: Any) -> dict[str, Any]:
+    """Return the parsed, verified Whop event, or raise ``WhopError``.
+
+    ``headers`` is the request's header mapping (``request.headers``). The raw
+    body must be passed exactly as received, before any JSON parsing, because
+    the signature covers those bytes.
+    """
+
+    secret = settings.whop_webhook_secret.get_secret_value().strip() if settings.whop_webhook_secret else ""
+    if not secret:
+        raise WhopError("The Whop webhook secret is not set.")
+
+    # Official SDK verification (`whop-sdk` >= 1.x exposes
+    # `whop_sdk.lib.verify_webhook.unwrap`, while legacy 0.x exposed
+    # `whop.webhooks.unwrap`). Fails closed if neither is available.
+    try:
+        from whop_sdk.lib.verify_webhook import unwrap  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            from whop.webhooks import unwrap  # type: ignore[import-not-found]
+        except Exception as exc:  # noqa: BLE001
+            raise WhopError("The Whop SDK is not installed; cannot verify the webhook.") from exc
+
+    try:
+        event = unwrap(raw_body, headers=dict(headers), key=secret)
+    except Exception as exc:  # noqa: BLE001 - any verification failure is a rejection
+        logger.warning("Whop webhook rejected: %s", exc)
+        raise WhopError("Bad Whop webhook signature.") from exc
+
+    if isinstance(event, (bytes, str)):
+        try:
+            event = json.loads(event)
+        except ValueError as exc:
+            raise WhopError("The Whop webhook body is not JSON.") from exc
+    if not isinstance(event, dict):
+        raise WhopError("The Whop webhook body is not an event.")
+    return event
+
+
+def _event_data(event: dict[str, Any]) -> dict[str, Any]:
+    data = event.get("data")
+    return data if isinstance(data, dict) else event
+
+
+def order_id_from_event(event: dict[str, Any]) -> str:
+    """Pull our ``order_id`` out of a verified event's metadata.
+
+    Whop nests the payment under ``data`` and copies the metadata we set on the
+    checkout to the payment. Both shapes (flat and nested) are read so a minor
+    SDK/account difference does not drop the id.
+    """
+
+    data = _event_data(event)
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    return str(metadata.get("order_id") or "").strip()
+
+
+def payment_id_from_event(event: dict[str, Any]) -> str:
+    """Pull Whop's payment id (``pay_...``) from a verified event, if present."""
+
+    data = _event_data(event)
+    if data is not event and data.get("id"):
+        return str(data["id"]).strip()
+    pid = event.get("payment_id") or data.get("payment_id")
+    return str(pid or "").strip()
+
+
+def plan_id_from_event(event: dict[str, Any]) -> str:
+    """Pull the Whop variant/plan id (``plan_...``) that was charged, if present."""
+
+    data = _event_data(event)
+    plan = data.get("plan")
+    if isinstance(plan, dict) and plan.get("id"):
+        return str(plan["id"]).strip()
+    if data.get("variant_id"):
+        return str(data["variant_id"]).strip()
+    if data.get("plan_id"):
+        return str(data["plan_id"]).strip()
+    items = data.get("line_items")
+    if isinstance(items, list) and items and isinstance(items[0], dict):
+        vid = items[0].get("variant_id") or items[0].get("plan_id")
+        if vid:
+            return str(vid).strip()
+    return ""
+
+
+def payer_id_from_event(event: dict[str, Any]) -> str:
+    """Pull a stable Whop buyer identifier (user id or email) from a verified event, if present."""
+
+    data = _event_data(event)
+    user = data.get("user")
+    if isinstance(user, dict):
+        uid = user.get("id") or user.get("email") or user.get("username")
+        if uid:
+            return str(uid).strip()
+    for key in ("user_id", "user_email", "email"):
+        if data.get(key):
+            return str(data[key]).strip()
+    return ""
+
+
+def event_type(event: dict[str, Any]) -> str:
+    return str(event.get("type") or event.get("event") or "").strip()
