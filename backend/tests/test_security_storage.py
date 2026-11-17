@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.security import sign_download, verify_download
-from app.storage import StorageError, classify, resolve_within, sanitize_filename
+from app.storage import StorageError, classify, display_filename, resolve_within, sanitize_filename
 from app.config import settings
 from app.schemas import AssetKind
 
@@ -45,6 +45,33 @@ def test_expired_token_is_rejected():
 )
 def test_sanitize_filename(raw, expected):
     assert sanitize_filename(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("my video.mp4", "my video.mp4"),
+        ("été (final).MP4", "été (final).MP4"),
+        ("e\u0301te\u0301.mp4", "été.mp4"),  # decomposed accents come back as one letter
+        ("إعلان.mp4", "إعلان.mp4"),
+        ("../../etc/passwd", "passwd"),
+        ("C:\\Users\\me\\clip.MOV", "clip.MOV"),
+        ('a<b>:"c|d?e*.mp4', "a_b___c_d_e_.mp4"),
+        ("line\nbreak\ttab.mp4", "line break tab.mp4"),
+        ("invoice\u202egpj.mp4", "invoice gpj.mp4"),  # right-to-left override removed
+        ("  ..hidden.mp4.. ", "hidden.mp4"),
+        ("", "asset"),
+        ("...", "asset"),
+    ],
+)
+def test_display_filename(raw, expected):
+    assert display_filename(raw) == expected
+
+
+def test_display_filename_truncates_long_names():
+    name = display_filename("я" * 400 + ".mp4")
+    assert len(name) <= 120
+    assert name.endswith(".mp4")
 
 
 def test_sanitize_truncates_long_names():

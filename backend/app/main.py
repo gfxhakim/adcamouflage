@@ -72,7 +72,7 @@ from .schemas import (
     new_id,
 )
 from .security import require_api_key, sign_download, verify_download
-from .storage import StorageError, classify, get_store, resolve_within, sanitize_filename
+from .storage import StorageError, classify, display_filename, get_store, resolve_within, sanitize_filename
 from .subscription_routes import router as subscription_router
 from .support_routes import admin_router as support_admin_router
 from .support_routes import user_router as support_user_router
@@ -378,8 +378,12 @@ async def create_batch(
     store = get_store()
 
     for upload in files:
-        original = sanitize_filename(upload.filename or "asset")
-        kind = classify(original, upload.content_type)
+        # Two names. A flattened one decides the file type and the extension on
+        # disk; the person's own is what the app shows and what the download is
+        # named after ("<name>flow").
+        safe_name = sanitize_filename(upload.filename or "asset")
+        original = display_filename(upload.filename or "asset")
+        kind = classify(safe_name, upload.content_type)
         if kind is None:
             rejected.append(
                 UploadRejection(filename=original, reason="Unsupported file type - upload a video or an image.")
@@ -388,7 +392,7 @@ async def create_batch(
             continue
 
         asset_id = new_id("asset")
-        suffix = Path(original).suffix.lower()
+        suffix = Path(safe_name).suffix.lower()
         stored_name = f"{asset_id}{suffix}"
         destination = resolve_within(settings.uploads_dir, stored_name)
 
@@ -488,6 +492,10 @@ def _with_fresh_links(asset: AssetJob) -> AssetJob:
     """
 
     if asset.status is not JobStatus.COMPLETED or not asset.output_filename:
+        if asset.download_url or asset.poster_url:
+            # A link left by an earlier run (cancel racing the finish, a task
+            # that ran twice) points at a file the API will not serve.
+            return asset.model_copy(update={"download_url": None, "poster_url": None})
         return asset
 
     token = sign_download(asset.id)

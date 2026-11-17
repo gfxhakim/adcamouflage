@@ -6,6 +6,7 @@ import io
 import json
 import time
 import zipfile
+from urllib.parse import unquote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -44,6 +45,15 @@ def _wait_for_batch(client: TestClient, batch_id: str, timeout: float = 180.0) -
             return payload
         time.sleep(0.25)
     pytest.fail(f"batch {batch_id} did not settle in {timeout}s: {payload}")
+
+
+def _saved_name(response) -> str:
+    """The file name a browser would save this download under."""
+
+    header = response.headers["content-disposition"]
+    if "filename*=utf-8''" in header:
+        return unquote(header.split("filename*=utf-8''", 1)[1])
+    return header.split('filename="', 1)[1].rstrip('"')
 
 
 def _upload(client: TestClient, files, options: dict | None = None):
@@ -107,8 +117,9 @@ def test_image_batch_completes_and_downloads(client, sample_image):
     download = client.get(asset["download_url"])
     assert download.status_code == 200
     assert len(download.content) > 0
-    # The saved file is the uploaded name with "flow" added.
-    assert 'filename="hero_shotflow.jpg"' in download.headers["content-disposition"]
+    # The saved file is the uploaded name, as it was written, with "flow" added.
+    assert asset["original_filename"] == "hero shot.jpg"
+    assert _saved_name(download) == "hero shotflow.jpg"
     assert b"EOS R5" not in download.content
 
 
@@ -158,7 +169,7 @@ def test_mixed_batch_variants_and_archive(client, sample_video, sample_image):
         if asset["original_filename"] == "promo.mp4" and asset["variant_index"] == 0
     )
     single = client.get(first_video["download_url"])
-    assert 'filename="promoflow_v1.mp4"' in single.headers["content-disposition"]
+    assert _saved_name(single) == "promoflow_v1.mp4"
 
 
 @requires_ffmpeg
@@ -174,11 +185,11 @@ def test_thumbnail_download_is_named_after_the_file(client, sample_video):
     asset = status["assets"][0]
 
     video = client.get(asset["download_url"])
-    assert 'filename="promoflow.mp4"' in video.headers["content-disposition"]
+    assert _saved_name(video) == "promoflow.mp4"
 
     poster = client.get(asset["poster_url"])
     assert poster.status_code == 200
-    assert 'filename="promoflow_poster.jpg"' in poster.headers["content-disposition"]
+    assert _saved_name(poster) == "promoflow_poster.jpg"
 
 
 def test_download_requires_a_valid_token(client, sample_image):
@@ -255,6 +266,41 @@ def test_unfinished_assets_have_no_links():
     queued = AssetJob(batch_id="batch_x", original_filename="a.mp4", stored_filename="a.mp4", kind="video", size_bytes=1)
     assert _with_fresh_links(queued).download_url is None
     assert _with_fresh_links(queued) is queued
+
+    # A link left behind by an earlier run (cancel racing the finish, a task
+    # that ran twice) must not be handed out for a file that did not complete.
+    for status in (JobStatus.CANCELLED, JobStatus.FAILED, JobStatus.PROCESSING):
+        leftover = queued.model_copy(
+            update={
+                "status": status,
+                "output_filename": "asset_1.mp4",
+                "download_url": "/api/v1/assets/asset_1/download?token=old",
+                "poster_url": "/api/v1/assets/asset_1/poster?token=old",
+            }
+        )
+        cleaned = _with_fresh_links(leftover)
+        assert cleaned.download_url is None and cleaned.poster_url is None
+
+
+def test_uploaded_names_keep_their_letters_and_spaces(client, sample_image):
+    """ "Old name + flow" has to hold for names with spaces, accents and other alphabets."""
+
+    names = ["été (final).jpg", "إعلان جديد.jpg", "реклама.jpg"]
+    response = _upload(client, [("files", (name, sample_image.read_bytes(), "image/jpeg")) for name in names])
+    assert response.status_code == 202, response.text
+    status = _wait_for_batch(client, response.json()["batch_id"])
+    assert status["completed"] == 3, status
+
+    saved = {asset["original_filename"]: _saved_name(client.get(asset["download_url"])) for asset in status["assets"]}
+    assert saved == {
+        "été (final).jpg": "été (final)flow.jpg",
+        "إعلان جديد.jpg": "إعلان جديدflow.jpg",
+        "реклама.jpg": "рекламаflow.jpg",
+    }
+
+    archive = client.get(status["archive_url"])
+    with zipfile.ZipFile(io.BytesIO(archive.content)) as bundle:
+        assert sorted(bundle.namelist()) == sorted(saved.values())
 
 
 @pytest.mark.parametrize(

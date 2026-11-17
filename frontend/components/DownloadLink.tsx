@@ -29,7 +29,7 @@ function startDownload(url: string): void {
 }
 
 interface DownloadLinkProps {
-  /** The link from the last status read. Kept for "open in new tab". */
+  /** The link from the last status read. Only the browser's "Save link as" uses it. */
   href: string;
   /**
    * Ask the server for the link again, right before the download starts.
@@ -57,8 +57,10 @@ export function DownloadLink({ href, fresh, onProblem, className, children }: Do
 
   const handleClick = useCallback(
     async (event: MouseEvent<HTMLAnchorElement>) => {
-      // "Open in new tab" and similar are the browser's business.
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      // With `download` on the link, a Ctrl/Cmd/Shift click and a middle click
+      // download too, so they take the same checked path. A right click is left
+      // to the browser's own menu.
+      if (event.button !== 0 && event.button !== 1) return;
       event.preventDefault();
       if (busyRef.current) return;
 
@@ -83,6 +85,7 @@ export function DownloadLink({ href, fresh, onProblem, className, children }: Do
     <a
       href={absoluteUrl(href)}
       onClick={handleClick}
+      onAuxClick={handleClick}
       className={clsx(className, busy && "cursor-progress opacity-70")}
       aria-busy={busy || undefined}
       download
