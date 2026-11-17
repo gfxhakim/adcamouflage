@@ -89,6 +89,10 @@ PLACEHOLDERS: dict[str, str] = {
     "new_email": "The new email address (email change)",
     "login_url": "Link to the log in page",
     "reset_url": "Link to the forgot password page",
+    "reason": "Why the customer asked for a refund (refund emails)",
+    "note": "Your note on a refund decision (refund emails)",
+    "refund_to": "Coin, network and wallet the refund goes to (refund emails)",
+    "refund_tx": "Transaction hash of the refund you sent (refund approved)",
 }
 
 DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
@@ -356,6 +360,83 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
             "so nothing was added to your account.\n\n"
             "You can try again from your plan page:\n{plan_url}\n\n"
             "If money left your account, reply to this email with the transaction ID and we will sort it out.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    # --- cancel and refunds ---------------------------------------------------
+    "cancelled": {
+        "label": "Subscription cancelled",
+        "kicker": "Subscription cancelled",
+        "stat": "{end_date}",
+        "stat_sub": "your access runs until this date",
+        "headline": "",
+        "button": "Open plan page",
+        "when": "When a customer cancels their plan from Account settings.",
+        "enabled": True,
+        "subject": "Your {plan} plan is cancelled",
+        "body": (
+            "Hi {name},\n\n"
+            "Your {plan} plan is cancelled and will not renew. You keep access and your tokens until {end_date}.\n\n"
+            "Changed your mind? You can resume it from your plan page before then:\n{plan_url}\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "refund_requested": {
+        "label": "Refund request received",
+        "kicker": "Refund request received",
+        "stat": "{amount}",
+        "stat_sub": "refund requested",
+        "headline": "",
+        "button": "Open plan page",
+        "when": "When a customer asks for a refund from Account settings.",
+        "enabled": True,
+        "subject": "We got your refund request",
+        "body": (
+            "Hi {name},\n\n"
+            "We received your refund request for {plan} ({amount}, transaction ID {order_id}). "
+            "We will look at it and email you the answer, usually within 2 business days.\n\n"
+            "Reason you gave: {reason}\nRefund to: {refund_to}\n\n"
+            "You can follow it on your plan page:\n{plan_url}\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "refund_approved": {
+        "label": "Refund approved",
+        "kicker": "Refund approved",
+        "stat": "{amount}",
+        "stat_sub": "is being refunded",
+        "headline": "",
+        "button": "Open plan page",
+        "when": "When you approve a refund request in Admin > Sales.",
+        "enabled": True,
+        "subject": "Your refund of {amount} is approved",
+        "body": (
+            "Hi {name},\n\n"
+            "Your refund of {amount} for {plan} (transaction ID {order_id}) is approved. "
+            "We sent it to: {refund_to}\nRefund transaction: {refund_tx}\n\n"
+            "The tokens from this payment were taken off your account.\n\n"
+            "{note}\n\n"
+            "Your plan page:\n{plan_url}\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "refund_rejected": {
+        "label": "Refund declined",
+        "kicker": "Refund request answered",
+        "stat": "{amount}",
+        "stat_sub": "refund not approved",
+        "headline": "",
+        "button": "Open plan page",
+        "when": "When you reject a refund request in Admin > Sales.",
+        "enabled": True,
+        "subject": "About your refund request",
+        "body": (
+            "Hi {name},\n\n"
+            "We looked at your refund request for {plan} ({amount}, transaction ID {order_id}) "
+            "and could not approve it.\n\n"
+            "{note}\n\n"
+            "If you think this is a mistake, reply to this email and we will take another look.\n\n"
+            "Your plan page:\n{plan_url}\n\n"
             f"{SIGN_OFF}"
         ),
     },
@@ -1219,7 +1300,11 @@ def _sample_values(user: User, kind: str, days_before: int) -> dict[str, Any]:
         "ip": "203.0.113.24",
         "provider": "Google",
         "new_email": "new-address@example.com",
-        "plan": "the Pro plan" if kind == "payment_failed" else "Pro",
+        "plan": "the Pro plan" if kind in ("payment_failed", "refund_requested", "refund_approved", "refund_rejected") else "Pro",
+        "reason": "Bought by mistake",
+        "refund_to": "USDT · Tron (TRC-20) TXk3...9fQ2",
+        "refund_tx": "4f1c...a9e0",
+        "note": "Refunds are only possible within 7 days of payment.",
         "tokens": "1,000" if kind == "topup" else "4,500",
         "end_date": f"{datetime.now(timezone.utc) + timedelta(days=days_before if kind == 'ending' else 30):%d %B %Y}",
         "grace_days": 7,

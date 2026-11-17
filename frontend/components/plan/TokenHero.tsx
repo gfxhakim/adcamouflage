@@ -1,17 +1,16 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarDays, Coins, Crown, Loader2, PauseCircle, PlayCircle, Snowflake, UserRound, Zap } from "lucide-react";
-import { useState } from "react";
+import { CalendarDays, Coins, Crown, Snowflake, UserRound, Zap } from "lucide-react";
 
 import NeonCard from "@/components/NeonCard";
-import { cancelSubscription, resumeSubscription, type Subscription } from "@/lib/auth";
+import type { Subscription } from "@/lib/auth";
 import { formatDate, formatMoney, formatTokens, plural } from "@/lib/format";
 
 interface TokenHeroProps {
   sub: Subscription;
-  /** Called after cancel / resume so the page re-reads the subscription. */
-  onChanged: () => Promise<void> | void;
+  /** Kept for callers; cancel / resume now live in Account settings. */
+  onChanged?: () => Promise<void> | void;
 }
 
 /** "Active", "Ends in 3 days", "Ended · renew within 5 days", "Cancelled" and their colours. */
@@ -40,36 +39,12 @@ export function subscriptionStatus(sub: Subscription): { text: string; tone: str
  * The plan page's headline card for a token account: which plan, whether the
  * period is running, when it ends, and the token balance split by bucket.
  */
-export function TokenHero({ sub, onChanged }: TokenHeroProps) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+export function TokenHero({ sub }: TokenHeroProps) {
   const current = sub.subscription;
   const balance = sub.balance;
   const status = subscriptionStatus(sub);
   const perGeneration = current?.tokens_per_generation ?? 0;
   const subShare = balance.usable_tokens > 0 ? Math.min(1, Math.max(0, balance.subscription_tokens) / balance.usable_tokens) : 0;
-
-  const toggleCancel = async () => {
-    if (!current?.active) return;
-    if (!current.cancelled) {
-      const ok = window.confirm(
-        `Cancel your ${current.plan_label} subscription? You keep access and your tokens until ${formatDate(current.period_end)}. Unused subscription tokens will not roll over into a later period.`,
-      );
-      if (!ok) return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      if (current.cancelled) await resumeSubscription();
-      else await cancelSubscription();
-      await onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "That change did not go through.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <NeonCard glow padding="lg" radius="xl">
@@ -123,31 +98,15 @@ export function TokenHero({ sub, onChanged }: TokenHeroProps) {
           </dl>
 
           {current?.active ? (
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={clsx("!py-2 !text-xs", current.cancelled ? "btn-primary" : "btn-ghost")}
-                disabled={busy}
-                onClick={() => void toggleCancel()}
-                aria-label={current.cancelled ? "Resume subscription" : "Cancel subscription"}
-              >
-                {busy ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                ) : current.cancelled ? (
-                  <PlayCircle className="h-3.5 w-3.5" aria-hidden />
-                ) : (
-                  <PauseCircle className="h-3.5 w-3.5" aria-hidden />
-                )}
-                {current.cancelled ? "Resume subscription" : "Cancel subscription"}
-              </button>
-              <span className="text-[11px] text-ink-faint">
-                {current.cancelled
-                  ? "Nothing more is charged. Resume to keep rolling tokens over."
-                  : "Access continues until the period ends."}
-              </span>
-            </div>
+            <p className="mt-5 text-[11px] text-ink-faint">
+              {current.cancelled
+                ? `Cancelled: you keep using the app until ${formatDate(current.period_end)}. `
+                : "Access continues until the period ends. "}
+              <a href="#cancel-refund" className="font-semibold text-meta-600 hover:underline">
+                {current.cancelled ? "Resume plan" : "Cancel plan or ask for a refund"}
+              </a>
+            </p>
           ) : null}
-          {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
         </div>
 
         {/* Token balance ------------------------------------------------ */}
