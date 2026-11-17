@@ -110,9 +110,12 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
   const tokens = user && user.billing_mode === "tokens" ? user.tokens_usable : null;
   const tokensLow = tokens !== null && (!user?.subscription_active || tokens <= 0);
   const tokenTip = tokens === null ? null : user?.subscription_active ? `${formatTokens(tokens)} tokens` : "No active subscription";
+  // `dark:!`: the theme from Admin > Workspace recolours `bg-white` (and `text-black` further down)
+  // with a stronger rule than the dark variant, which would leave a light badge and dark text on
+  // the dark sidebar.
   const tokenTone = tokensLow
     ? "border-red-400/50 bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-200"
-    : "border-meta-500/40 bg-white text-meta-700 dark:border-meta-500/50 dark:bg-slate-900 dark:text-meta-200";
+    : "border-meta-500/40 bg-white text-meta-700 dark:border-meta-500/50 dark:!bg-slate-900 dark:text-meta-200";
 
   const closeDrawer = () => {
     if (isMobile) setOpenMobile(false);
@@ -274,7 +277,7 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
               </AvatarFallback>
             </Avatar>
             <span className="min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:sr-only" data-cms-skip>
-              <span className="block truncate text-sm font-semibold text-black dark:text-slate-100">
+              <span className="block truncate text-sm font-semibold text-black dark:!text-slate-100">
                 {user.display_name || user.email.split("@")[0]}
               </span>
               <span className="block truncate text-xs text-ink-faint dark:text-slate-400">{user.email}</span>

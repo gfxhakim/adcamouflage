@@ -26,6 +26,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import NeonCard from "@/components/NeonCard";
+import { jumpActive } from "@/lib/admin-search";
 import { formatBytes, formatTokens } from "@/lib/format";
 import {
   getAdminSupportThread,
@@ -190,7 +191,13 @@ export default function SupportTab({
 
   useEffect(() => {
     const id = setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      const end = messagesEndRef.current;
+      const list = end?.parentElement;
+      if (!end || !list) return;
+      // While the settings search is showing its result, only the chat box moves: bringing the
+      // newest message into the window would pull that result off screen.
+      if (jumpActive()) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+      else end.scrollIntoView({ behavior: "smooth" });
     }, 60);
     return () => clearTimeout(id);
   }, [detail?.thread.messages.length]);
@@ -744,7 +751,7 @@ export default function SupportTab({
               Customer details &amp; reported issues will appear here when a ticket is selected.
             </div>
           ) : (
-            <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
+            <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2 xl:grid-cols-1">
               {/* Highlighted Issues Reported to Bot */}
               <div className="rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3.5">
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-300">

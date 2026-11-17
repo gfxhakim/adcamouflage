@@ -385,7 +385,8 @@ const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<
         data-sidebar="group-label"
         className={cn(
           "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-          "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
+          // Folded, the label is invisible and slides up over the icon above it: it must not take that icon's clicks.
+          "group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
           className,
         )}
         {...props}
@@ -471,6 +472,8 @@ const SidebarMenuButton = React.forwardRef<
   React.useEffect(() => {
     if (!tipEnabled) setTipOpen(false);
   }, [tipEnabled]);
+  // Set when the button loses focus because the whole window does (another browser tab or app).
+  const leftWithWindow = React.useRef(false);
 
   const button = (
     <Comp
@@ -496,9 +499,14 @@ const SidebarMenuButton = React.forwardRef<
       <TooltipTrigger
         asChild
         // Only keyboard focus opens the label. Focus that comes back by itself (returning to the browser
-        // tab after a click) would leave a label stuck on screen with the mouse far away.
+        // tab) would leave a label stuck on screen with the mouse far away.
+        onBlur={(event) => {
+          leftWithWindow.current = document.activeElement === event.currentTarget;
+        }}
         onFocus={(event) => {
-          if (!event.currentTarget.matches(":focus-visible")) event.preventDefault();
+          const cameBack = leftWithWindow.current;
+          leftWithWindow.current = false;
+          if (cameBack || !event.currentTarget.matches(":focus-visible")) event.preventDefault();
         }}
       >
         {button}

@@ -54,6 +54,7 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
     }
     let cancelled = false;
     setLoading(true);
+    setFailed(false); // the error was about the last search, not this one
     const timer = setTimeout(async () => {
       try {
         const page = await listUsers({ q, plan: "", state: "", sort: "newest" }, 0, 8);

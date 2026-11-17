@@ -239,17 +239,23 @@ export default function AdminPage() {
       <SidebarInset className="min-w-0 bg-transparent">
         <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
+            {/* This side takes the room the buttons leave (less with an unread badge). On a phone the
+                brand name is cut short with "…" when it does not fit, and when too little of it
+                would be left the mark stands alone, instead of the name running under the buttons. */}
+            <div className="flex min-w-0 flex-1 items-center gap-3 [container-type:inline-size]">
               <SidebarTrigger
                 className="h-9 w-9 shrink-0 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white [&>svg]:h-4 [&>svg]:w-4"
                 aria-label="Open or close the menu"
               />
               <Link href="/" className="flex min-w-0 items-center lg:hidden" aria-label="ProteusFlow home">
-                <BrandLogo onDark />
+                <BrandLogo
+                  onDark
+                  className="[&>span:last-child>span:first-child]:truncate [@container_(max-width:11.4rem)]:[&>span:last-child]:hidden"
+                />
               </Link>
               <span className="hidden truncate text-sm font-semibold text-slate-300 lg:block">{activeTab?.label}</span>
             </div>
-            <nav className="flex items-center gap-2">
+            <nav className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => openTab("support")}

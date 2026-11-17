@@ -189,12 +189,19 @@ const TOP_CLEAR = 76;
 const TAKE_OVER = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 /** The second press of a double click lands within this time: it belongs to picking the result. */
 const DOUBLE_PRESS_MS = 450;
+/** Keys held for a shortcut (Alt+Tab to another window): pressing one steers nothing. */
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "AltGraph", "Meta", "OS", "CapsLock"]);
 
 let stopJump: (() => void) | null = null;
 
 /** Stops the jump in progress, if any. Call it when the admin opens another page. */
 export function cancelJump(): void {
   stopJump?.();
+}
+
+/** True while a jump is finding or holding its title: a page should not scroll itself meanwhile. */
+export function jumpActive(): boolean {
+  return stopJump !== null;
 }
 
 /**
@@ -215,6 +222,7 @@ export function jumpToTitle(entry: Pick<AdminSearchEntry, "title" | "via" | "noP
   const wanted = tidy(entry.title);
   const via = entry.via ? tidy(entry.via) : undefined;
   const started = Date.now();
+  const origin = document.activeElement; // where the keyboard was when the result was picked
   let viaPressed = false;
   let stopped = false;
   let timer = 0;
@@ -229,8 +237,19 @@ export function jumpToTitle(entry: Pick<AdminSearchEntry, "title" | "via" | "noP
     if (stopJump === stop) stopJump = null;
   }
   function takeOver(event: Event) {
-    const press = event.type === "pointerdown" || event.type === "touchstart";
-    if (press && Date.now() - started < DOUBLE_PRESS_MS) return;
+    const early = Date.now() - started < DOUBLE_PRESS_MS;
+    if (event.type === "keydown") {
+      const { key, repeat, target } = event as KeyboardEvent;
+      // A key still held from picking the result, or a modifier, is not the owner taking over.
+      if (repeat || MODIFIER_KEYS.has(key)) return;
+      // Enter again where the result was picked (the search box), or with nothing focused (the
+      // phone menu closed and took the search box with it), asks for nothing new. Enter or Space
+      // pressed twice is one pick, like a double click.
+      if (key === "Enter" && (early || target === origin || target === document.body)) return;
+      if (key === " " && early) return;
+    } else if (early && event.type !== "wheel") {
+      return; // the second press of a double click
+    }
     stop();
   }
   for (const type of TAKE_OVER) window.addEventListener(type, takeOver, { capture: true, passive: true });
