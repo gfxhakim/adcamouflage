@@ -1,4 +1,5 @@
 import type {
+  AssetJob,
   BatchCreated,
   BatchStatus,
   HealthReport,
@@ -104,6 +105,11 @@ export function getPresets(): Promise<PresetCatalogue> {
 
 export function getBatch(batchId: string): Promise<BatchStatus> {
   return request<BatchStatus>(`/api/v1/batches/${batchId}`);
+}
+
+/** One asset with freshly signed download links (they are signed on every read). */
+export function getAsset(assetId: string): Promise<AssetJob> {
+  return request<AssetJob>(`/api/v1/assets/${assetId}`);
 }
 
 export function cancelAsset(assetId: string): Promise<{ status: string }> {

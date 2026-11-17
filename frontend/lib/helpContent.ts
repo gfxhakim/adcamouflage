@@ -135,7 +135,7 @@ export const HELP_GUIDE: HelpGuideSection[] = [
     points: [
       "Check the token cost line, then press Render.",
       "Renders keep going if you close the tab. Come back to the queue any time.",
-      "Download each variation or the whole batch as a zip with its export report.",
+      "Download each variation or the whole batch as a zip.",
     ],
     warning: "Files are deleted automatically after the retention window. Download your zip right away.",
   },

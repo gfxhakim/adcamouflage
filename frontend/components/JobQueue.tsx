@@ -2,9 +2,11 @@
 
 import clsx from "clsx";
 import { Archive, Inbox, RefreshCw, Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
 
-import { absoluteUrl } from "@/lib/api";
+import { getBatch } from "@/lib/api";
 import type { BatchStatus } from "@/lib/types";
+import DownloadLink from "./DownloadLink";
 import JobCard from "./JobCard";
 import NeonCard from "./NeonCard";
 import ProgressBar from "./ProgressBar";
@@ -27,6 +29,22 @@ export function JobQueue({
   onRefresh,
   onDiscard,
 }: JobQueueProps) {
+  const batchId = batch?.batch.id ?? null;
+  const [archiveProblem, setArchiveProblem] = useState<{ batchId: string; message: string } | null>(null);
+  // The zip link is signed again on every read, so ask for it right before the download.
+  const freshArchive = useCallback(
+    () => (batchId ? getBatch(batchId).then((latest) => latest.archive_url) : Promise.resolve(null)),
+    [batchId],
+  );
+  const handleArchiveProblem = useCallback(
+    (message: string | null) => {
+      setArchiveProblem(message && batchId ? { batchId, message } : null);
+      // The files are gone or the batch changed: show the queue as it is now.
+      if (message) onRefresh();
+    },
+    [batchId, onRefresh],
+  );
+
   if (!batch) {
     return (
       <NeonCard tone="muted" padding="lg" radius="xl" className="h-full">
@@ -88,14 +106,15 @@ export function JobQueue({
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
               </button>
               {batch.archive_url ? (
-                <a
-                  href={absoluteUrl(batch.archive_url)}
+                <DownloadLink
+                  href={batch.archive_url}
+                  fresh={freshArchive}
+                  onProblem={handleArchiveProblem}
                   className="btn-primary !px-3 !py-1.5 !text-xs"
-                  download
                 >
                   <Archive className="h-3.5 w-3.5" aria-hidden />
                   Download all
-                </a>
+                </DownloadLink>
               ) : null}
             </div>
           </div>
@@ -126,6 +145,15 @@ export function JobQueue({
           {error ? (
             <p className="mt-3 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
               {error}
+            </p>
+          ) : null}
+
+          {archiveProblem && archiveProblem.batchId === batch.batch.id ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-lg border border-amber-400/50 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300"
+            >
+              {archiveProblem.message}
             </p>
           ) : null}
         </div>
