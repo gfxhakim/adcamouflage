@@ -15,6 +15,7 @@ import {
   Receipt,
   ShieldCheck,
   Sparkles,
+  Undo2,
   UserRound,
   X,
 } from "lucide-react";
@@ -24,6 +25,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
+import CancelRefundCard from "@/components/plan/CancelRefundCard";
 import CouponBox from "@/components/plan/CouponBox";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
@@ -603,6 +605,18 @@ export default function PlanPage() {
                     </div>
                     <PasswordCard socialOnly={user?.social_only} />
                   </NeonCard>
+
+                  {isTokens ? (
+                    <div id="cancel-refund" className="scroll-mt-24">
+                      <NeonCard padding="lg" radius="xl">
+                        <div className="mb-4 flex items-center gap-2">
+                          <Undo2 className="h-4 w-4 text-meta-500" aria-hidden />
+                          <h2 className="text-sm font-semibold tracking-tight text-black">Cancel plan &amp; refunds</h2>
+                        </div>
+                        <CancelRefundCard sub={sub} planLabels={planLabels} onChanged={load} />
+                      </NeonCard>
+                    </div>
+                  ) : null}
 
                   <NeonCard tone="slow" padding="lg" radius="xl">
                     <div className="mb-4 flex items-center gap-2">

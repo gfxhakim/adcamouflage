@@ -372,8 +372,14 @@ def order_status(order_id: str, user: User = Depends(current_user), db: Session 
 # --------------------------------------------------------------------------
 
 
+class CancelIn(BaseModel):
+    reason: str = Field(default="", max_length=500)
+
+
 @router.post("/cancel", response_model=SubscriptionState)
-def cancel_subscription(user: User = Depends(current_user), db: Session = Depends(get_db)) -> SubscriptionState:
+def cancel_subscription(
+    payload: CancelIn | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> SubscriptionState:
     """Stop at the end of the paid period. Access continues until then; the next purchase gets no rollover."""
 
     if not subscription_active(user):
@@ -381,7 +387,17 @@ def cancel_subscription(user: User = Depends(current_user), db: Session = Depend
     if user.sub_cancelled_at is None:
         user.sub_cancelled_at = datetime.now(timezone.utc)
         db.commit()
-        log_activity(db, user.id, "subscription", f"Cancelled the {user.sub_plan} subscription")
+        reason = " ".join((payload.reason if payload else "").split())
+        log_activity(
+            db, user.id, "subscription", f"Cancelled the {user.sub_plan} subscription" + (f" ({reason})" if reason else "")
+        )
+        plan = get_token_plans(db).get(user.sub_plan or "")
+        label = plan.label if plan else (user.sub_plan or "")
+        end = user.sub_period_end
+        notify.cancelled(user.email, label, end, reason, name=user.display_name)
+        from . import mailer
+
+        mailer.send_kind(db, user, "cancelled", {"plan": label, "end_date": f"{end:%d %B %Y}" if end else ""})
     return SubscriptionState(cancelled=True, period_end=user.sub_period_end)
 
 

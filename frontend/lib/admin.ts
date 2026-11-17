@@ -819,3 +819,60 @@ export const saveGuide = (slug: string, guide: GuideEdit) =>
   call<SavedGuide>(`/guides/${encodeURIComponent(slug)}`, { method: "PUT", body: JSON.stringify(guide) });
 export const deleteSavedGuide = (slug: string) =>
   call<void>(`/guides/${encodeURIComponent(slug)}`, { method: "DELETE" });
+
+// --- refund requests ---------------------------------------------------------
+
+export interface RefundRules {
+  enabled: boolean;
+  window_days: number;
+  max_used_percent: number;
+  allow_subscriptions: boolean;
+  allow_topups: boolean;
+}
+
+export interface AdminRefundRequest {
+  id: number;
+  status: "pending" | "approved" | "rejected" | "withdrawn";
+  reason: string;
+  details: string;
+  network: string;
+  address: string | null;
+  refund_tx: string | null;
+  admin_note: string;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+  tokens_removed: number;
+  user_id: number;
+  email: string;
+  name: string | null;
+  order: {
+    id: string;
+    ref: string;
+    kind: "subscription" | "topup";
+    plan_label: string;
+    amount: number;
+    tokens: number;
+    tokens_used: number;
+    provider: string;
+    provider_ref: string | null;
+    status: string;
+    paid_at: string | null;
+  } | null;
+  in_rules: boolean;
+  outside_rules: string;
+}
+
+export interface AdminRefunds {
+  currency: string;
+  pending: number;
+  rules: RefundRules;
+  requests: AdminRefundRequest[];
+}
+
+export const getRefundRequests = (state: "pending" | "all") => call<AdminRefunds>(`/refunds?state=${state}`);
+export const approveRefund = (id: number, body: { note: string; refund_tx: string; remove_access: boolean }) =>
+  call<AdminRefundRequest>(`/refunds/${id}/approve`, json("POST", body));
+export const rejectRefund = (id: number, note: string) =>
+  call<AdminRefundRequest>(`/refunds/${id}/reject`, json("POST", { note }));
+export const saveRefundRules = (rules: RefundRules) => call<RefundRules>("/refunds/rules", json("PUT", rules));
