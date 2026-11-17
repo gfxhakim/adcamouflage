@@ -546,7 +546,7 @@ def sync_partner_promo_code(
     whop_variant_ids: list[str] = []
     for plan_id in plan_ids:
         try:
-            mapped = plan_id_for("subscription", plan_id)
+            mapped = plan_id_for("subscription", plan_id, 0)
             if mapped and mapped not in whop_variant_ids:
                 whop_variant_ids.append(mapped)
         except WhopError:

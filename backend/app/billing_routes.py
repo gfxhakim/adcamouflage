@@ -25,6 +25,7 @@ from . import affiliates, meta_capi, notify, refunds, whop
 from .accounts import require_studio_user
 from .activity import log_activity
 from .app_settings import currency
+from .config import settings
 from .db import Order, User, get_db
 from .tokens import (
     cancel_period,

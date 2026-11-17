@@ -650,7 +650,7 @@ def test_visitor_offer_and_landing_discount_preview():
         json={"email": aff_email, "password": PASSWORD, "display_name": "Partner Maya", "account_role": "affiliate"},
     )
     assert reg.status_code == 201, reg.text
-    code = f"MAYA{RUN_ID[:4].upper()}"
+    code = f"VISIT{RUN_ID[:4].upper()}"
     applied = aff_client.post(
         "/api/v1/referrals/partner/apply",
         json={"code": code, "audience": "Performance marketing agency"},

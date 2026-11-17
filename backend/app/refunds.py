@@ -343,7 +343,9 @@ def request_refund(
             logger.warning("Could not cancel Whop membership %s on refund request for %s", mem_id, order.id, exc_info=True)
 
     # Stop plan and deactivate account immediately so no further rendering can occur.
-    cancel_period(db, user, immediately=True, reason="Refund requested by customer")
+    cancel_res = cancel_period(db, user, immediately=True, reason="Refund requested by customer")
+    if order.kind == "subscription":
+        row.tokens_removed = min(int(order.tokens or 0), int(cancel_res.get("expired", 0)))
     user.is_active = False
     user.token_version += 1
     db.commit()
@@ -587,7 +589,7 @@ def admin_approve(
     row.admin_note = note
     row.decided_at = now
     row.decided_by = admin.email
-    row.tokens_removed = int(result["removed"])
+    row.tokens_removed = int(row.tokens_removed or 0) + int(result["removed"])
     row.refund_tx = refund_tx[:200]
     db.commit()
     reversed_ = "" if already else affiliates.on_order_refunded(db, order)

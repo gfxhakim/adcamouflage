@@ -515,10 +515,11 @@ def test_whop_renewal_cancel_resume_and_deactivated_events(whop_env, monkeypatch
     }
     res_cycle = _post_whop(cycle_evt)
     assert res_cycle.status_code == 200 and res_cycle.json() == {"ok": True, "applied": True, "renewal": True}
-    assert _balances(email) == (3000, 0)
+    # Starter has 0 rollover months, so renewal refreshes the period balance to 1500.
+    assert _balances(email) == (1500, 0)
     # Re-delivering the same cycle payment id does not double-credit.
     assert _post_whop(cycle_evt).json() == {"ok": True, "applied": False}
-    assert _balances(email) == (3000, 0)
+    assert _balances(email) == (1500, 0)
 
     # membership.deactivated with cancel_at_period_end=True turns off auto-renewal but keeps remaining tokens.
     deact_end = {
@@ -527,7 +528,7 @@ def test_whop_renewal_cancel_resume_and_deactivated_events(whop_env, monkeypatch
         "data": {"id": "mem_life_1", "cancel_at_period_end": True},
     }
     assert _post_whop(deact_end).json() == {"ok": True, "synced": "cancelled"}
-    assert _load(email).sub_cancelled_at is not None and _balances(email) == (3000, 0)
+    assert _load(email).sub_cancelled_at is not None and _balances(email) == (1500, 0)
 
     # membership.deactivated without cancel_at_period_end ends access now.
     deact_now = {
@@ -750,7 +751,7 @@ def test_whop_webhook_syncs_whop_native_promo_code_and_discounted_total(whop_env
     aff_client = _signed_in(aff_email)
     applied = aff_client.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": code, "audience": "Ad buyers"},
+        json={"code": code, "audience": "Media buyers and performance ad teams"},
     )
     assert applied.status_code in (200, 201), applied.text
     with get_session_factory()() as db:

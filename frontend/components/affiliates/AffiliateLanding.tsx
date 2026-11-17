@@ -44,13 +44,17 @@ function tierPctFor(tiers: { min: number; pct: number }[], customers: number): n
 
 export function AffiliateLanding({ program }: { program: PublicAffiliateProgram }) {
   const { partner, currency, link_days: linkDays, plans } = program;
-  const tiers = partner.tiers.length
-    ? partner.tiers
-    : [
-        { min: 0, pct: 25 },
-        { min: 20, pct: 30 },
-        { min: 50, pct: 35 },
-      ];
+  const tiers = useMemo(
+    () =>
+      partner.tiers.length
+        ? partner.tiers
+        : [
+            { min: 0, pct: 25 },
+            { min: 20, pct: 30 },
+            { min: 50, pct: 35 },
+          ],
+    [partner.tiers],
+  );
   const minRate = tiers[0]?.pct ?? 25;
   const maxRate = tiers[tiers.length - 1]?.pct ?? 35;
 

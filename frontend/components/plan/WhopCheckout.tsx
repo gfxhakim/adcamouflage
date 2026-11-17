@@ -128,6 +128,7 @@ export default function WhopCheckout({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    const container = containerRef.current;
     let cancelled = false;
     let completed = false;
     let controller: WhopCheckoutController | null = null;
@@ -151,13 +152,12 @@ export default function WhopCheckout({
       } catch {
         /* ignore teardown errors */
       }
-      if (containerRef.current) containerRef.current.innerHTML = "";
+      if (container) container.innerHTML = "";
       onCompleteRef.current?.();
     };
 
     loadElementsScript()
       .then(() => {
-        const container = containerRef.current;
         if (cancelled || completed || !window.WhopElements || !container) return;
 
         let extraMeta: Record<string, string> = {};
@@ -211,7 +211,7 @@ export default function WhopCheckout({
       } catch {
         /* ignore teardown errors */
       }
-      if (containerRef.current) containerRef.current.innerHTML = "";
+      if (container) container.innerHTML = "";
     };
   }, [planId, checkoutConfigId, buyerEmail, orderId, returnUrl, promoCode, metadataJson]);
 
