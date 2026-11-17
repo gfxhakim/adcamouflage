@@ -6,7 +6,7 @@ import { Instrument_Serif } from "next/font/google";
 import MetaPixel from "@/components/MetaPixel";
 import RefCapture from "@/components/RefCapture";
 import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
-import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, siteUrl } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, sharePreview, siteUrl } from "@/lib/site";
 import "./globals.css";
 
 // Headlines: Instrument Serif (the blue part set in italic). Text: Geist.
@@ -28,15 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: SITE_NAME,
     keywords: SITE_KEYWORDS,
     alternates: { canonical: "/" },
-    openGraph: {
-      type: "website",
-      siteName: SITE_NAME,
-      title: SITE_TITLE,
-      description: SITE_DESCRIPTION,
-      url: base,
-      locale: "en_US",
-    },
-    twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
+    ...sharePreview(SITE_TITLE, SITE_DESCRIPTION),
     robots: { index: true, follow: true },
     // Paste the code from Google Search Console / Meta Business domain verification into these env vars.
     verification: {

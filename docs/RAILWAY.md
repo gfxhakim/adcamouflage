@@ -123,6 +123,25 @@ match.
 build time) and while the site runs (the `/admin` page uses it to recognise the
 admin), so after changing it, redeploy the `web` service.
 
+When the site has its own domain, add two more variables on `web`:
+
+```bash
+SITE_URL=https://www.yourdomain.com          # the address customers use, no trailing slash
+LEGAL_CONTACT_EMAIL=support@yourdomain.com   # shown on the Privacy and Terms pages
+```
+
+`SITE_URL` is the address written into link previews (WhatsApp, Facebook, X),
+the canonical link, the sitemap and robots.txt. Visits to the other spelling
+(with or without `www`) are sent to it. Without it the site uses its built-in
+default address. After changing it, redeploy the `web` service. On `api`, set
+`ADCAM_PUBLIC_URL` to the same address so links in emails and payment pages
+match.
+
+The title and description in a link preview are the same as the browser tab
+title and the search description: change them in **Admin > Landing page > Tab & SEO**.
+Chat apps keep the old preview of a link they have already seen for a while, so
+after a change test with a fresh link such as `https://www.yourdomain.com/?v=2`.
+
 ### 4. Deploy
 
 Both services build on push. Open the web service's domain, create the first

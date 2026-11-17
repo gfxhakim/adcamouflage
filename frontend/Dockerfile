@@ -23,6 +23,12 @@ ARG API_ORIGIN=http://api:8000
 ENV API_ORIGIN=${API_ORIGIN} \
     NEXT_TELEMETRY_DISABLED=1
 
+# The public address is written into pages that are built ahead of time (log in,
+# sign up), so their canonical link and link preview need SITE_URL here too.
+# Left empty, the built-in default address is used.
+ARG SITE_URL=
+ENV SITE_URL=${SITE_URL}
+
 RUN npm run build
 
 FROM node:22-alpine AS runner

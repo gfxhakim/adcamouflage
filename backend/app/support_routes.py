@@ -41,6 +41,7 @@ from sqlalchemy.orm import Session
 
 from .accounts import current_user, is_admin, require_admin
 from .activity import log_activity
+from .brand import rebrand
 from .config import settings
 from .db import BatchRecord, SupportMessage, SupportThread, User, get_db, utcnow
 from .mailer import send_email
@@ -642,6 +643,31 @@ def wants_live_agent(text: str) -> bool:
     return any(phrase in cleaned for phrase in AGENT_REQUEST_PHRASES)
 
 
+# The summary the app writes for a ticket opened without any customer message.
+_NO_MESSAGES_SUMMARY = "Customer requested a live agent from the ProteusFlow Bot."
+
+
+def _shown_body(msg: SupportMessage) -> str:
+    """A stored message's text as it is shown.
+
+    The bot's replies from before a rename carry the old product name. What a
+    customer or an agent typed is never changed.
+    """
+
+    body = msg.body or ""
+    return rebrand(body) if msg.sender_role == "bot" else body
+
+
+def _shown_summary(summary: str | None) -> str:
+    """A ticket summary as shown: the line the app writes itself gets the current name.
+
+    A summary made of the customer's own messages is returned untouched.
+    """
+
+    summary = summary or ""
+    return _NO_MESSAGES_SUMMARY if rebrand(summary) == _NO_MESSAGES_SUMMARY else summary
+
+
 def _serialize_message(msg: SupportMessage) -> SupportMessageOut:
     suggestions: list[str] = []
     if msg.suggestions_json:
@@ -651,12 +677,18 @@ def _serialize_message(msg: SupportMessage) -> SupportMessageOut:
                 suggestions = [str(item) for item in parsed]
         except Exception:
             suggestions = []
+    # Bot replies and sender labels saved before a rename carry the old name
+    # ("BluEditor Bot"). What a customer or an agent typed is never changed.
+    by_bot = msg.sender_role == "bot"
+    by_person = msg.sender_role == "user"
+    if by_bot:
+        suggestions = [rebrand(item) for item in suggestions]
     return SupportMessageOut(
         id=msg.id,
         thread_id=msg.thread_id,
         sender_role=msg.sender_role,
-        sender_name=msg.sender_name,
-        body=msg.body,
+        sender_name=msg.sender_name if by_person or msg.sender_name is None else rebrand(msg.sender_name),
+        body=_shown_body(msg),
         attachment_url=msg.attachment_url,
         attachment_name=msg.attachment_name,
         attachment_type=msg.attachment_type,
@@ -675,7 +707,7 @@ def _serialize_thread(thread: SupportThread, messages: list[SupportMessage]) -> 
         bot_attempts=thread.bot_attempts,
         max_attempts=MAX_ATTEMPTS_BEFORE_AGENT,
         can_escalate=thread.bot_attempts >= MAX_ATTEMPTS_BEFORE_AGENT or thread.status != "bot",
-        issue_summary=thread.issue_summary,
+        issue_summary=_shown_summary(thread.issue_summary),
         escalated_at=thread.escalated_at,
         unread_admin=thread.unread_admin,
         unread_user=thread.unread_user,
@@ -775,7 +807,7 @@ def _build_issue_summary(messages: list[SupportMessage], extra_note: str = "") -
     if extra_note.strip():
         user_lines.append(f"• [Escalation Note]: {extra_note.strip()}")
     if not user_lines:
-        return "Customer requested a live agent from the ProteusFlow Bot."
+        return _NO_MESSAGES_SUMMARY
     return "\n".join(user_lines[-12:])
 
 
@@ -803,7 +835,7 @@ def _notify_admins_by_email(
         role_label = {
             "user": f"Customer ({html.escape(user.email)})",
             "bot": "ProteusFlow Bot",
-            "agent": f"Agent ({html.escape(m.sender_name or 'Admin')})",
+            "agent": f"Agent ({html.escape(rebrand(m.sender_name or '') or 'Admin')})",
             "system": "System",
         }.get(m.sender_role, m.sender_role)
         attachment_html = ""
@@ -811,7 +843,7 @@ def _notify_admins_by_email(
             attachment_html = f"<br/><em>Attachment: {html.escape(m.attachment_name or m.attachment_url)}</em>"
         transcript_rows.append(
             f"<div style='margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;'>"
-            f"<strong>{role_label}:</strong><br/>{html.escape(m.body or '').replace(chr(10), '<br/>')}{attachment_html}"
+            f"<strong>{role_label}:</strong><br/>{html.escape(_shown_body(m)).replace(chr(10), '<br/>')}{attachment_html}"
             f"</div>"
         )
 
@@ -831,7 +863,7 @@ def _notify_admins_by_email(
       </table>
 
       <h3 style="margin-bottom:6px;border-bottom:1px solid #cbd5e1;padding-bottom:4px;">Issues Reported to Bot</h3>
-      <pre style="white-space:pre-wrap;background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:8px;font-size:13px;color:#9a3412;">{html.escape(thread.issue_summary)}</pre>
+      <pre style="white-space:pre-wrap;background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:8px;font-size:13px;color:#9a3412;">{html.escape(_shown_summary(thread.issue_summary))}</pre>
 
       <h3 style="margin-bottom:6px;border-bottom:1px solid #cbd5e1;padding-bottom:4px;">Conversation Transcript</h3>
       {''.join(transcript_rows)}
@@ -1354,7 +1386,7 @@ def _build_thread_summary(db: Session, thread: SupportThread, user: User) -> Adm
     preview = ""
     last_at = None
     if last_msg is not None:
-        preview = (last_msg.body or "").strip()
+        preview = _shown_body(last_msg).strip()
         if not preview and last_msg.attachment_name:
             preview = f"[Attachment: {last_msg.attachment_name}]"
         if len(preview) > 140:
@@ -1366,7 +1398,7 @@ def _build_thread_summary(db: Session, thread: SupportThread, user: User) -> Adm
         status=thread.status,
         overdue=_is_overdue(thread),
         bot_attempts=thread.bot_attempts,
-        issue_summary=thread.issue_summary,
+        issue_summary=_shown_summary(thread.issue_summary),
         escalated_at=thread.escalated_at,
         unread_admin=thread.unread_admin,
         unread_user=thread.unread_user,

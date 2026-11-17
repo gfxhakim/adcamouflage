@@ -160,3 +160,79 @@ def test_ticket_from_legacy_account_shows_in_admin(admin):
     assert admin.get("/api/v1/admin/support/notifications").status_code == 200
     detail = admin.get(f"/api/v1/admin/support/threads/{tid}")
     assert detail.status_code == 200, detail.text
+
+
+def test_email_to_admins_names_old_agent_replies_with_the_new_name(admin, monkeypatch):
+    """The ticket email labels an agent reply saved before the rename with the new name."""
+
+    sent: list[str] = []
+    monkeypatch.setattr("app.support_routes.send_email", lambda to, subject, body: sent.append(body))
+    customer = _signed_in(address("oldagent"))
+    tid = None
+    for i in range(5):
+        r = customer.post("/api/v1/support/thread/message", json={"body": f"my export failed {i}"})
+        assert r.status_code == 200, r.text
+        tid = r.json()["id"]
+    with get_session_factory()() as db:
+        db.add(SupportMessage(thread_id=tid, sender_role="agent", sender_name="BluEditor Support Agent", body="BluEditor was our old name."))
+        db.commit()
+    r = customer.post("/api/v1/support/thread/escalate", json={"note": "please help"})
+    assert r.status_code == 200, r.text
+    assert sent, "no email was built"
+    assert "Agent (ProteusFlow Support Agent)" in sent[0]
+    # What the agent typed is never changed.
+    assert "BluEditor was our old name." in sent[0]
+
+
+def test_old_brand_name_in_saved_bot_messages_is_replaced(admin):
+    """Chats saved before the rename show the new name; typed text is never changed."""
+
+    customer = _signed_in(address("oldchat"))
+    r = customer.post("/api/v1/support/thread/message", json={"body": "is BluEditor down?"})
+    assert r.status_code == 200, r.text
+    tid = r.json()["id"]
+    with get_session_factory()() as db:
+        db.add_all(
+            [
+                SupportMessage(thread_id=tid, sender_role="agent", sender_name="BluEditor Support Agent", body="BluEditor was our old name."),
+                SupportMessage(
+                    thread_id=tid,
+                    sender_role="bot",
+                    sender_name="BluEditor Bot",
+                    body="Welcome to BluEditor. Mail support@blucloack.online",
+                    suggestions_json='["What is BluEditor?"]',
+                ),
+            ]
+        )
+        db.commit()
+
+    messages = customer.get("/api/v1/support/thread").json()["messages"]
+    typed = next(m for m in messages if m["sender_role"] == "user")
+    assert typed["body"] == "is BluEditor down?"
+    old_bot = next(m for m in messages if m["body"].startswith("Welcome to"))
+    assert old_bot["sender_name"] == "ProteusFlow Bot"
+    assert old_bot["body"] == "Welcome to ProteusFlow. Mail support@blucloack.online"
+    assert old_bot["suggestions"] == ["What is ProteusFlow?"]
+    agent = next(m for m in messages if m["sender_role"] == "agent")
+    assert agent["sender_name"] == "ProteusFlow Support Agent"
+    assert agent["body"] == "BluEditor was our old name."
+
+    # The admin's ticket list shows the same cleaned bot text in its preview line.
+    with get_session_factory()() as db:
+        thread = db.get(SupportThread, tid)
+        thread.status = "escalated"
+        thread.escalated_at = utcnow()
+        thread.issue_summary = "Customer requested a live agent from the BluEditor Bot."
+        last = db.query(SupportMessage).filter(SupportMessage.thread_id == tid, SupportMessage.sender_role == "bot").order_by(SupportMessage.id.desc()).first()
+        last.created_at = utcnow() + timedelta(minutes=1)
+        db.commit()
+    ticket = _admin_ticket(admin, tid)
+    assert ticket is not None
+    assert ticket["last_message_preview"] == "Welcome to ProteusFlow. Mail support@blucloack.online"
+    assert ticket["issue_summary"] == "Customer requested a live agent from the ProteusFlow Bot."
+
+    # A summary made of the customer's own words is left exactly as typed.
+    with get_session_factory()() as db:
+        db.get(SupportThread, tid).issue_summary = "• is BluEditor down?"
+        db.commit()
+    assert _admin_ticket(admin, tid)["issue_summary"] == "• is BluEditor down?"

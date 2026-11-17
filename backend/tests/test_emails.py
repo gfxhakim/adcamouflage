@@ -266,6 +266,77 @@ def test_admin_preview(outbox, admin):
     assert data["subject"].startswith("Ends ") and ">4 days<" in data["html"] and "Renew plan &rarr;" in data["html"]
 
 
+def test_admin_preview_shows_the_new_brand_name(outbox, admin):
+    style = admin.get("/api/v1/admin/emails").json()["style_defaults"]
+    response = admin.post(
+        "/api/v1/admin/emails/preview",
+        json={
+            "kind": "welcome",
+            "template": {"subject": "Welcome to BluEditor", "body": "Thanks for joining BluEditor.\n\n{app_url}", "kicker": "BluEditor", "stat": "Hi", "button": "Open BluEditor"},
+            "style": style,
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["subject"] == "Welcome to ProteusFlow"
+    assert "BluEditor" not in data["html"] and "Thanks for joining ProteusFlow." in data["html"]
+
+
+def test_sender_name_set_before_the_rename_is_replaced(monkeypatch, admin):
+    """A From value still holding the old name sends under the new one; the address is kept."""
+
+    monkeypatch.setattr(settings, "email_from", "BluCloacking <billing@blucloack.online>")
+    assert mailer.sender() == "ProteusFlow <billing@blucloack.online>"
+    assert admin.get("/api/v1/admin/emails").json()["from"] == "ProteusFlow <billing@blucloack.online>"
+    for untouched in ("billing@blucloack.online", "Acme Video <hello@example.test>"):
+        monkeypatch.setattr(settings, "email_from", untouched)
+        assert mailer.sender() == untouched
+
+
+def test_footer_saved_before_the_slogan_follows_the_default(admin):
+    """A design saved before the slogan existed gets the slogan line; a footer the admin chooses is kept."""
+
+    default = mailer.DEFAULT_STYLE["footer_text"]
+    assert "Seamless adaptation. Peak efficiency." in default
+    old_footer = "You get this email because you have a BluEditor account."
+    one_line = "You get this email because you have a ProteusFlow account."
+    with _session() as db:
+        before = mailer.get_setting(db, "email_style", None)
+        # Saved before the slogan (and before the rename): no marker on it.
+        mailer.set_setting(db, "email_style", {"footer_text": old_footer, "header_color": "#123456"})
+        db.commit()
+    try:
+        with _session() as db:
+            style = mailer.get_style(db)
+        assert style["footer_text"] == default and style["header_color"] == "#123456"
+        assert "footer_rev" not in style
+        shown = admin.get("/api/v1/admin/emails").json()["style"]
+        assert shown["footer_text"] == default
+
+        # The admin removes the slogan line on purpose: it is saved and it stays.
+        saved = admin.put("/api/v1/admin/emails", json={"templates": {}, "style": {**shown, "footer_text": one_line}})
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["style"]["footer_text"] == one_line
+        assert admin.get("/api/v1/admin/emails").json()["style"]["footer_text"] == one_line
+        with _session() as db:
+            assert mailer.get_style(db)["footer_text"] == one_line
+        # The preview shows what was typed too.
+        preview = admin.post(
+            "/api/v1/admin/emails/preview",
+            json={"kind": "welcome", "template": {"subject": "", "body": ""}, "style": {**shown, "footer_text": one_line}},
+        )
+        assert preview.status_code == 200, preview.text
+        assert "Peak efficiency" not in preview.json()["html"]
+    finally:
+        with _session() as db:
+            mailer.set_setting(db, "email_style", before if before is not None else {})
+            db.commit()
+
+    # A footer the admin wrote is kept, with only the old name replaced.
+    assert mailer.clean_style({"footer_text": "BluEditor, Algiers"})["footer_text"] == "ProteusFlow, Algiers"
+    assert mailer.clean_style({"footer_text": ""})["footer_text"] == ""
+
+
 def test_to_html_footer_param_for_group_sends():
     html = mailer.to_html("Hello\n\nhttps://a.example/x", footer='<a href="https://a.example/u">Unsubscribe</a>')
     assert '<a href="https://a.example/u">Unsubscribe</a>' in html
