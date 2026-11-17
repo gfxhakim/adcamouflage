@@ -6,9 +6,9 @@ import { SITE_NAME, sharePreview } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
-const TITLE = "Affiliate Program — Earn 25%–35% Recurring Revenue";
+const TITLE = "Affiliate Program — Partner with ProteusFlow";
 const DESCRIPTION =
-  "Join the ProteusFlow Affiliate Partner Program. Give your audience 15% off their first payment and earn 25% to 35% recurring commissions on subscriptions, renewals, upgrades, and top-ups.";
+  "Join the ProteusFlow Affiliate Partner Program. Apply with your channels and content details to receive your personal Whop promo code and affiliate link.";
 
 export const metadata: Metadata = {
   title: TITLE,

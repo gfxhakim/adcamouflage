@@ -72,6 +72,8 @@ export function OptionsPanel({
 }: OptionsPanelProps) {
   // Every change goes through the plan locks, so a preset can never switch a locked option on.
   const emit = (next: MutationOptions) => onChange(applyPlanLocks(next, lockedFeatures));
+  const set = <K extends keyof MutationOptions>(key: K, value: MutationOptions[K]) =>
+    emit({ ...options, [key]: value, preset: "custom" });
   const engineLocked = lockedFeatures.includes("full_engine");
 
   const applyPreset = (preset: PresetId) => {
@@ -173,6 +175,34 @@ export function OptionsPanel({
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-2 flex items-baseline justify-between">
+          <label htmlFor="intensity" className="label">
+            Variation intensity
+          </label>
+          <span className="font-mono text-sm text-meta-500">{options.intensity}</span>
+        </div>
+        <input
+          id="intensity"
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={options.intensity}
+          disabled={disabled}
+          onChange={(event) => set("intensity", Number(event.target.value))}
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
+          style={{
+            backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, var(--track-empty, rgb(30 41 59)) ${options.intensity}%)`,
+          }}
+        />
+        <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint dark:text-slate-500">
+          <span>Subtle</span>
+          <span>Balanced</span>
+          <span>Maximum</span>
         </div>
       </section>
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -10,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import affiliates, audit, costs, meta_capi, whop
+from . import affiliates, audit, costs, meta_capi
 from .accounts import current_user, is_affiliate_only, optional_user, require_admin, require_studio_user
 from .activity import log_activity
 from .app_settings import currency
@@ -120,9 +121,40 @@ def apply_code(
     return {"offer": _offer(db, code, affiliates.get_program(db))}
 
 
+def _parse_social_links(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [item.strip() for item in data if isinstance(item, str) and item.strip()]
+
+
+def _clean_social_links(items: list[str] | None) -> list[str]:
+    if not items:
+        return []
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for raw in items:
+        val = raw.strip()
+        if not val or val in seen:
+            continue
+        if len(val) > 300:
+            raise HTTPException(status_code=422, detail="Each social media link must be 300 characters or fewer.")
+        seen.add(val)
+        cleaned.append(val)
+    return cleaned[:10]
+
+
 class PartnerApplyIn(BaseModel):
-    code: str = Field(min_length=3, max_length=24)
+    full_name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=5, max_length=254)
+    social_links: list[str] = Field(min_length=1, max_length=10)
     audience: str = Field(min_length=10, max_length=2000)
+    code: str = Field(default="", max_length=24)
     payout_method: str = Field(default="", max_length=40)
     payout_address: str = Field(default="", max_length=300)
 
@@ -203,7 +235,12 @@ def _partner_block(db: Session, user: User, program: dict[str, Any]) -> dict[str
     if partner is None:
         return block
     block.update(
+        full_name=partner.full_name,
+        email=partner.contact_email or user.email,
+        social_links=_parse_social_links(partner.social_links_json),
+        audience=partner.audience,
         requested_code=partner.requested_code,
+        affiliate_link=partner.affiliate_link,
         payout_method=partner.payout_method,
         payout_address=partner.payout_address,
     )
@@ -315,12 +352,25 @@ def partner_apply(
     program = affiliates.get_program(db)
     if not program[PARTNER]["enabled"] or not program[PARTNER]["applications_open"]:
         raise HTTPException(status_code=403, detail="Partner applications are closed right now.")
-    code = affiliates.normalise_code(payload.code)
-    if not affiliates.valid_code(code):
-        raise HTTPException(status_code=422, detail="Use 3 to 24 letters or numbers for your code.")
-    taken = affiliates.find_code(db, code)
-    if taken is not None and taken.user_id != user.id:
-        raise HTTPException(status_code=409, detail="That code is taken. Try another one.")
+    full_name = payload.full_name.strip()
+    if len(full_name) < 2:
+        raise HTTPException(status_code=422, detail="Enter your full name.")
+    contact_email = payload.email.strip().lower()
+    if "@" not in contact_email or "." not in contact_email.split("@", 1)[-1]:
+        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+    social_links = _clean_social_links(payload.social_links)
+    if not social_links:
+        raise HTTPException(status_code=422, detail="Add at least one social media profile link.")
+    audience = payload.audience.strip()
+    if len(audience) < 10:
+        raise HTTPException(status_code=422, detail="Describe why you want to join, your audience, and your content.")
+    code = affiliates.normalise_code(payload.code) if payload.code.strip() else ""
+    if code:
+        if not affiliates.valid_code(code):
+            raise HTTPException(status_code=422, detail="Use 3 to 24 letters or numbers for your code.")
+        taken = affiliates.find_code(db, code)
+        if taken is not None and taken.user_id != user.id:
+            raise HTTPException(status_code=409, detail="That code is taken. Try another one.")
     partner = db.get(AffiliatePartner, user.id)
     if partner is not None and partner.status in ("approved", "suspended"):
         raise HTTPException(status_code=409, detail="You already have a partner account.")
@@ -328,17 +378,20 @@ def partner_apply(
         partner = AffiliatePartner(user_id=user.id)
         db.add(partner)
     partner.status = "pending"
+    partner.full_name = full_name
+    partner.contact_email = contact_email
+    partner.social_links_json = json.dumps(social_links)
     partner.requested_code = code
-    partner.audience = payload.audience.strip()
+    partner.audience = audience
     partner.payout_method = payload.payout_method.strip()
     partner.payout_address = payload.payout_address.strip()
     partner.decided_at = None
     db.commit()
-    log_activity(db, user.id, "partner", f"Applied to the partner program with code {code}")
+    log_activity(db, user.id, "partner", "Applied to the affiliate program")
     try:
         from . import notify
 
-        notify.alert("review", "New partner application", [f"{user.email} applied with code {code}."])
+        notify.alert("review", "New affiliate application", [f"{full_name} ({contact_email}) applied."])
     except Exception:  # noqa: BLE001 - an alert must never fail the application
         pass
     return _partner_block(db, user, program)
@@ -410,9 +463,13 @@ def _partner_row(db: Session, partner: AffiliatePartner, user: User | None, prog
         "user_id": partner.user_id,
         "email": user.email if user else "",
         "name": (user.display_name if user else "") or "",
+        "full_name": partner.full_name or ((user.display_name if user else "") or ""),
+        "contact_email": partner.contact_email or (user.email if user else ""),
+        "social_links": _parse_social_links(partner.social_links_json),
         "status": partner.status,
         "requested_code": partner.requested_code,
         "code": code.code if code else None,
+        "affiliate_link": partner.affiliate_link,
         "audience": partner.audience,
         "payout_method": partner.payout_method,
         "payout_address": partner.payout_address,
@@ -492,6 +549,7 @@ def admin_save_settings(
 class PartnerDecisionIn(BaseModel):
     action: str = Field(pattern="^(approve|reject|suspend|reinstate|note)$")
     code: str | None = Field(default=None, max_length=24)
+    affiliate_link: str | None = Field(default=None, max_length=500)
     note: str | None = Field(default=None, max_length=2000)
 
 
@@ -505,13 +563,15 @@ def admin_partner_decision(
         raise HTTPException(status_code=404, detail="No such partner.")
     if payload.note is not None:
         partner.admin_note = payload.note.strip()
+    if payload.affiliate_link is not None:
+        partner.affiliate_link = payload.affiliate_link.strip()
     detail = ""
     if payload.action in ("approve", "reinstate"):
         wanted = affiliates.normalise_code(payload.code or partner.requested_code)
         code = affiliates.partner_code(db, user_id)
         if payload.action == "approve" or payload.code:
             if not affiliates.valid_code(wanted):
-                raise HTTPException(status_code=422, detail="The code needs 3 to 24 letters or numbers.")
+                raise HTTPException(status_code=422, detail="Enter a 3-to-24 character promo code from Whop.")
             taken = affiliates.find_code(db, wanted)
             if taken is not None and (taken.user_id != user_id or taken.channel != PARTNER):
                 raise HTTPException(status_code=409, detail=f"The code {wanted} is already in use.")
@@ -540,21 +600,6 @@ def admin_partner_decision(
         detail = "Partner note updated"
     program = affiliates.get_program(db)
     db.commit()
-    final_code = code.code if code is not None else wanted if payload.action in ("approve", "reinstate") else ""
-    if payload.action in ("approve", "reinstate") and final_code:
-        whop.sync_partner_promo_code(
-            code=final_code,
-            discount_pct=float(program[PARTNER]["discount_pct"]),
-            plan_ids=list(program[PARTNER]["plans"]),
-            active=True,
-        )
-    elif payload.action == "suspend" and code is not None:
-        whop.sync_partner_promo_code(
-            code=code.code,
-            discount_pct=float(program[PARTNER]["discount_pct"]),
-            plan_ids=list(program[PARTNER]["plans"]),
-            active=False,
-        )
     audit.record(db, admin, user, f"partner_{payload.action}", detail)
     return _partner_row(db, partner, user, program)
 

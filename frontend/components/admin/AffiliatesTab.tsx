@@ -418,22 +418,32 @@ function PartnerDetail({ userId, currency, onChanged }: { userId: number; curren
 function PartnersCard({ partners, currency, onChanged, onSelectUser }: { partners: AffiliatePartnerRow[]; currency: string; onChanged: () => void; onSelectUser: (id: number) => void }) {
   const [open, setOpen] = useState<number | null>(null);
   const [codes, setCodes] = useState<Record<number, string>>({});
+  const [links, setLinks] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const decide = async (partner: AffiliatePartnerRow, action: "approve" | "reject" | "suspend" | "reinstate") => {
     const code = (codes[partner.user_id] ?? partner.code ?? partner.requested_code).trim().toUpperCase();
+    const affiliateLink = (links[partner.user_id] ?? partner.affiliate_link ?? "").trim();
+    if (action === "approve" && !code) {
+      setError("Enter the promo code from Whop before approving this applicant.");
+      return;
+    }
+    const label = partner.full_name || partner.contact_email || partner.email;
     const questions: Record<string, string> = {
-      approve: `Approve ${partner.email} as a partner with the code ${code}?`,
-      reject: `Reject ${partner.email}'s application?`,
-      suspend: `Suspend ${partner.email}?\n\nTheir code stops working and commissions still on hold are cancelled. Money already paid is not touched.`,
-      reinstate: `Bring ${partner.email} back as a partner? Their code works again.`,
+      approve: `Approve ${label} with promo code ${code}${affiliateLink ? ` and Whop link ${affiliateLink}` : ""}?`,
+      reject: `Reject ${label}'s application?`,
+      suspend: `Suspend ${label}?\n\nTheir code stops working.`,
+      reinstate: `Reinstate ${label} as an affiliate partner?`,
     };
     if (!window.confirm(questions[action])) return;
     setBusy(`${action}-${partner.user_id}`);
     setError(null);
     try {
-      await decidePartner(partner.user_id, { action, ...(action === "approve" ? { code } : {}) });
+      await decidePartner(partner.user_id, {
+        action,
+        ...(action === "approve" ? { code, affiliate_link: affiliateLink } : {}),
+      });
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "That did not go through.");
@@ -447,9 +457,9 @@ function PartnersCard({ partners, currency, onChanged, onSelectUser }: { partner
 
   return (
     <Card
-      title="Creator partners"
+      title="Affiliate applications & partners"
       icon={<Megaphone className="h-4 w-4 text-meta-500" aria-hidden />}
-      hint="Applications wait here for your decision. Open a partner to see commissions and record a payout."
+      hint="Review applicants below, create their promo code and affiliate link in Whop manually, then paste both here to approve."
     >
       {error ? <p className="mb-3 text-xs text-red-600 dark:text-red-300">{error}</p> : null}
       {sorted.length === 0 ? (
@@ -458,33 +468,58 @@ function PartnersCard({ partners, currency, onChanged, onSelectUser }: { partner
         <ul className={clsx("rounded-xl border", line, rows)}>
           {sorted.map((partner) => (
             <li key={partner.user_id}>
-              <div className="flex flex-wrap items-center gap-3 px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <button type="button" className="block max-w-full truncate text-left text-xs font-semibold text-meta-600 hover:underline dark:text-meta-300" onClick={() => onSelectUser(partner.user_id)}>
-                    {partner.email}
-                  </button>
+              <div className="flex flex-wrap items-start gap-3 px-3 py-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" className="max-w-full truncate text-left text-xs font-semibold text-meta-600 hover:underline dark:text-meta-300" onClick={() => onSelectUser(partner.user_id)}>
+                      {partner.full_name || partner.name || partner.email}
+                    </button>
+                    <span className={clsx("text-[11px]", faint)}>{partner.contact_email || partner.email}</span>
+                  </div>
                   <p className={clsx("truncate text-[11px]", faint)}>
                     {partner.status === "pending" || partner.status === "rejected"
-                      ? `Applied ${timeAgo(partner.created_at)} · wants ${partner.requested_code}`
-                      : `${partner.code ?? "no code"} · ${partner.stats.clicks} clicks · ${partner.stats.signups} sign-ups · ${partner.stats.paying} paying · ${partner.month_rate_pct}% this month`}
+                      ? `Applied ${timeAgo(partner.created_at)}${partner.requested_code ? ` · suggested ${partner.requested_code}` : ""}`
+                      : `Code: ${partner.code ?? "—"} · Link: ${partner.affiliate_link || "none set"}`}
                   </p>
-                  {partner.status === "pending" && partner.audience ? <p className={clsx("mt-1 whitespace-pre-wrap text-[11px]", faint)}>{partner.audience}</p> : null}
+                  {partner.social_links && partner.social_links.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {partner.social_links.map((rawLink) => {
+                        const href = /^https?:\/\//i.test(rawLink) ? rawLink : `https://${rawLink}`;
+                        return (
+                          <a
+                            key={rawLink}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex max-w-xs truncate rounded-md border border-meta-500/25 bg-meta-500/10 px-2 py-0.5 text-[11px] text-meta-600 hover:underline dark:text-meta-300"
+                          >
+                            {rawLink}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {partner.audience ? <p className={clsx("mt-1 whitespace-pre-wrap text-[11px]", text)}>{partner.audience}</p> : null}
                 </div>
-                {partner.status === "approved" || partner.status === "suspended" ? (
-                  <span className={clsx("text-xs tabular-nums", text)}>
-                    {formatMoney(partner.totals.payable, currency)} <span className={faint}>ready</span>
-                  </span>
-                ) : null}
                 <Chip status={partner.status} label={partner.status === "pending" ? "needs review" : undefined} />
                 <div className="flex flex-wrap items-center gap-2">
                   {partner.status === "pending" || partner.status === "rejected" ? (
                     <>
                       <input
                         className="field !w-32 !py-1.5 !text-xs uppercase"
-                        value={codes[partner.user_id] ?? partner.requested_code}
+                        value={codes[partner.user_id] ?? partner.requested_code ?? ""}
                         maxLength={24}
-                        aria-label="Code to approve"
+                        placeholder="Whop code"
+                        aria-label="Promo code from Whop"
                         onChange={(e) => setCodes((c) => ({ ...c, [partner.user_id]: e.target.value }))}
+                      />
+                      <input
+                        className="field !w-56 !py-1.5 !text-xs"
+                        value={links[partner.user_id] ?? partner.affiliate_link ?? ""}
+                        maxLength={500}
+                        placeholder="Whop affiliate link (https://...)"
+                        aria-label="Whop affiliate link"
+                        onChange={(e) => setLinks((l) => ({ ...l, [partner.user_id]: e.target.value }))}
                       />
                       <button type="button" className="btn-primary !py-1.5 !text-xs" disabled={busy !== null} onClick={() => void decide(partner, "approve")}>
                         Approve
@@ -498,7 +533,7 @@ function PartnersCard({ partners, currency, onChanged, onSelectUser }: { partner
                   ) : (
                     <>
                       <button type="button" className="btn-ghost !py-1.5 !text-xs" onClick={() => setOpen(open === partner.user_id ? null : partner.user_id)}>
-                        {open === partner.user_id ? "Close" : "Commissions & payout"}
+                        {open === partner.user_id ? "Close" : "Details"}
                       </button>
                       <button
                         type="button"

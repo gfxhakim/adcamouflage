@@ -661,9 +661,13 @@ export interface AffiliatePartnerRow {
   user_id: number;
   email: string;
   name: string;
+  full_name: string;
+  contact_email: string;
+  social_links: string[];
   status: "pending" | "approved" | "rejected" | "suspended";
   requested_code: string;
   code: string | null;
+  affiliate_link: string;
   audience: string;
   payout_method: string;
   payout_address: string;
@@ -741,7 +745,7 @@ export const saveAffiliateProgram = (program: AffiliateProgram) =>
   call<AffiliateProgram>("/affiliates/settings", json("PUT", program));
 export const decidePartner = (
   userId: number,
-  body: { action: "approve" | "reject" | "suspend" | "reinstate" | "note"; code?: string; note?: string },
+  body: { action: "approve" | "reject" | "suspend" | "reinstate" | "note"; code?: string; affiliate_link?: string; note?: string },
 ) => call<AffiliatePartnerRow>(`/affiliates/partners/${userId}`, json("POST", body));
 export const getPartnerDetail = (userId: number) => call<AffiliatePartnerDetail>(`/affiliates/partners/${userId}`);
 export const recordPartnerPayout = (

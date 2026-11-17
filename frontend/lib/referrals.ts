@@ -67,7 +67,12 @@ export interface PartnerProgram {
   hold_days: number;
   min_payout: number;
   status: "pending" | "approved" | "rejected" | "suspended" | null;
+  full_name?: string;
+  email?: string;
+  social_links?: string[];
+  audience?: string;
   requested_code?: string;
+  affiliate_link?: string;
   payout_method?: string;
   payout_address?: string;
   code?: string | null;
@@ -190,8 +195,15 @@ export function dispatchVisitorOffer(offer: ReferralOffer | null): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<ReferralOffer | null>(VISITOR_OFFER_EVENT, { detail: offer }));
 }
-export const applyAsPartner = (body: { code: string; audience: string; payout_method: string; payout_address: string }) =>
-  call<PartnerProgram>("/partner/apply", send("POST", body));
+export const applyAsPartner = (body: {
+  full_name: string;
+  email: string;
+  social_links: string[];
+  audience: string;
+  code?: string;
+  payout_method?: string;
+  payout_address?: string;
+}) => call<PartnerProgram>("/partner/apply", send("POST", body));
 export const savePayoutDetails = (body: { payout_method: string; payout_address: string }) =>
   call<PartnerProgram>("/partner/payout", send("PUT", body));
 

@@ -26,7 +26,6 @@ import WorkspaceShell from "@/components/WorkspaceShell";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
 import CancelRefundCard from "@/components/plan/CancelRefundCard";
-import CouponBox from "@/components/plan/CouponBox";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
@@ -58,7 +57,6 @@ import {
 } from "@/lib/auth";
 import { formatDate, formatMoney, formatTokens, timeAgo } from "@/lib/format";
 import { trackCheckout, trackPurchase } from "@/lib/meta";
-import { fetchMyReferrals, type MyReferrals } from "@/lib/referrals";
 import type { TokenPlanCard } from "@/lib/types";
 
 /** How often we check order status while checkout is open or validating. */
@@ -97,7 +95,6 @@ export default function PlanPage() {
   const [sub, setSub] = useState<Subscription | null>(null);
   const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [referrals, setReferrals] = useState<MyReferrals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   /** The plan id or "topup" whose checkout is being created. */
@@ -118,7 +115,7 @@ export default function PlanPage() {
    * the effect below twice, so the second run takes it from here instead of
    * finding an empty query and leaving the "waiting" state without a poll.
    */
-  const returned = useRef<{ orderId: string | null; backedOut: boolean } | null>(null);
+  const returned = useRef<{ orderId: string | null; backedOut: boolean; paymentReturned: boolean } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -132,13 +129,11 @@ export default function PlanPage() {
         window.location.assign("/affiliates/dashboard");
         return;
       }
-      const [subscription, history, orderList, program] = await Promise.all([
+      const [subscription, history, orderList] = await Promise.all([
         fetchSubscription(),
         fetchMyBatches(),
         fetchOrders().catch(() => [] as Order[]),
-        fetchMyReferrals().catch(() => null),
       ]);
-      setReferrals(program);
       // Same recovery as the workspace: a cookie the API rejects is cleared first.
       if (!subscription) {
         await signOut().catch(() => undefined);
@@ -169,34 +164,65 @@ export default function PlanPage() {
   useEffect(() => {
     if (returned.current === null) {
       const params = new URLSearchParams(window.location.search);
-      const statusParam = params.get("status");
+      const statusParam = params.get("status")?.toLowerCase() ?? null;
+      const backedOut =
+        params.get("cancelled") === "1" || statusParam === "canceled" || statusParam === "cancelled" || statusParam === "failed";
+      const paymentReturned =
+        !backedOut && (statusParam === "success" || statusParam === "succeeded" || params.has("payment_id"));
       returned.current = {
         orderId: params.get("order"),
-        backedOut: params.get("cancelled") === "1" || statusParam === "canceled" || statusParam === "failed",
+        backedOut,
+        paymentReturned,
       };
-      if (returned.current.orderId || returned.current.backedOut || statusParam) {
+      if (returned.current.orderId || backedOut || paymentReturned || statusParam) {
         // Drop the query so a reload does not start another wait.
         window.history.replaceState(null, "", window.location.pathname);
       }
     }
-    const { orderId, backedOut } = returned.current;
-    if (!orderId && !backedOut) return;
-    if (backedOut || !orderId) {
+    const { orderId, backedOut, paymentReturned } = returned.current;
+    if (!orderId && !backedOut && !paymentReturned) return;
+    if (backedOut) {
       setToast({ tone: "error", text: "Payment cancelled — nothing was charged." });
       return;
     }
-    setSettledOrder(null);
-    setCheckoutNotice(null);
-    setCheckoutStage("validating");
-    setActiveCheckout({
-      orderId,
-      whopPlan: "",
-      whopCheckoutConfig: null,
-      label: "Your subscription",
-      amount: 0,
-      tokens: 0,
-      returnUrl: `${window.location.origin}/app/plan?order=${encodeURIComponent(orderId)}`,
-    });
+    if (orderId) {
+      setSettledOrder(null);
+      setCheckoutNotice(null);
+      setCheckoutStage("validating");
+      setActiveCheckout({
+        orderId,
+        whopPlan: "",
+        whopCheckoutConfig: null,
+        label: "Your subscription",
+        amount: 0,
+        tokens: 0,
+        returnUrl: `${window.location.origin}/app/plan?order=${encodeURIComponent(orderId)}`,
+      });
+      return;
+    }
+    // Whop Dashboard redirect appended ?payment_id=...&status=success without ?order=: resolve latest order.
+    let cancelled = false;
+    void fetchOrders()
+      .then((list) => {
+        if (cancelled || list.length === 0) return;
+        const latest = list[0];
+        setSettledOrder(null);
+        setCheckoutNotice(null);
+        setCheckoutStage("validating");
+        setActiveCheckout({
+          orderId: latest.id,
+          whopPlan: "",
+          whopCheckoutConfig: null,
+          label: latest.kind === "topup" ? "Token top-up" : `${labelsRef.current[latest.plan_id] ?? latest.plan_id} period`,
+          amount: latest.amount,
+          tokens: latest.tokens,
+          returnUrl: `${window.location.origin}/app/plan?order=${encodeURIComponent(latest.id)}`,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // --- poll active checkout / validating popup until Whop webhook settles ---
@@ -438,17 +464,7 @@ export default function PlanPage() {
                     <span className="text-[11px] text-ink-faint">Applies to plans and top-ups.</span>
                   </div>
                 ) : null}
-                {/* A code can only be used before the first payment. */}
-                {referrals && !sub.subscription && sub.team?.role !== "member" &&
-                (referrals.my_offer || referrals.friend.enabled || referrals.partner.enabled) ? (
-                  <CouponBox
-                    offer={referrals.my_offer}
-                    planLabels={planLabels}
-                    onApplied={(offer) => setReferrals({ ...referrals, my_offer: offer })}
-                  />
-                ) : null}
                 <TokenPlanCards
-                  offer={referrals?.my_offer ?? null}
                   plans={sub.token_plans}
                   current={isTokens ? sub.subscription : null}
                   currency={sub.currency}

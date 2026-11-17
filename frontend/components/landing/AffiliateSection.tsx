@@ -5,20 +5,10 @@ import Link from "next/link";
 
 import { CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { CmsHeadline, PillArrow, Reveal } from "@/components/landing/primitives";
-import { formatMoney } from "@/lib/format";
 import type { PublicAffiliateProgram } from "@/lib/referrals";
 
 export function AffiliateSection({ program }: { program: PublicAffiliateProgram }) {
-  const { partner, currency, link_days: linkDays } = program;
-  const tiers = partner.tiers.length
-    ? partner.tiers
-    : [
-        { min: 0, pct: 25 },
-        { min: 20, pct: 30 },
-        { min: 50, pct: 35 },
-      ];
-  const minRate = tiers[0]?.pct ?? 25;
-  const maxRate = tiers[tiers.length - 1]?.pct ?? 35;
+  const { partner } = program;
 
   if (!partner.enabled) return null;
 
@@ -43,14 +33,14 @@ export function AffiliateSection({ program }: { program: PublicAffiliateProgram 
                 <CmsHeadline
                   k="affiliates.headline"
                   dark
-                  text={`Earn [${minRate}%–${maxRate}%] | Recurring Revenue.`}
+                  text="Partner with [ProteusFlow] | Grow with us."
                   className="mt-5 text-4xl sm:text-5xl lg:text-6xl"
                 />
 
                 <T k="affiliates.body" long as="p" className="mt-5 max-w-xl text-sm leading-relaxed text-white/75 sm:text-base">
-                  Share ProteusFlow with agencies, creators, and ad teams. Your audience gets 15% off their first plan
-                  and you earn recurring revenue across subscriptions, renewals, upgrades, and top-ups — tracked in a
-                  dedicated Affiliate Dashboard.
+                  Share ProteusFlow with agencies, creators, and media-buying teams. Submit your profile and channels to
+                  apply — once approved, you receive your personal affiliate link and promo code inside your partner
+                  dashboard.
                 </T>
 
                 <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -71,57 +61,54 @@ export function AffiliateSection({ program }: { program: PublicAffiliateProgram 
                     href="/affiliates"
                     className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-sm font-medium text-white/90 transition hover:bg-white/10"
                   >
-                    See full strategy
+                    Program details
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                 </div>
 
                 <p className="mt-4 font-mono text-[10px] uppercase tracking-wider text-white/45">
-                  Affiliate-only dashboard · {linkDays}-day attribution · {formatMoney(partner.min_payout, currency)} min
-                  monthly payout
+                  Dedicated affiliate portal · Manual partner review · Personal promo code &amp; link
                 </p>
               </div>
 
               <div className="space-y-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
                 <div className="flex items-center justify-between border-b border-white/10 pb-3">
                   <span className="font-mono text-[10px] uppercase tracking-wider text-white/55">
-                    Monthly commission tiers
+                    How joining works
                   </span>
                   <span className="rounded-full bg-meta-500/20 px-2.5 py-0.5 font-mono text-[10px] text-meta-200">
-                    {partner.discount_pct}% audience code
+                    Partner portal
                   </span>
                 </div>
 
-                {tiers.map((tier, idx) => {
-                  const next = tiers[idx + 1];
-                  const label = next
-                    ? tier.min === 0
-                      ? `0–${next.min - 1} customers/mo`
-                      : `${tier.min}–${next.min - 1} customers/mo`
-                    : `${tier.min}+ customers/mo`;
-                  return (
-                    <div
-                      key={`${tier.min}-${tier.pct}`}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-black/50 px-4 py-3"
-                    >
-                      <span className="text-xs text-white/80">{label}</span>
-                      <span className="font-display text-2xl font-normal text-meta-300 tabular-nums">
-                        {tier.pct}%
-                      </span>
+                {[
+                  {
+                    step: "01",
+                    title: "Submit your profile",
+                    detail: "Share your full name, email, social media links, and why you want to join.",
+                  },
+                  {
+                    step: "02",
+                    title: "Team review & setup",
+                    detail: "Once approved, we create your personal promo code and affiliate link in Whop.",
+                  },
+                  {
+                    step: "03",
+                    title: "Share with your audience",
+                    detail: "Clients enter your promo code at Whop checkout when subscribing to a plan.",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.step}
+                    className="rounded-xl border border-white/10 bg-black/50 px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-white">{item.title}</span>
+                      <span className="font-mono text-[11px] text-meta-300">{item.step}</span>
                     </div>
-                  );
-                })}
-
-                <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px] text-white/60">
-                  <div className="rounded-xl border border-white/10 bg-black/40 px-3 py-2">
-                    <span className="block text-[10px] uppercase text-white/40">Hold period</span>
-                    <span className="text-white">{partner.hold_days} days</span>
+                    <p className="mt-1 text-[11px] leading-relaxed text-white/60">{item.detail}</p>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-black/40 px-3 py-2">
-                    <span className="block text-[10px] uppercase text-white/40">Min payout</span>
-                    <span className="text-white">{formatMoney(partner.min_payout, currency)}</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
