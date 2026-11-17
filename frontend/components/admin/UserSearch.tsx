@@ -32,15 +32,24 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
+  // The words the list on screen was found with. While they differ from the box, the list is an old one.
+  const [listFor, setListFor] = useState("");
+  // Enter was pressed before the answer for the words in the box arrived: open its first row when it does.
+  const enterWaiting = useRef(false);
   const box = useRef<HTMLDivElement>(null);
+  const select = useRef(onSelectUser);
+  select.current = onSelectUser;
 
   const q = query.trim();
 
   useEffect(() => {
+    enterWaiting.current = false;
     if (!q) {
       setUsers([]);
       setTotal(0);
+      setListFor("");
       setLoading(false);
+      setFailed(false);
       return;
     }
     let cancelled = false;
@@ -51,12 +60,25 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
         if (cancelled) return;
         setUsers(page.users);
         setTotal(page.total);
+        setListFor(q);
         setCursor(0);
         setFailed(false);
+        if (enterWaiting.current && page.users[0]) {
+          setOpen(false);
+          select.current(page.users[0].id);
+        }
       } catch {
-        if (!cancelled) setFailed(true);
+        if (cancelled) return;
+        // Never leave an old list behind an error: Enter would open someone from it.
+        setUsers([]);
+        setTotal(0);
+        setListFor("");
+        setFailed(true);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          enterWaiting.current = false;
+          setLoading(false);
+        }
       }
     }, 250);
     return () => {
@@ -65,9 +87,15 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
     };
   }, [q]);
 
+  // The list on screen answers the words in the box (not an older search still being replaced).
+  const fresh = !loading && !failed && listFor === q;
+
   useEffect(() => {
     const onDown = (ev: MouseEvent) => {
-      if (box.current && !box.current.contains(ev.target as Node)) setOpen(false);
+      if (box.current && !box.current.contains(ev.target as Node)) {
+        enterWaiting.current = false;
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -89,12 +117,18 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
           aria-label="Search a user by name or email"
           value={query}
           onFocus={() => setOpen(true)}
+          onBlur={() => {
+            enterWaiting.current = false;
+          }}
           onChange={(ev) => {
             setQuery(ev.target.value);
             setOpen(true);
           }}
           onKeyDown={(ev) => {
-            if (ev.key === "Escape") setOpen(false);
+            if (ev.key === "Escape") {
+              enterWaiting.current = false;
+              setOpen(false);
+            }
             if (ev.key === "ArrowDown") {
               ev.preventDefault();
               setCursor((c) => Math.min(c + 1, users.length - 1));
@@ -103,7 +137,15 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
               ev.preventDefault();
               setCursor((c) => Math.max(c - 1, 0));
             }
-            if (ev.key === "Enter" && users[cursor]) pick(users[cursor].id);
+            if (ev.key === "Enter") {
+              // Typed fast and pressed Enter: wait for this search's own answer instead of
+              // opening whoever the previous list happened to show.
+              if (fresh) {
+                if (users[cursor]) pick(users[cursor].id);
+              } else if (loading) {
+                enterWaiting.current = true;
+              }
+            }
           }}
         />
         {loading ? (
@@ -125,7 +167,7 @@ export default function UserSearch({ onSelectUser, onOpenUsers }: UserSearchProp
           {failed ? (
             <p className="px-4 py-3 text-xs text-red-300">Could not search right now. Try again.</p>
           ) : users.length === 0 ? (
-            <p className="px-4 py-3 text-xs text-slate-400">
+            <p className="break-words px-4 py-3 text-xs text-slate-400">
               {loading ? "Searching..." : `No user has "${q}" in their name or email.`}
             </p>
           ) : (

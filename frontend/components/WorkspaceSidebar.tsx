@@ -74,7 +74,8 @@ const ROW_IDLE =
 const ROW_CURRENT =
   "data-[active=true]:border-meta-500/50 data-[active=true]:bg-meta-50 data-[active=true]:text-meta-700 data-[active=true]:shadow-[0_0_18px_-6px_rgb(8_102_255/0.5)] dark:data-[active=true]:bg-meta-500/20 dark:data-[active=true]:text-white dark:data-[active=true]:shadow-[0_0_18px_-4px_rgb(8_102_255/0.7)]";
 const GROUP_LABEL = "px-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint dark:text-slate-500";
-const LABEL = "truncate group-data-[collapsible=icon]:hidden";
+// Folded to icons, the name stays for screen readers and voice control.
+const LABEL = "truncate group-data-[collapsible=icon]:sr-only";
 
 interface WorkspaceSidebarProps {
   /** This page follows the black / white switch (the plan and referral pages stay white). */
@@ -141,9 +142,10 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
     <Sidebar
       collapsible="icon"
       className="border-black/[0.07] dark:border-white/10 [&>[data-sidebar=sidebar]]:bg-white/85 [&>[data-sidebar=sidebar]]:backdrop-blur-xl dark:[&>[data-sidebar=sidebar]]:bg-slate-900/85"
-      // The phone drawer opens outside the page, so it carries the deck switch itself.
+      // The phone drawer opens outside the page, so it carries the deck switch itself, and the
+      // class the theme from Admin > Workspace (corner radius, text colour, own CSS) is scoped to.
       mobileClassName={clsx(
-        "border-black/[0.07] bg-white text-black",
+        "cms-workspace border-black/[0.07] bg-white text-black",
         deck && "deck dark:border-white/10 dark:!bg-slate-900 dark:![background-image:none] dark:text-slate-100",
       )}
       aria-label="Workspace navigation"
@@ -271,7 +273,7 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
                 {initials(user.display_name, user.email)}
               </AvatarFallback>
             </Avatar>
-            <span className="min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden" data-cms-skip>
+            <span className="min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:sr-only" data-cms-skip>
               <span className="block truncate text-sm font-semibold text-black dark:text-slate-100">
                 {user.display_name || user.email.split("@")[0]}
               </span>

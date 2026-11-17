@@ -633,7 +633,7 @@ export default function SupportTab({
               ) : null}
 
               {/* Admin Reply Composer (Text + Screenshot/Video Upload + Screen Recording) */}
-              <div className="border-t border-white/10 pt-3">
+              <div className="border-t border-white/10 pt-3 [container-type:inline-size]">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -646,9 +646,11 @@ export default function SupportTab({
                   }}
                 />
 
-                {/* Phones: the text box takes its own full-width row above the
-                    buttons, so it never gets squeezed to a sliver. */}
-                <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
+                {/* A narrow chat column (a phone, or the middle column beside the open
+                    sidebar): the text box takes its own full-width row above the
+                    buttons, so it never gets squeezed to a sliver. It follows the
+                    width of this box, not of the window. */}
+                <div className="flex flex-wrap items-end gap-2 [@container_(min-width:26rem)]:flex-nowrap">
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
@@ -708,14 +710,14 @@ export default function SupportTab({
                       }
                     }}
                     placeholder="Reply as Live Agent (Enter to send, Shift+Enter for newline, or paste a screenshot with Ctrl+V)…"
-                    className="order-first max-h-28 min-w-0 basis-full resize-none rounded-xl sm:order-none sm:flex-1 sm:basis-auto border border-white/15 bg-slate-900/80 px-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
+                    className="order-first max-h-28 min-w-0 basis-full resize-none rounded-xl [@container_(min-width:26rem)]:order-none [@container_(min-width:26rem)]:flex-1 [@container_(min-width:26rem)]:basis-auto border border-white/15 bg-slate-900/80 px-3.5 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
                   />
 
                   <button
                     type="button"
                     disabled={sending || uploading || (!draft.trim() && !attachment)}
                     onClick={() => void handleSendReply()}
-                    className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 sm:ml-0 px-4 text-xs font-semibold text-white shadow transition hover:bg-emerald-500 disabled:opacity-40"
+                    className="ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 [@container_(min-width:26rem)]:ml-0 px-4 text-xs font-semibold text-white shadow transition hover:bg-emerald-500 disabled:opacity-40"
                   >
                     {sending ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

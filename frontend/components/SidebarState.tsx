@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
+import { readSidebarOpen } from "@/lib/sidebarCookie";
+
 interface SidebarState {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -15,7 +17,9 @@ const SidebarStateContext = createContext<SidebarState | null>(null);
  * starts from the cookie the sidebar writes, so a reload keeps the choice too.
  */
 export function SidebarStateProvider({ initialOpen, children }: { initialOpen: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(initialOpen);
+  // In the browser the cookie itself is the truth: `initialOpen` can be an old answer when
+  // Next brings this layout back from its cache (Back / Forward after leaving the workspace).
+  const [open, setOpen] = useState(() => (typeof document === "undefined" ? initialOpen : readSidebarOpen()));
   const value = useMemo(() => ({ open, setOpen }), [open]);
   return <SidebarStateContext.Provider value={value}>{children}</SidebarStateContext.Provider>;
 }

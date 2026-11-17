@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { ArrowLeft, Bell, Headset, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import AdminSidebar, { ADMIN_TABS } from "@/components/admin/AdminSidebar";
 import AffiliatesTab from "@/components/admin/AffiliatesTab";
@@ -22,7 +22,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import NotFound from "@/app/not-found";
 import { getOverview, getPlans, type Overview, type PlanInfo } from "@/lib/admin";
 import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
-import { jumpToTitle, type AdminSearchEntry, type AdminTabId } from "@/lib/admin-search";
+import { cancelJump, jumpToTitle, type AdminSearchEntry, type AdminTabId } from "@/lib/admin-search";
 import { ADMIN_SIDEBAR_COOKIE, readSidebarOpen } from "@/lib/sidebarCookie";
 import { getAdminSupportNotifications, type AdminSupportNotifications } from "@/lib/support";
 
@@ -61,12 +61,25 @@ export default function AdminPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // --- who is looking ----------------------------------------------------
-  useEffect(() => {
-    const syncTab = () => setTab(tabFromHash());
-    syncTab();
-    window.addEventListener("hashchange", syncTab);
-    return () => window.removeEventListener("hashchange", syncTab);
+  // A sidebar search result that is still on its way to a title (see jumpTo).
+  const jumpTimer = useRef(0);
+  const dropJump = useCallback(() => {
+    window.clearTimeout(jumpTimer.current);
+    cancelJump();
   }, []);
+
+  useEffect(() => {
+    const syncTab = () => {
+      dropJump();
+      setTab(tabFromHash());
+    };
+    setTab(tabFromHash());
+    window.addEventListener("hashchange", syncTab);
+    return () => {
+      window.removeEventListener("hashchange", syncTab);
+      dropJump();
+    };
+  }, [dropJump]);
 
   // Anyone who is not a signed-in admin sees the ordinary "page not found"
   // screen, with no redirect to sign-in, so customers cannot tell this page
@@ -138,11 +151,15 @@ export default function AdminPage() {
     setRefreshKey((k) => k + 1);
   }, [loadShared]);
 
-  const openTab = useCallback((id: TabId) => {
-    setTab(id);
-    setUsersQuery("");
-    window.history.replaceState(null, "", `#${id}`);
-  }, []);
+  const openTab = useCallback(
+    (id: TabId) => {
+      dropJump();
+      setTab(id);
+      setUsersQuery("");
+      window.history.replaceState(null, "", `#${id}`);
+    },
+    [dropJump],
+  );
 
   // "See all" under the dashboard search: the Users page opens on the same search.
   const openUsersWith = useCallback(
@@ -165,7 +182,10 @@ export default function AdminPage() {
   const jumpTo = useCallback(
     (entry: AdminSearchEntry) => {
       openTab(entry.tab);
-      window.setTimeout(() => jumpToTitle(entry, document.getElementById("admin-main") ?? document), 80);
+      jumpTimer.current = window.setTimeout(
+        () => jumpToTitle(entry, document.getElementById("admin-main") ?? document),
+        80,
+      );
     },
     [openTab],
   );
@@ -365,7 +385,8 @@ export default function AdminPage() {
               refreshKey={refreshKey}
               initialThreadId={activeSupportThreadId}
               onSelectUser={setSelected}
-              onNotificationsChanged={() => void loadSupportNotifs()}
+              // A stable function: a new one on every render makes the tab reload its ticket in a loop.
+              onNotificationsChanged={loadSupportNotifs}
             />
           ) : tab === "users" ? (
             <UsersTab

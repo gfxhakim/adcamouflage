@@ -2,9 +2,10 @@
 
 import type { CSSProperties, ReactNode } from "react";
 
+import { useCms } from "@/components/cms/ContentProvider";
 import Header from "@/components/Header";
 import { useSidebarState } from "@/components/SidebarState";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import WorkspaceSidebar from "@/components/WorkspaceSidebar";
 import { type UserProfile } from "@/lib/auth";
 import { useDeckTheme } from "@/lib/deckTheme";
@@ -28,6 +29,25 @@ interface WorkspaceShellProps {
 const SIZES = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3.75rem" } as CSSProperties;
 
 /**
+ * The menu button in the top bar. On phones and tablets the help button sits
+ * inside the closed drawer, so the tour's "help is one click away" tip points
+ * at this button instead of at nothing. With the drawer open the help button
+ * itself is on screen, and it is the only target again.
+ */
+function MenuButton() {
+  const { isMobile, openMobile } = useSidebar();
+  const helpShown = !useCms().hidden("rail.help");
+
+  return (
+    <SidebarTrigger
+      data-tour={isMobile && helpShown && !openMobile ? "help" : undefined}
+      className="h-9 w-9 shrink-0 rounded-lg border border-black/10 text-ink-muted hover:bg-meta-50 hover:text-meta-700 focus-visible:ring-meta-500 focus-visible:ring-offset-0 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white [&>svg]:h-4 [&>svg]:w-4"
+      aria-label="Open or close the menu"
+    />
+  );
+}
+
+/**
  * The frame every signed-in customer page sits in: the sidebar on the left
  * (a drawer on phones and tablets) and the top bar with its menu button.
  */
@@ -45,12 +65,7 @@ export function WorkspaceShell({ user, deck = false, health, healthError, onOpen
           healthError={healthError}
           user={user}
           onDark={onDark}
-          leading={
-            <SidebarTrigger
-              className="h-9 w-9 shrink-0 rounded-lg border border-black/10 text-ink-muted hover:bg-meta-50 hover:text-meta-700 focus-visible:ring-meta-500 focus-visible:ring-offset-0 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white [&>svg]:h-4 [&>svg]:w-4"
-              aria-label="Open or close the menu"
-            />
-          }
+          leading={<MenuButton />}
         />
         {children}
       </div>
