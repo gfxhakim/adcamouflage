@@ -43,6 +43,12 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   e("support", "Support Queue", "tickets live chat agent"),
 
   // Sales
+  e("sales", "Refund requests", "refunds money back cancel approve reject rules"),
+  e("sales", "Customers can ask for refunds from Account settings", "refund rules allow turn off", "Rules"),
+  e("sales", "Plan payments can be refunded", "refund rules subscription", "Rules"),
+  e("sales", "Top-ups can be refunded", "refund rules extra tokens", "Rules"),
+  e("sales", "Days after payment a customer can ask", "refund rules window period limit", "Rules"),
+  e("sales", "Most of the order's tokens used, % (0 = unused only, 100 = no limit)", "refund rules usage limit", "Rules"),
   e("sales", "Daily", "chart revenue sign-ups checkouts"),
   e("sales", "Funnel", "conversion sign-ups checkouts payments"),
   e("sales", "Revenue by plan", "income money"),
@@ -87,7 +93,7 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   e("settings", "Grace days after a period ends", "billing expiry"),
   e("settings", "Limited-time offer", "discount launch price sale"),
   e("settings", "Top-ups", "extra tokens buy"),
-  e("settings", "Phone alerts", "telegram notifications bot"),
+  e("settings", "Phone alerts", "telegram notifications bot cancel refund"),
   e("settings", "Customer emails", "automatic email templates welcome subject design colours logo"),
   e("settings", "Top line and highlight box", "email design"),
   e("settings", "Send to a group", "broadcast newsletter group email sent history"),
@@ -133,10 +139,27 @@ export function searchAdmin(query: string, limit = 12): AdminSearchEntry[] {
 
 const TITLES = "h2, h3, h4, legend, .label, label span, th";
 
-/** The first element in `root` whose text is `wanted`, allowing a count after it: "Support Queue (3)". */
-function findByText(root: ParentNode, selector: string, wanted: string): HTMLElement | null {
+const tidy = (text: string) => text.replace(/\s+/g, " ").trim().toLowerCase();
+
+/** The words an element holds itself, without what its children add (a count chip, a field). */
+function ownText(node: Element): string {
+  let text = "";
+  node.childNodes.forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? "";
+  });
+  return tidy(text);
+}
+
+/**
+ * The first element in `root` whose text is `wanted`. A count may follow it,
+ * in brackets ("Support Queue (3)") or as a chip inside the title. With
+ * `ownOnly`, only the element's own words count (a label that wraps its field).
+ */
+function findByText(root: ParentNode, selector: string, wanted: string, ownOnly = false): HTMLElement | null {
   for (const node of Array.from(root.querySelectorAll<HTMLElement>(selector))) {
-    const text = (node.textContent ?? "").trim().toLowerCase();
+    if (ownText(node) === wanted) return node;
+    if (ownOnly) continue;
+    const text = tidy(node.textContent ?? "");
     if (text === wanted || text.startsWith(`${wanted} (`)) return node;
   }
   return null;
@@ -149,8 +172,8 @@ function findByText(root: ParentNode, selector: string, wanted: string): HTMLEle
  * and `entry.via` is pressed first when the title sits behind it.
  */
 export function jumpToTitle(entry: Pick<AdminSearchEntry, "title" | "via">, root: ParentNode = document, tries = 24): void {
-  const wanted = entry.title.trim().toLowerCase();
-  const via = entry.via?.trim().toLowerCase();
+  const wanted = tidy(entry.title);
+  const via = entry.via ? tidy(entry.via) : undefined;
   let viaPressed = false;
 
   // An attribute, not a class: a pressed tab re-renders its class list and would drop the glow.
@@ -161,7 +184,8 @@ export function jumpToTitle(entry: Pick<AdminSearchEntry, "title" | "via">, root
   };
 
   const attempt = (left: number) => {
-    const title = findByText(root, TITLES, wanted);
+    // A plain label around its field is the last place to look.
+    const title = findByText(root, TITLES, wanted) ?? findByText(root, "label", wanted, true);
     if (title) return show(title);
     if (via && !viaPressed) {
       const opener = findByText(root, "button", via);
