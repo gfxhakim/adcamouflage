@@ -240,6 +240,9 @@ class Order(Base):
     # the code, and how much came off the list price. ``amount_usd`` is
     # what the customer actually pays.
     coupon_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Hash of the payer's account when the provider tells us (Volet's wallet),
+    # so a referrer paying for their own "friend" is caught.
+    payer_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     discount_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0", nullable=False)
 
 
@@ -615,6 +618,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("email_campaigns", "button", "VARCHAR(60) NOT NULL DEFAULT ''"),
     ("orders", "coupon_code", "VARCHAR(40)"),
     ("orders", "discount_usd", "FLOAT NOT NULL DEFAULT 0"),
+    ("orders", "payer_hash", "VARCHAR(64)"),
 ]
 
 

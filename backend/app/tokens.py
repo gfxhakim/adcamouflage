@@ -806,6 +806,12 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
 
     now = _now()
     paid_late = order.status != "pending"
+    # Had the subscription already ended (past the grace window) before this
+    # purchase? A partner's commission stops there (see affiliates.py).
+    returning = False
+    if order.kind == "subscription" and user.sub_plan is not None:
+        old_end = aware(user.sub_period_end)
+        returning = old_end is not None and now > old_end + timedelta(days=get_billing_rules(db)["grace_days"])
     try:
         claimed = db.execute(
             update(Order)
@@ -872,7 +878,7 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
         from . import affiliates
 
         try:
-            affiliates.on_order_paid(db, order)
+            affiliates.on_order_paid(db, order, returning=returning)
         except Exception:  # noqa: BLE001 - the program must never undo a payment
             db.rollback()
             logger.exception("referral bookkeeping for order %s failed", order.id)

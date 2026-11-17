@@ -512,3 +512,73 @@ def test_batch_cost_adds_worker_time_and_download_bandwidth(admin):
     doubled = next(b for b in admin.get("/api/v1/admin/affiliates/batch-costs").json()["batches"] if b["batch_id"] == batch_id)
     assert doubled["egress"] > row["egress"] * 1.9
     admin.put("/api/v1/admin/affiliates/batch-costs/rates", json=data["rates"])
+
+
+# --------------------------------------------------------------------------
+# hardening
+# --------------------------------------------------------------------------
+
+
+def test_paying_from_the_referrers_own_payment_account_blocks_the_reward():
+    referrer_email = address("ref")
+    referrer = client_for(referrer_email, device="device-m1")
+    own = checkout(referrer, "pro").json()["order_id"]
+    wallet = affiliates.payer_hash("U123456789012")
+    with session() as db:
+        db.get(Order, own).payer_hash = wallet
+        db.commit()
+    pay(referrer_email, own)
+    friend_email = address("friend")
+    friend = client_for(friend_email, device="device-m2", ref=friend_code(referrer))
+    order_id = checkout(friend, "pro").json()["order_id"]
+    with session() as db:
+        db.get(Order, order_id).payer_hash = affiliates.payer_hash(" u123456789012 ")
+        db.commit()
+    pay(friend_email, order_id)
+    row = referral(friend_email)
+    assert row.status == "blocked" and "payment" in row.flags and row.reward_tokens == 0
+
+
+def test_commission_stops_once_the_customer_has_left(admin):
+    code = f"END{RUN_ID[:4].upper()}"
+    creator, creator_email = make_partner(admin, code)
+    buyer_email = address("fan")
+    buyer = client_for(buyer_email, device="device-n1", ref=code)
+    pay(buyer_email, checkout(buyer, "pro").json()["order_id"])
+    pay(buyer_email, checkout(buyer, "pro").json()["order_id"])  # renewed in time: still earning
+    assert len(creator.get("/api/v1/referrals/me").json()["partner"]["commissions"]) == 2
+    with session() as db:
+        user_of(db, buyer_email).sub_period_end = datetime.now(timezone.utc) - timedelta(days=30)
+        db.commit()
+    pay(buyer_email, checkout(buyer, "pro").json()["order_id"])  # came back after the plan had ended
+    assert referral(buyer_email).status == "ended"
+    pay(buyer_email, checkout(buyer, "pro").json()["order_id"])
+    assert len(creator.get("/api/v1/referrals/me").json()["partner"]["commissions"]) == 2
+
+
+def test_reloading_a_link_counts_one_click():
+    email = address("ref")
+    referrer = client_for(email, device="device-o1")
+    subscribe(email)
+    code = friend_code(referrer)
+    visitor = TestClient(app, headers={"x-device-id": "device-o2-visitor"})
+    for _ in range(3):
+        assert visitor.post("/api/v1/referrals/click", json={"code": code}).json()["valid"] is True
+    assert referrer.get("/api/v1/referrals/me").json()["friend"]["stats"]["clicks"] == 1
+
+
+def test_a_reward_is_only_ever_given_once():
+    referrer_email = address("ref")
+    referrer = client_for(referrer_email, device="device-p1")
+    subscribe(referrer_email)
+    friend_email = address("friend")
+    friend = client_for(friend_email, device="device-p2", ref=friend_code(referrer))
+    pay(friend_email, checkout(friend, "pro").json()["order_id"])
+    later = datetime.now(timezone.utc) + timedelta(days=8)
+    with session() as first, session() as second:
+        row_a = affiliates.referral_of(first, user_of(first, friend_email).id)
+        row_b = affiliates.referral_of(second, user_of(second, friend_email).id)
+        assert affiliates.give_reward(first, row_a, now=later) == "rewarded"
+        assert affiliates.give_reward(second, row_b, now=later) == "rewarded"  # sees it is done, pays nothing
+    with session() as db:
+        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 750

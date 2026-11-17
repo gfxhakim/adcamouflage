@@ -590,7 +590,7 @@ def admin_referral_action(
             sale.void_reason = row.void_reason
         db.commit()
     elif payload.action == "allow":
-        if row.status not in ("blocked", "void", "capped"):
+        if row.status not in ("blocked", "void", "capped", "ended"):
             raise HTTPException(status_code=409, detail="This referral is not blocked.")
         row.flags = ""
         row.void_reason = ""

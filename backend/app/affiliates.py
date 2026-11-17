@@ -29,7 +29,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .app_settings import get_setting, set_setting
@@ -132,6 +132,24 @@ def device_hash(raw: str | None) -> str:
 
 def ip_hash(ip: str | None) -> str:
     return _hash(ip or "")
+
+
+def payer_hash(account: str | None) -> str:
+    """Hash of the account a payment came from (Volet's wallet id), when the provider gives one."""
+
+    return _hash((account or "").strip().upper())
+
+
+def same_payer(db: Session, order: Order, referrer_id: int) -> bool:
+    """True when this payment came from an account the referrer has paid from themselves."""
+
+    if not order.payer_hash:
+        return False
+    return bool(
+        db.execute(
+            select(func.count(Order.id)).where(Order.user_id == referrer_id, Order.payer_hash == order.payer_hash)
+        ).scalar_one()
+    )
 
 
 def remember_device(db: Session, user: User, device: str, ip: str) -> None:
@@ -277,7 +295,21 @@ def offer_for_code(db: Session, code: ReferralCode, program: dict[str, Any] | No
 
 
 def record_click(db: Session, code: ReferralCode, device: str, ip: str) -> None:
+    """Count a link click, once an hour per browser or network so reloads do not inflate it."""
+
     try:
+        same = [ReferralClick.device_hash == device] if device else []
+        same += [ReferralClick.ip_hash == ip] if ip else []
+        if same:
+            recent = db.execute(
+                select(func.count(ReferralClick.id)).where(
+                    ReferralClick.code_id == code.id,
+                    ReferralClick.created_at >= _now() - timedelta(hours=1),
+                    or_(*same),
+                )
+            ).scalar_one()
+            if recent:
+                return
         db.add(ReferralClick(code_id=code.id, device_hash=device, ip_hash=ip))
         db.commit()
     except Exception:  # noqa: BLE001
@@ -403,17 +435,29 @@ def _month(when: datetime) -> str:
     return f"{when:%Y-%m}"
 
 
-def on_order_paid(db: Session, order: Order) -> None:
-    """A real payment was confirmed: start the friend reward clock or book the partner's commission."""
+def on_order_paid(db: Session, order: Order, *, returning: bool = False) -> None:
+    """A real payment was confirmed: start the friend reward clock or book the partner's commission.
+
+    ``returning`` says the customer's subscription had already ended (past
+    the grace window) before this payment. A partner earns for as long as
+    the customer stays subscribed, so that is where their commission stops.
+    """
 
     if not order.amount_usd or order.amount_usd <= 0:
         return
     row = referral_of(db, order.user_id)
-    if row is None or row.status in ("blocked", "void"):
+    if row is None or row.status in ("blocked", "void", "ended"):
         return
     program = get_program(db)
     paid_at = aware(order.paid_at) or _now()
     first = row.first_order_id is None
+    if same_payer(db, order, row.referrer_id):
+        flags = {flag for flag in row.flags.split(",") if flag} | {"payment"}
+        row.flags = ",".join(sorted(flags))
+        row.status = "blocked"
+        row.void_reason = "Looks like a self-referral (paid from the referrer's own payment account)"
+        db.commit()
+        return
 
     if row.channel == FRIEND:
         if not first or order.kind != "subscription":
@@ -426,6 +470,11 @@ def on_order_paid(db: Session, order: Order) -> None:
         db.commit()
         return
 
+    if returning and not first:
+        row.status = "ended"
+        row.void_reason = "The customer's subscription had ended before they came back, so the commission stopped"
+        db.commit()
+        return
     partner = db.get(AffiliatePartner, row.referrer_id)
     if first:
         row.first_order_id = order.id
@@ -532,6 +581,18 @@ def give_reward(db: Session, row: Referral, *, force: bool = False, now: datetim
 
     now = now or _now()
     program = get_program(db)
+    # Claim the row first, so two runs at the same moment cannot both pay it.
+    claimed = db.execute(
+        update(Referral)
+        .where(Referral.id == row.id, Referral.status.in_(("waiting", "capped")))
+        .values(status="granting")
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if claimed != 1:
+        db.rollback()
+        db.refresh(row)
+        return row.status
+    db.refresh(row)
     referrer = db.get(User, row.referrer_id)
     referred = db.get(User, row.referred_user_id)
     if referrer is None or referred is None:
@@ -702,13 +763,27 @@ def record_payout(
     )
     db.add(payout)
     db.flush()
-    by_id = {row["id"]: row for row in rows}
-    for row in db.execute(select(AffiliateCommission).where(AffiliateCommission.id.in_(by_id))).scalars():
-        live = by_id[row.id]
-        row.status = "paid"
-        row.rate_pct = live["rate_pct"]
-        row.commission_usd = live["commission"]
-        row.payout_id = payout.id
+    # Each line is claimed on its own (still unpaid -> paid), so a payout
+    # recorded twice at the same moment cannot pay a commission twice.
+    paid = 0.0
+    for live in rows:
+        claimed = db.execute(
+            update(AffiliateCommission)
+            .where(
+                AffiliateCommission.id == live["id"],
+                AffiliateCommission.status == "pending",
+                AffiliateCommission.payout_id.is_(None),
+            )
+            .values(status="paid", rate_pct=live["rate_pct"], commission_usd=live["commission"], payout_id=payout.id)
+            .execution_options(synchronize_session=False)
+        ).rowcount
+        if claimed == 1:
+            paid += live["commission"]
+    paid = round(paid, 2)
+    if paid <= 0:
+        db.rollback()
+        raise PayoutError("Nothing is payable for this partner yet.")
+    payout.amount_usd = paid
     db.commit()
     return payout
 

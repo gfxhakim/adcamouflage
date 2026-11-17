@@ -549,6 +549,7 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         # Kept before the claim so even a settlement that fails leaves a
         # trace of which Volet transaction it was.
         order.provider_ref = (fields.get("ac_transfer") or "")[:128] or None
+        order.payer_hash = affiliates.payer_hash(fields.get("ac_src_wallet")) or None
         db.commit()
         settle_order(db, order, source="Volet")
     elif state == volet.CANCELED:

@@ -17,6 +17,7 @@ const STATUS: Record<Order["status"], { text: string; tone: string }> = {
   pending: { text: "Awaiting payment", tone: "!border-amber-400/50 !bg-amber-50 !text-amber-700" },
   expired: { text: "Expired", tone: "!border-black/10 !text-ink-faint" },
   invalid: { text: "Invalid", tone: "!border-red-300 !bg-red-50 !text-red-700" },
+  refunded: { text: "Refunded", tone: "!border-black/10 !text-ink-faint" },
 };
 
 /** Every checkout the user started, newest first, with its outcome. */
@@ -42,6 +43,7 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
               <p className="text-xs text-ink-subtle">
                 {formatMoney(order.amount, currency)} · {formatTokens(order.tokens)} tokens ·{" "}
                 {formatDate(order.paid_at ?? order.created_at)}
+                {order.coupon_code ? ` · code ${order.coupon_code}` : ""}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">

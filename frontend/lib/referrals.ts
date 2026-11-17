@@ -1,0 +1,162 @@
+import { API_BASE, ApiError } from "./api";
+
+/** A discount a link or coupon gives on the first subscription payment. */
+export interface ReferralOffer {
+  code: string;
+  channel: "friend" | "partner";
+  discount_pct: number;
+  plans: string[];
+  /** Plan id -> price after the discount. */
+  prices: Record<string, number>;
+}
+
+export interface CodeStats {
+  clicks: number;
+  signups: number;
+  paying: number;
+}
+
+export interface FriendProgram {
+  enabled: boolean;
+  /** Only active subscribers have a link. */
+  eligible: boolean;
+  discount_pct: number;
+  plans: string[];
+  reward_tokens: Record<string, number>;
+  hold_days: number;
+  monthly_cap: number;
+  code: string | null;
+  stats: CodeStats;
+  rewards_this_month: number;
+  tokens_earned: number;
+  tokens_left: number;
+  friends: { email: string; status: string; reward_tokens: number; reward_due_at: string | null; created_at: string }[];
+}
+
+export interface CommissionTotals {
+  pending: number;
+  payable: number;
+  paid: number;
+}
+
+export interface CommissionLine {
+  id: number;
+  kind: "sale" | "clawback";
+  amount: number;
+  month: string;
+  rate_pct: number;
+  commission: number;
+  status: "pending" | "payable" | "paid" | "void";
+  payable_at: string;
+  created_at: string;
+}
+
+export interface StatementMonth {
+  month: string;
+  customers: number;
+  revenue: number;
+  rate_pct: number;
+  commission: number;
+}
+
+export interface PartnerProgram {
+  enabled: boolean;
+  applications_open: boolean;
+  discount_pct: number;
+  tiers: { min: number; pct: number }[];
+  hold_days: number;
+  min_payout: number;
+  status: "pending" | "approved" | "rejected" | "suspended" | null;
+  requested_code?: string;
+  payout_method?: string;
+  payout_address?: string;
+  code?: string | null;
+  stats?: CodeStats;
+  totals?: CommissionTotals;
+  month?: { month: string; customers: number; rate_pct: number };
+  statement?: StatementMonth[];
+  commissions?: CommissionLine[];
+  payouts?: { id: number; amount: number; method: string; reference: string; created_at: string }[];
+}
+
+export interface MyReferrals {
+  link_days: number;
+  my_offer: ReferralOffer | null;
+  friend: FriendProgram;
+  partner: PartnerProgram;
+}
+
+const DEVICE_KEY = "pf_device";
+
+/**
+ * A random id for this browser, kept in local storage. Sent with sign-up,
+ * sign-in and checkout so one person cannot refer themselves from the same
+ * browser. It identifies nothing but the browser.
+ */
+export function deviceId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    let id = window.localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/[^a-zA-Z0-9-]/g, "");
+      window.localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+export function deviceHeaders(): Record<string, string> {
+  const id = deviceId();
+  return id ? { "X-Device-Id": id } : {};
+}
+
+async function call<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/v1/referrals${path}`, {
+      ...init,
+      credentials: "include",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json", ...deviceHeaders(), ...(init?.headers ?? {}) },
+    });
+  } catch {
+    throw new ApiError("Cannot reach the server. Check your connection.", 0);
+  }
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const detail = (await response.json())?.detail;
+      if (typeof detail === "string") message = detail;
+      else if (Array.isArray(detail)) message = detail.map((e) => e?.msg ?? "invalid").join("; ");
+    } catch {
+      /* keep the status text */
+    }
+    throw new ApiError(message, response.status);
+  }
+  return (await response.json()) as T;
+}
+
+const send = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+
+export const fetchMyReferrals = () => call<MyReferrals>("/me");
+export const recordClick = (code: string) =>
+  call<{ valid: boolean; offer?: ReferralOffer }>("/click", send("POST", { code }));
+export const applyCode = (code: string) => call<{ offer: ReferralOffer }>("/apply", send("POST", { code }));
+export const applyAsPartner = (body: { code: string; audience: string; payout_method: string; payout_address: string }) =>
+  call<PartnerProgram>("/partner/apply", send("POST", body));
+export const savePayoutDetails = (body: { payout_method: string; payout_address: string }) =>
+  call<PartnerProgram>("/partner/payout", send("PUT", body));
+
+/** The link a friend or a creator's audience opens. */
+export function referralLink(code: string): string {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return `${origin}/?ref=${encodeURIComponent(code)}`;
+}
+
+export function offerLine(offer: ReferralOffer, labels: Record<string, string> = {}): string {
+  const names = offer.plans.map((id) => labels[id] ?? id.replace(/^\w/, (c) => c.toUpperCase()));
+  const where = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names[0] ?? "a plan";
+  return `${offer.discount_pct}% off your first ${where} payment`;
+}

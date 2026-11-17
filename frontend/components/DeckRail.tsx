@@ -5,6 +5,7 @@ import clsx from "clsx";
 import {
   Clock,
   Crown,
+  Gift,
   HelpCircle,
   LayoutGrid,
   LogOut,
@@ -36,6 +37,7 @@ const ITEMS: NavItem[] = [
   { href: "/app", label: "Workspace", icon: LayoutGrid },
   { href: "/app/history", label: "History", icon: Clock },
   { href: "/app/plan", label: "My plan", icon: Crown },
+  { href: "/app/referrals", label: "Invite & earn", icon: Gift },
 ];
 
 /** The ProteusFlow mark, sitting at the top of the rail. */
