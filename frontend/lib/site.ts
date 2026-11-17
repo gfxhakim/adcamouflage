@@ -1,21 +1,34 @@
+import type { Metadata } from "next";
+
 /**
  * Fallback public address. The real one comes from SITE_URL on the Railway
  * `web` service (or the request's host); see siteUrl() in lib/seo.ts. When
- * SITE_URL is set, visits to www.<host> are sent to it with a permanent
- * redirect so Google sees one site, not two.
+ * SITE_URL is set, visits to the other spelling (www or not) are sent to it
+ * with a permanent redirect so Google sees one site, not two.
  */
-export const DEFAULT_SITE_URL = "https://proteusflow.com";
+export const DEFAULT_SITE_URL = "https://www.proteusflow.com";
 
 export const SITE_NAME = "ProteusFlow";
 export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";
 
-// Search results and link previews. Honest and specific: say what the product
-// does, in the words people search with. Google shows about 60 characters of a
-// title and 155 of a description.
-export const SITE_TITLE = "ProteusFlow: Ad Creative Variations & Batch Video Studio";
+// The title and description shown in the browser tab, in search results and
+// in link previews (WhatsApp, Facebook, X). Both are kept short so previews
+// show them whole. Admin > Landing page > Tab & SEO can replace both.
+export const SITE_TITLE = "ProteusFlow — Online Video Formatter, Brand Overlay & Batch Export Studio";
 export const SITE_DESCRIPTION =
-  "Turn one winning video or image ad into up to 10 polished, branded variations in minutes. " +
-  "Color grading, logo overlays and cover frames for Meta, TikTok and YouTube ads.";
+  "Format, brand and export your videos for Reels, TikTok and Shorts in minutes. Software that adapts to your business, not the other way around.";
+
+/**
+ * The link-preview tags for a page's title and description. Pass the page's
+ * own path where it is known; without one no address is sent and the preview
+ * uses the address of the page that was shared.
+ */
+export function sharePreview(title: string, description: string, path?: string): Pick<Metadata, "openGraph" | "twitter"> {
+  return {
+    openGraph: { type: "website", siteName: SITE_NAME, title, description, ...(path ? { url: path } : {}), locale: "en_US" },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 export const SITE_KEYWORDS = [
   "ad creative variations",

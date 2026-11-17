@@ -18,28 +18,37 @@ import { loadPublishedContent } from "@/lib/siteContent";
 import { publishedFaqs } from "@/components/landing/faqData";
 import { jsonLd, siteUrl } from "@/lib/seo";
 import type { SiteContent } from "@/lib/siteContent";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_SLOGAN, SITE_TITLE } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_SLOGAN, SITE_TITLE, sharePreview } from "@/lib/site";
 import type { PublicPricing, TokenPlanCard, TopupTable } from "@/lib/types";
 
-const METADATA: Metadata = {
-  title: { absolute: SITE_TITLE },
-  description: SITE_DESCRIPTION,
-  alternates: { canonical: "/" },
-  openGraph: { type: "website", siteName: SITE_NAME, locale: "en_US", url: "/", title: SITE_TITLE, description: SITE_DESCRIPTION },
-};
-
-// Admin > Landing can override the tab title, description and icon.
+// Admin > Landing page > Tab & SEO can replace the title, description and tab icon.
+// The same title and description go into the link preview (WhatsApp,
+// Facebook, X), so a shared link never shows different text from the tab.
 export async function generateMetadata(): Promise<Metadata> {
   const meta = (await loadPublishedContent("landing")).meta ?? {};
-  const legacyMeta = /fingerprint|hash|cloak|camouflage|bypass|mutate|duplicate|scanner|algorithm|\$37\.50|variation/i;
-  const cleanTitle = meta.title && !legacyMeta.test(meta.title) ? meta.title : undefined;
-  const cleanDesc = meta.description && !legacyMeta.test(meta.description) ? meta.description : undefined;
+  const title = savedMeta(meta.title) || SITE_TITLE;
+  const description = savedMeta(meta.description) || SITE_DESCRIPTION;
   return {
-    ...METADATA,
-    ...(cleanTitle ? { title: { absolute: cleanTitle } } : {}),
-    ...(cleanDesc ? { description: cleanDesc } : {}),
-    ...(meta.favicon ? { icons: { icon: meta.favicon } } : {}),
+    title: { absolute: title },
+    description,
+    alternates: { canonical: "/" },
+    ...sharePreview(title, description, "/"),
+    ...(saved(meta.favicon) ? { icons: { icon: saved(meta.favicon) } } : {}),
   };
+}
+
+/** A value saved in Admin, or "" when the field was left empty. */
+function saved(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// A title or description saved before the studio cleanup is ignored, so the
+// built-in text shows instead.
+const LEGACY_META = /fingerprint|hash|cloak|camouflage|bypass|mutate|duplicate|scanner|algorithm|\$37\.50|variation/i;
+
+function savedMeta(value: unknown): string {
+  const text = saved(value);
+  return text && !LEGACY_META.test(text) ? text : "";
 }
 
 // Shown only if the API cannot be reached or sends a price list this page
@@ -121,7 +130,7 @@ async function loadPricing(): Promise<PublicPricing> {
   return FALLBACK_PRICING;
 }
 
-function structuredData(pricing: PublicPricing, content: SiteContent): string {
+function structuredData(pricing: PublicPricing, content: SiteContent, description: string): string {
   const base = siteUrl();
   const faqs = publishedFaqs(content);
   const graph: Record<string, unknown>[] = [
@@ -149,7 +158,7 @@ function structuredData(pricing: PublicPricing, content: SiteContent): string {
       applicationCategory: "MultimediaApplication",
       applicationSubCategory: "Video ad creative tool",
       operatingSystem: "Web browser",
-      description: SITE_DESCRIPTION,
+      description,
       publisher: { "@id": `${base}/#org` },
       featureList: [
         "Up to 10 creative variations from one video or image",
@@ -196,7 +205,7 @@ export default async function LandingPage() {
       <script
         type="application/ld+json"
         // Structured data: lets Google show the product, its prices and the brand.
-        dangerouslySetInnerHTML={{ __html: structuredData(pricing, content) }}
+        dangerouslySetInnerHTML={{ __html: structuredData(pricing, content, savedMeta(content.meta?.description) || SITE_DESCRIPTION) }}
       />
       <SiteHeader floating nav={<LandingNav variant="header" />} />
       <CursorRing />

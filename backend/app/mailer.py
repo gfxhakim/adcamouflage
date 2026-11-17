@@ -383,6 +383,11 @@ DEFAULT_STYLE: dict[str, Any] = {
     "footer_text": f"{BRAND} · {SLOGAN}\nYou get this email because you have a {BRAND} account.",
     "show_footer_logo": True,
 }
+# The default footer before the slogan line was added. A design saved back
+# then stored it as if the admin had typed it. Saves made since carry
+# FOOTER_REV, so a footer the admin really chose is never replaced.
+_FOOTER_BEFORE_SLOGAN = f"You get this email because you have a {BRAND} account."
+FOOTER_REV = 2
 COLOR_FIELDS = ("header_color", "header_text_color", "page_color", "card_color", "text_color", "button_color", "button_text_color")
 _HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _SAFE_URL = re.compile(r"^(?:https://|/)[^\s\"'<>()\\]*$")
@@ -424,7 +429,13 @@ def clean_style(raw: Any) -> dict[str, Any]:
 
 
 def get_style(db: Session) -> dict[str, Any]:
-    return clean_style(get_setting(db, "email_style", {}) or {})
+    saved = get_setting(db, "email_style", {}) or {}
+    style = clean_style(saved)
+    # A design saved before the slogan existed follows the current default
+    # footer, until the admin saves the design again.
+    if isinstance(saved, dict) and not saved.get("footer_rev") and style["footer_text"].strip() == _FOOTER_BEFORE_SLOGAN:
+        style["footer_text"] = DEFAULT_STYLE["footer_text"]
+    return style
 
 
 def get_templates(db: Session) -> dict[str, dict[str, Any]]:
@@ -723,6 +734,13 @@ def configured() -> bool:
     return bool(transport())
 
 
+def sender() -> str:
+    """The From value of every email. An old brand name in the display name is
+    replaced; the address itself is never changed."""
+
+    return rebrand(settings.email_from)
+
+
 def _html_to_text(html: str) -> str:
     stripped = re.sub(r"<br\s*/?>", "\n", html)
     stripped = re.sub(r"</p>", "\n\n", stripped)
@@ -731,7 +749,7 @@ def _html_to_text(html: str) -> str:
 
 def _send_smtp(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     message = EmailMessage()
-    message["From"] = settings.email_from
+    message["From"] = sender()
     message["To"] = to
     message["Subject"] = subject
     if settings.email_reply_to.strip():
@@ -768,7 +786,7 @@ def _send_smtp(to: str, subject: str, html: str, text_body: str, headers: dict[s
 
 def _send_resend(to: str, subject: str, html: str, text_body: str, headers: dict[str, str] | None = None) -> bool:
     payload: dict[str, Any] = {
-        "from": settings.email_from,
+        "from": sender(),
         "to": [to],
         "subject": subject,
         "html": html,
@@ -1215,7 +1233,7 @@ router = APIRouter(prefix="/api/v1/admin/emails", tags=["emails"], dependencies=
 def _status(db: Session) -> dict[str, Any]:
     return {
         "transport": transport(),
-        "from": settings.email_from,
+        "from": sender(),
         "public_url_set": bool(_base_url()),
         "placeholders": PLACEHOLDERS,
         "templates": get_templates(db),
@@ -1258,7 +1276,7 @@ def save_email_settings(payload: EmailSettingsIn, db: Session = Depends(get_db))
         saved[kind] = entry
     set_setting(db, "email_templates", saved)
     if payload.style is not None:
-        set_setting(db, "email_style", _check_style(payload.style))
+        set_setting(db, "email_style", {**_check_style(payload.style), "footer_rev": FOOTER_REV})
     db.commit()
     return _status(db)
 
@@ -1289,13 +1307,14 @@ def preview_email(payload: EmailPreviewIn, admin: User = Depends(require_admin))
         raise HTTPException(status_code=422, detail="Unknown email.")
     default = DEFAULT_TEMPLATES[payload.kind]
     t = payload.template
+    # Same cleaning as get_templates, so the preview shows what would be sent.
     template: dict[str, Any] = {
-        "subject": t.subject if t.subject.strip() else default["subject"],
-        "body": t.body if t.body.strip() else default["body"],
+        "subject": rebrand(t.subject) if t.subject.strip() else default["subject"],
+        "body": rebrand(t.body) if t.body.strip() else default["body"],
     }
     for field in DESIGN_FIELDS:
         value = getattr(t, field)
-        template[field] = default.get(field, "") if value is None else value
+        template[field] = default.get(field, "") if value is None else rebrand(value)
     values = _sample_values(admin, payload.kind, t.days_before or int(default.get("days_before") or ENDING_SOON_DAYS))
     subject = " ".join(fill(template["subject"], values).split())[:SUBJECT_MAX]
     body = fill(template["body"], values)

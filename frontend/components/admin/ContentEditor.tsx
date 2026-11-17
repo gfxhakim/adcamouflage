@@ -54,6 +54,7 @@ import {
   type ThemeValue,
   listEntries,
 } from "@/lib/siteContent";
+import { SITE_DESCRIPTION, SITE_TITLE } from "@/lib/site";
 
 // --------------------------------------------------------------------------
 // helpers
@@ -943,15 +944,21 @@ function ThemePanel({ namespace, theme, onChange }: { namespace: Namespace; them
   );
 }
 
-function PagePanel({ meta, onChange }: { meta: NonNullable<SiteContent["meta"]>; onChange: (m: SiteContent["meta"]) => void }) {
+function PagePanel({ namespace, meta, onChange }: { namespace: Namespace; meta: NonNullable<SiteContent["meta"]>; onChange: (m: SiteContent["meta"]) => void }) {
   const set = (patch: Partial<NonNullable<SiteContent["meta"]>>) => onChange(cleanObject({ ...meta, ...patch }));
+  // The landing page is the one people share, so its title and description
+  // are also what a link preview shows. Empty fields use the built-in text.
+  const shared = namespace === "landing";
   return (
     <div className="space-y-3">
-      <Row label="Browser tab title">
-        <input className="field" value={meta.title ?? ""} placeholder="Built-in title" onChange={(e) => set({ title: e.target.value || undefined })} />
+      <Row label={shared ? "Browser tab and link preview title" : "Browser tab title"}>
+        <input className="field" value={meta.title ?? ""} placeholder={shared ? SITE_TITLE : "Built-in title"} onChange={(e) => set({ title: e.target.value || undefined })} />
       </Row>
-      <Row label="Search / share description">
-        <textarea className="field min-h-[90px] resize-y" value={meta.description ?? ""} placeholder="Built-in description" onChange={(e) => set({ description: e.target.value || undefined })} />
+      <Row
+        label={shared ? "Search and link preview description" : "Search / share description"}
+        hint={shared ? "Shown under the title in Google and when the link is shared (WhatsApp, Facebook, X). Keep it under about 150 characters so it is not cut off." : undefined}
+      >
+        <textarea className="field min-h-[90px] resize-y" value={meta.description ?? ""} placeholder={shared ? SITE_DESCRIPTION : "Built-in description"} onChange={(e) => set({ description: e.target.value || undefined })} />
       </Row>
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
@@ -1218,15 +1225,28 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
     return () => observer.disconnect();
   }, []);
 
+  // The server can store slightly different text from what was typed: an old
+  // brand name is saved as the current one. Show what was stored, so the
+  // fields match the site and "not live yet" clears after publishing. Skipped
+  // when typing went on while the save was under way.
+  const showStored = useCallback((sent: SiteContent, stored: SiteContent | undefined) => {
+    const sentText = JSON.stringify(sent);
+    if (JSON.stringify(prune(draftRef.current)) !== sentText) return;
+    if (JSON.stringify(prune(stored ?? {})) === sentText) return;
+    setDraft(clone(stored ?? {}));
+  }, []);
+
   // --- autosave ---------------------------------------------------------------
   useEffect(() => {
     if (!dirty.current) return;
     setStatus("saving");
     const id = setTimeout(async () => {
       try {
-        const saved = await contentAdmin.saveDraft(namespace, prune(draftRef.current));
+        const sent = prune(draftRef.current);
+        const saved = await contentAdmin.saveDraft(namespace, sent);
         setRecord(saved);
         dirty.current = false;
+        showStored(sent, saved.draft);
         setStatus("saved");
       } catch (err) {
         setStatus("error");
@@ -1234,7 +1254,7 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
       }
     }, 900);
     return () => clearTimeout(id);
-  }, [draft, namespace]);
+  }, [draft, namespace, showStored]);
 
   const update = useCallback((fn: (d: SiteContent) => void) => {
     setDraft((prev) => {
@@ -1248,10 +1268,13 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
   const publish = async () => {
     setBusy("publish");
     try {
-      await contentAdmin.saveDraft(namespace, prune(draftRef.current));
+      const sent = prune(draftRef.current);
+      const saved = await contentAdmin.saveDraft(namespace, sent);
       dirty.current = false;
       const r = await contentAdmin.publish(namespace);
       setRecord(r);
+      // Compare with this save's own answer, never with a draft another tab saved in between.
+      showStored(sent, saved.draft);
       setStatus("saved");
       setStatusText("");
     } catch (err) {
@@ -1476,7 +1499,7 @@ export function ContentEditor({ namespace, pages }: { namespace: Namespace; page
             ) : panel === "theme" ? (
               <ThemePanel namespace={namespace} theme={draft.theme ?? {}} onChange={(theme) => update((d) => { d.theme = theme; })} />
             ) : (
-              <PagePanel meta={draft.meta ?? {}} onChange={(meta) => update((d) => { d.meta = meta; })} />
+              <PagePanel namespace={namespace} meta={draft.meta ?? {}} onChange={(meta) => update((d) => { d.meta = meta; })} />
             )}
           </div>
         </aside>

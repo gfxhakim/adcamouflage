@@ -61,7 +61,7 @@ export function OfferCountdown({ left, savePercent }: OfferCountdownProps) {
   const parts = left === null ? null : split(left);
 
   return (
-    <div className="offer-glow relative mx-auto mt-10 max-w-4xl rounded-3xl p-px" role="timer" aria-live="off">
+    <div className="offer-glow relative mt-10 w-full rounded-3xl p-px" role="timer" aria-live="off">
       <div className="relative overflow-hidden rounded-[calc(1.5rem-1px)] bg-gradient-to-br from-meta-900/80 via-black to-meta-900/80 px-4 py-4 sm:px-6 sm:py-5">
         {/* The sweeping shine. */}
         <span className="offer-shine pointer-events-none absolute inset-y-0 -left-1/3 w-1/3" aria-hidden />

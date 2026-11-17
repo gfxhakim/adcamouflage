@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from .accounts import require_admin
 from .activity import log_activity
 from .app_settings import get_setting, set_setting
+from .brand import rebrand_site_content
 from .config import settings
 from .db import User, get_db
 
@@ -93,8 +94,9 @@ def _load(db: Session, namespace: str) -> dict[str, Any]:
             if field in stored:
                 record[field] = stored[field]
     for field in ("draft", "published"):
-        if not isinstance(record[field], dict):
-            record[field] = {}
+        # Names from before a rename are replaced as the document is read, so
+        # the site, the editor and the next save all carry the current name.
+        record[field] = _renamed(record[field]) if isinstance(record[field], dict) else {}
     return record
 
 
@@ -138,6 +140,25 @@ def _sanitize_document(doc: dict[str, Any]) -> dict[str, Any]:
                 meta.pop(field, None)
         out["meta"] = meta
     return out
+
+
+def _renamed(document: dict[str, Any]) -> dict[str, Any]:
+    """``document`` with old brand names replaced by the current one.
+
+    A text or tab title/description that ``_sanitize_document`` keeps off the
+    site is left exactly as saved, so replacing a name never brings a hidden
+    entry back onto the site.
+    """
+
+    cleaned = rebrand_site_content(document)
+    for bucket, fields in (("text", None), ("meta", ("title", "description"))):
+        saved, out = document.get(bucket), cleaned.get(bucket)
+        if not isinstance(saved, dict) or not isinstance(out, dict):
+            continue
+        for key, value in saved.items():
+            if (fields is None or key in fields) and isinstance(value, str) and _LEGACY_TEXT_RE.search(value):
+                out[key] = value
+    return cleaned
 
 
 def published_content(db: Session, namespace: str) -> dict[str, Any]:
@@ -185,7 +206,8 @@ def read_record(namespace: str, db: Session = Depends(get_db)) -> dict[str, Any]
 def save_draft(namespace: str, document: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
     _check_namespace(namespace)
     record = _load(db, namespace)
-    record["draft"] = _validated(document)
+    # An editor tab opened before a rename still holds the old name in its copy.
+    record["draft"] = _renamed(_validated(document))
     record["draft_updated_at"] = _now()
     set_setting(db, _key(namespace), record)
     db.commit()

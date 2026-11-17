@@ -7,7 +7,7 @@ import MetaPixel from "@/components/MetaPixel";
 import RefCapture from "@/components/RefCapture";
 import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
 import { siteUrl } from "@/lib/seo";
-import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, sharePreview } from "@/lib/site";
 import "./globals.css";
 
 // Headlines: Instrument Serif (the blue part set in italic). Text: Geist.
@@ -33,15 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
     creator: SITE_NAME,
     publisher: SITE_NAME,
     formatDetection: { telephone: false, email: false, address: false },
-    openGraph: {
-      type: "website",
-      siteName: SITE_NAME,
-      title: SITE_TITLE,
-      description: SITE_DESCRIPTION,
-      url: base,
-      locale: "en_US",
-    },
-    twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
+    ...sharePreview(SITE_TITLE, SITE_DESCRIPTION),
     robots: {
       index: true,
       follow: true,
