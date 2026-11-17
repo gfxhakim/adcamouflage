@@ -25,15 +25,19 @@ import { useEffect, useRef, useState } from "react";
 type WhopCheckoutProps = {
   /** Whop plan id (`plan_xxx`) returned by our checkout endpoint as `whop_plan`. */
   planId: string;
+  /** Optional Whop CheckoutConfiguration id (`ch_xxx`) carrying redirect_url & metadata. */
+  checkoutConfigId?: string | null;
+  /** Buyer's ProteusFlow account email, prefilled in Whop checkout. */
+  buyerEmail?: string;
   /** Our own order id, echoed back in the webhook metadata. */
   orderId: string;
-  /** Where Whop sends the browser after payment. Display only — not proof. */
+  /** Where Whop sends the browser after off-site auth (3DS, etc.). Display only — not proof. */
   returnUrl: string;
   /** Optional: a Whop promo code to prefill when using base-plan promo fallback. */
   promoCode?: string;
   /** Extra metadata copied onto the Whop payment & webhook (coupon, affiliate channel, etc.). */
   metadata?: Record<string, string>;
-  /** Called when the embed reports completion. Use for UI state only. */
+  /** Called once when the embed reports completion so the host can close the embed immediately. */
   onComplete?: () => void;
 };
 
@@ -56,7 +60,8 @@ declare global {
     WhopElements?: () => {
       checkout: {
         create: (opts: {
-          plan: string;
+          plan?: string;
+          checkoutConfiguration?: string;
           metadata?: Record<string, string>;
           returnUrl?: string;
           promoCode?: string;
@@ -106,6 +111,8 @@ function loadElementsScript(): Promise<void> {
 
 export default function WhopCheckout({
   planId,
+  checkoutConfigId,
+  buyerEmail,
   orderId,
   returnUrl,
   promoCode,
@@ -122,16 +129,36 @@ export default function WhopCheckout({
 
   useEffect(() => {
     let cancelled = false;
+    let completed = false;
     let controller: WhopCheckoutController | null = null;
     let element: WhopMountable | null = null;
 
     setReady(false);
     setLoadError(null);
 
+    const handleComplete = () => {
+      if (cancelled || completed) return;
+      completed = true;
+      // Destroy the Whop controller & child iframe synchronously right when payment completes
+      // so Whop's built-in "claim / open a Whop account" view or delayed _top navigation cannot run.
+      try {
+        element?.destroy?.();
+      } catch {
+        /* ignore teardown errors */
+      }
+      try {
+        controller?.destroy?.();
+      } catch {
+        /* ignore teardown errors */
+      }
+      if (containerRef.current) containerRef.current.innerHTML = "";
+      onCompleteRef.current?.();
+    };
+
     loadElementsScript()
       .then(() => {
         const container = containerRef.current;
-        if (cancelled || !window.WhopElements || !container) return;
+        if (cancelled || completed || !window.WhopElements || !container) return;
 
         let extraMeta: Record<string, string> = {};
         try {
@@ -142,11 +169,11 @@ export default function WhopCheckout({
 
         container.innerHTML = "";
         controller = window.WhopElements().checkout.create({
-          plan: planId,
+          ...(checkoutConfigId ? { checkoutConfiguration: checkoutConfigId } : { plan: planId }),
           metadata: { ...extraMeta, order_id: orderId },
           returnUrl,
           ...(promoCode ? { promoCode } : {}),
-          onComplete: () => onCompleteRef.current?.(),
+          onComplete: handleComplete,
         });
 
         // Current amber `elements.js` exposes `.create("checkout")` returning the
@@ -154,7 +181,7 @@ export default function WhopCheckout({
         const target =
           typeof controller.mount === "function"
             ? (controller as WhopMountable)
-            : controller.create?.("checkout");
+            : controller.create?.("checkout", buyerEmail ? { buyerEmail } : undefined);
 
         if (!target || typeof target.mount !== "function") {
           throw new Error("Whop checkout element handle could not be created");
@@ -167,7 +194,7 @@ export default function WhopCheckout({
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error("Whop checkout could not start:", err);
-        if (!cancelled) {
+        if (!cancelled && !completed) {
           setLoadError("Could not load Whop checkout. Please check your connection or disable script blockers and try again.");
         }
       });
@@ -186,7 +213,7 @@ export default function WhopCheckout({
       }
       if (containerRef.current) containerRef.current.innerHTML = "";
     };
-  }, [planId, orderId, returnUrl, promoCode, metadataJson]);
+  }, [planId, checkoutConfigId, buyerEmail, orderId, returnUrl, promoCode, metadataJson]);
 
   return (
     <div className="min-h-[280px]">

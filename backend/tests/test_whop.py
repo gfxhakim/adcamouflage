@@ -889,7 +889,32 @@ def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, 
     )
     assert active_click.status_code == 200 and active_click.json()["valid"] is True
     co = visitor.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro", "provider": "whop"}).json()
-    assert co["amount"] == 75.65 and co["whop_plan"] == "plan_disc_auto_1"
+    assert co["amount"] == 75.65 and co["whop_plan"] == "plan_disc_auto_1" and co["whop_checkout_config"] == "ch_auto_1"
+
+    # Standard (non-discounted) live checkouts also create a CheckoutConfiguration with redirect_url back to /app/plan.
+    reg_calls: list[dict] = []
+
+    class _FakeRegCheckoutCfgs:
+        def create(self, **kwargs):
+            reg_calls.append(kwargs)
+            return SimpleNamespace(id="ch_reg_1", purchase_url="https://whop.com/checkout/ch_reg_1", variant=None)
+
+    monkeypatch.setattr(
+        whop,
+        "_sdk_client",
+        lambda: SimpleNamespace(
+            variants=_FakeVariants(),
+            promo_codes=_FakePromoCodes(),
+            checkout_configurations=_FakeRegCheckoutCfgs(),
+        ),
+    )
+    reg_buyer = _signed_in(address("regcfgbuyer"))
+    reg_co = reg_buyer.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter", "provider": "whop"}).json()
+    assert reg_co["whop_plan"] == "plan_starter"
+    assert reg_co["whop_checkout_config"] == "ch_reg_1"
+    assert len(reg_calls) == 1
+    assert reg_calls[0]["variant_id"] == "plan_starter"
+    assert f"/app/plan?order={reg_co['order_id']}" in reg_calls[0]["redirect_url"]
     paid_evt = _whop_event(
         co["order_id"],
         payment_id="pay_auto_1",

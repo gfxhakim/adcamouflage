@@ -619,13 +619,36 @@ def create_discounted_checkout(
 
     fallback: dict[str, Any] = {
         "whop_plan": base_whop_plan,
+        "checkout_config_id": None,
         "checkout_url": "",
         "metadata": metadata,
         "promo_to_prefill": coupon_code if discount_usd > 0 and coupon_code else None,
     }
 
-    if not coupon_code or discount_usd <= 0 or not _has_live_api_key():
+    if not _has_live_api_key():
         return fallback
+
+    if not coupon_code or discount_usd <= 0:
+        if not return_url:
+            return fallback
+        try:
+            info = retrieve_variant_meta(base_whop_plan)
+            cfg = _sdk_client().checkout_configurations.create(
+                account_id=info["account_id"],
+                variant_id=base_whop_plan,
+                metadata=metadata,
+                redirect_url=return_url,
+            )
+            return {
+                "whop_plan": base_whop_plan,
+                "checkout_config_id": str(getattr(cfg, "id", "") or "").strip() or None,
+                "checkout_url": str(getattr(cfg, "purchase_url", "") or "").strip(),
+                "metadata": metadata,
+                "promo_to_prefill": None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Standard Whop CheckoutConfiguration skipped for %s: %s", order_id, _error_detail(exc))
+            return fallback
 
     try:
         info = retrieve_variant_meta(base_whop_plan)
@@ -659,6 +682,7 @@ def create_discounted_checkout(
         if variant_id:
             return {
                 "whop_plan": variant_id,
+                "checkout_config_id": str(getattr(cfg, "id", "") or "").strip() or None,
                 "checkout_url": str(getattr(cfg, "purchase_url", "") or "").strip(),
                 "metadata": metadata,
                 # Discount already baked into initial_price of the checkout variant;

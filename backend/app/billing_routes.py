@@ -64,6 +64,7 @@ class CheckoutIn(BaseModel):
 class CheckoutOut(BaseModel):
     order_id: str
     whop_plan: str
+    whop_checkout_config: str | None = None
     checkout_url: str = ""
     amount: float
     original_amount: float | None = None
@@ -304,6 +305,7 @@ def checkout(
         return CheckoutOut(
             order_id=existing.id,
             whop_plan=resolved_plan,
+            whop_checkout_config=None,
             checkout_url=existing.checkout_url or "",
             amount=amount,
             original_amount=original_amount,
@@ -367,6 +369,7 @@ def checkout(
     return CheckoutOut(
         order_id=order.id,
         whop_plan=whop_plan,
+        whop_checkout_config=session.get("checkout_config_id"),
         checkout_url=checkout_url,
         amount=amount,
         original_amount=original_amount,

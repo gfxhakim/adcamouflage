@@ -384,6 +384,8 @@ export interface Checkout {
   order_id: string;
   /** Whop plan id (`plan_xxx`) passed to `<WhopCheckout />`. */
   whop_plan: string;
+  /** Whop CheckoutConfiguration id (`ch_xxx`) carrying server-side redirect_url & metadata. */
+  whop_checkout_config?: string | null;
   provider: PaymentProviderId;
   checkout_url: string;
   amount: number;
