@@ -100,7 +100,8 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
         _fail(asset_id, error="The uploaded file is no longer available (retention window elapsed).")
         return {"asset_id": asset_id, "status": "failed"}
 
-    suffix = Path(asset.original_filename).suffix.lower() or (".mp4" if asset.kind is AssetKind.VIDEO else ".jpg")
+    # The stored upload carries the flattened extension; the display name may not.
+    suffix = Path(asset.stored_filename).suffix.lower() or (".mp4" if asset.kind is AssetKind.VIDEO else ".jpg")
     target = settings.outputs_dir / f"{asset.id}{suffix}"
 
     # Each variant of the same upload gets a distinct deterministic seed so the

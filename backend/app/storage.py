@@ -53,6 +53,37 @@ def sanitize_filename(name: str) -> str:
     return name
 
 
+# Characters a file name cannot hold on Windows, plus the path separators.
+_UNSAVEABLE = re.compile(r'[<>:"/\\|?*]')
+
+
+def display_filename(name: str) -> str:
+    """The upload's own name, kept as the person wrote it, made safe to show and save.
+
+    ``sanitize_filename`` is for names that touch the disk and flattens
+    everything outside ``A-Za-z0-9._-``, so ``été (final).mp4`` came out as
+    ``e_te_final_.mp4`` and a name in Arabic or Cyrillic lost every letter.
+    This one is for the name shown in the app and used for the download, which
+    is the uploaded name plus "flow": letters of any language, spaces and
+    brackets stay. Only what cannot be part of a saved file name goes: folders,
+    control and invisible direction characters, and ``< > : " / \\ | ? *``.
+    """
+
+    name = unicodedata.normalize("NFC", name or "")
+    name = name.replace("\\", "/").split("/")[-1]
+    # Categories C*: control, format (bidi overrides, zero-width), surrogates, unassigned.
+    name = "".join(" " if unicodedata.category(ch).startswith("C") else ch for ch in name)
+    name = _UNSAVEABLE.sub("_", name)
+    name = re.sub(r"\s+", " ", name).strip(" .")
+    if not name:
+        return "asset"
+    if len(name) > 120:
+        stem, dot, suffix = name.rpartition(".")
+        stem = (stem or name)[:100].rstrip(" .")
+        name = f"{stem}{dot}{suffix[:15]}" if dot and stem else (stem or name[:100])
+    return name
+
+
 def classify(filename: str, content_type: str | None = None) -> AssetKind | None:
     suffix = Path(filename).suffix.lower()
     if suffix in VIDEO_EXTENSIONS:
