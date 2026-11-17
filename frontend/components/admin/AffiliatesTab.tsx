@@ -453,7 +453,7 @@ function PartnersCard({ partners, currency, onChanged, onSelectUser }: { partner
     >
       {error ? <p className="mb-3 text-xs text-red-600 dark:text-red-300">{error}</p> : null}
       {sorted.length === 0 ? (
-        <p className={clsx("py-3 text-xs", faint)}>No applications yet. Creators apply from Invite &amp; earn in their account.</p>
+        <p className={clsx("py-3 text-xs", faint)}>No applications yet. Creators apply from Affiliate program in their account or /affiliates.</p>
       ) : (
         <ul className={clsx("rounded-xl border", line, rows)}>
           {sorted.map((partner) => (

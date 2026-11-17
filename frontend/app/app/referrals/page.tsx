@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import WorkspaceShell from "@/components/WorkspaceShell";
-import FriendCard from "@/components/referrals/FriendCard";
 import PartnerCard from "@/components/referrals/PartnerCard";
 import { fetchSubscription, type Subscription } from "@/lib/auth";
 import { fetchMyReferrals, type MyReferrals } from "@/lib/referrals";
@@ -22,7 +21,7 @@ export default function ReferralsPage() {
       setSub(subscription);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load the program.");
+      setError(err instanceof Error ? err.message : "Could not load the affiliate program.");
     }
   }, []);
 
@@ -30,20 +29,24 @@ export default function ReferralsPage() {
     if (user) void load();
   }, [user, load]);
 
-  const planLabels = Object.fromEntries((sub?.token_plans ?? []).map((p) => [p.id, p.label]));
   const currency = sub?.currency || "USD";
-  const nothingOn = data && !data.friend.enabled && !data.partner.enabled;
+  const partner = data?.partner;
+  const approved = partner?.status === "approved" || partner?.status === "suspended";
+  const nothingOn = data && !data.partner.enabled && !data.partner.status;
 
   return (
     <WorkspaceShell user={user}>
       <div className="mx-auto flex w-full max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         <main className="relative min-w-0 flex-1">
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
-            <p className="label">Invite &amp; earn</p>
-            <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">Share ProteusFlow</h1>
+            <p className="label">Affiliate program</p>
+            <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">
+              {approved ? "Affiliate Partner Dashboard" : "Join our Affiliate Program"}
+            </h1>
             <p className="max-w-2xl text-sm text-ink-muted">
-              Invite a friend and earn bonus tokens, or apply as a creator partner and earn a share of what your audience
-              pays.
+              {approved && partner
+                ? `Your link and promo code are active across Whop checkout (${partner.discount_pct}% buyer discount) and automatic monthly commission calculation.`
+                : "Tell us about your audience and request your promo code. Once we approve you, your link and code activate automatically with checkout discounts and commission tracking."}
             </p>
           </section>
 
@@ -51,21 +54,14 @@ export default function ReferralsPage() {
 
           {!data ? (
             <div className="space-y-4" aria-busy="true">
-              {[0, 1].map((i) => (
-                <div key={i} className="h-56 animate-pulse rounded-2xl bg-black/[0.04]" />
-              ))}
+              <div className="h-64 animate-pulse rounded-2xl bg-black/[0.04]" />
             </div>
           ) : nothingOn ? (
             <p className="rounded-xl border border-black/10 bg-white px-4 py-6 text-center text-sm text-ink-muted">
-              The referral program is not open right now.
+              The affiliate program is not open right now.
             </p>
           ) : (
-            <div className="space-y-6">
-              {data.friend.enabled ? <FriendCard friend={data.friend} linkDays={data.link_days} planLabels={planLabels} /> : null}
-              {data.partner.enabled || data.partner.status ? (
-                <PartnerCard partner={data.partner} currency={currency} onChanged={(partner) => setData({ ...data, partner })} />
-              ) : null}
-            </div>
+            <PartnerCard partner={data.partner} currency={currency} onChanged={(next) => setData({ ...data, partner: next })} />
           )}
         </main>
       </div>

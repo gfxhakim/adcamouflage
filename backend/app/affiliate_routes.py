@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import affiliates, audit, costs, meta_capi
+from . import affiliates, audit, costs, meta_capi, whop
 from .accounts import current_user, is_affiliate_only, optional_user, require_admin, require_studio_user
 from .activity import log_activity
 from .app_settings import currency
@@ -538,9 +538,25 @@ def admin_partner_decision(
         detail = f"Partner suspended; {voided} pending commissions cancelled"
     else:
         detail = "Partner note updated"
+    program = affiliates.get_program(db)
     db.commit()
+    final_code = code.code if code is not None else wanted if payload.action in ("approve", "reinstate") else ""
+    if payload.action in ("approve", "reinstate") and final_code:
+        whop.sync_partner_promo_code(
+            code=final_code,
+            discount_pct=float(program[PARTNER]["discount_pct"]),
+            plan_ids=list(program[PARTNER]["plans"]),
+            active=True,
+        )
+    elif payload.action == "suspend" and code is not None:
+        whop.sync_partner_promo_code(
+            code=code.code,
+            discount_pct=float(program[PARTNER]["discount_pct"]),
+            plan_ids=list(program[PARTNER]["plans"]),
+            active=False,
+        )
     audit.record(db, admin, user, f"partner_{payload.action}", detail)
-    return _partner_row(db, partner, user, affiliates.get_program(db))
+    return _partner_row(db, partner, user, program)
 
 
 @admin_router.get("/partners/{user_id}")

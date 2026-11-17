@@ -453,19 +453,59 @@ def retrieve_variant_meta(whop_plan_id: str) -> dict[str, str]:
     return info
 
 
+def _find_promo_code_id(client: Any, *, account_id: str, code: str) -> str | None:
+    clean_code = (code or "").strip().upper()
+    if not clean_code:
+        return None
+    for status_filter in (None, "expired"):
+        try:
+            kwargs: dict[str, Any] = {"account_id": account_id}
+            if status_filter:
+                kwargs["status"] = status_filter
+            page = client.promo_codes.list(**kwargs)
+            items = getattr(page, "data", None)
+            if items is None and isinstance(page, list):
+                items = page
+            for item in items or []:
+                if str(getattr(item, "code", "") or "").strip().upper() == clean_code:
+                    item_id = str(getattr(item, "id", "") or "").strip()
+                    if item_id:
+                        return item_id
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not list Whop promo codes for %s", clean_code, exc_info=True)
+    return None
+
+
+def _set_promo_code_active(client: Any, *, account_id: str, code: str, active: bool) -> bool:
+    promo_id = _find_promo_code_id(client, account_id=account_id, code=code)
+    if not promo_id:
+        return False
+    try:
+        if active:
+            client.promo_codes.activate(id=promo_id)
+        else:
+            client.promo_codes.deactivate(id=promo_id)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not %s Whop promo code %s: %s", "activate" if active else "deactivate", code, _error_detail(exc))
+        return False
+
+
 def ensure_promo_code(
     *,
     account_id: str,
     code: str,
     discount_pct: float,
     base_currency: str,
-    variant_id: str,
+    variant_id: str | None = None,
+    variant_ids: list[str] | None = None,
 ) -> bool:
-    """Ensure a single-use-per-customer percentage promo code exists on Whop for ``variant_id``."""
+    """Ensure a single-use-per-customer percentage promo code is active on Whop."""
 
     client = _sdk_client()
     clean_code = (code or "").strip().upper()
-    if not clean_code:
+    targets = [str(v).strip() for v in (variant_ids or ([variant_id] if variant_id else [])) if v and str(v).strip()]
+    if not clean_code or not targets:
         return False
     try:
         client.promo_codes.create(
@@ -478,15 +518,59 @@ def ensure_promo_code(
             promo_duration_months=1,
             promo_type="percentage",
             unlimited_stock=True,
-            variant_ids=[variant_id],
+            variant_ids=targets,
         )
         return True
     except Exception as exc:  # noqa: BLE001
         detail = _error_detail(exc).lower()
         if "already" in detail or "taken" in detail or "exists" in detail:
+            _set_promo_code_active(client, account_id=account_id, code=clean_code, active=True)
             return True
         logger.warning("Could not create Whop promo code %s: %s", clean_code, _error_detail(exc))
         return False
+
+
+def sync_partner_promo_code(
+    *,
+    code: str,
+    discount_pct: float,
+    plan_ids: list[str],
+    active: bool = True,
+) -> bool:
+    """Activate (or deactivate) an approved partner's promo code across Whop subscription variants."""
+
+    clean_code = (code or "").strip().upper()
+    if not clean_code or not _has_live_api_key():
+        return False
+
+    whop_variant_ids: list[str] = []
+    for plan_id in plan_ids:
+        try:
+            mapped = plan_id_for("subscription", plan_id)
+            if mapped and mapped not in whop_variant_ids:
+                whop_variant_ids.append(mapped)
+        except WhopError:
+            continue
+
+    if not whop_variant_ids:
+        return False
+
+    try:
+        info = retrieve_variant_meta(whop_variant_ids[0])
+    except WhopError as exc:
+        logger.warning("Skipping Whop partner promo sync for %s: %s", clean_code, exc)
+        return False
+
+    if not active:
+        return _set_promo_code_active(_sdk_client(), account_id=info["account_id"], code=clean_code, active=False)
+
+    return ensure_promo_code(
+        account_id=info["account_id"],
+        code=clean_code,
+        discount_pct=discount_pct,
+        base_currency=info["currency"],
+        variant_ids=whop_variant_ids,
+    )
 
 
 def create_discounted_checkout(
