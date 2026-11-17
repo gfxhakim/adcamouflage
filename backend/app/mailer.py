@@ -104,7 +104,7 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
         "stat_sub": "tokens added · until {end_date}",
         "headline": "",
         "button": "Open workspace",
-        "when": "When a plan payment is confirmed or approved (Volet, BTCPay, Admin or Telegram).",
+        "when": "When a plan payment is confirmed or approved (Whop, Admin or Telegram).",
         "enabled": True,
         "subject": "Your {plan} plan is active",
         "body": (

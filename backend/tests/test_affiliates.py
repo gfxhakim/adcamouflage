@@ -51,9 +51,20 @@ def _database():
 @pytest.fixture(autouse=True)
 def _clean(monkeypatch):
     login_limiter._hits.clear()
-    monkeypatch.setattr(settings, "volet_account_email", "shop@example.test", raising=False)
-    monkeypatch.setattr(settings, "volet_sci_name", "shop", raising=False)
-    monkeypatch.setattr(settings, "volet_sci_secret", SecretStr("pw"), raising=False)
+    monkeypatch.setattr(settings, "whop_api_key", SecretStr("whop-api-key-placeholder"), raising=False)
+    monkeypatch.setattr(settings, "whop_webhook_secret", SecretStr("ws_webhook-secret-placeholder"), raising=False)
+    monkeypatch.setattr(
+        settings,
+        "whop_plan_subscription",
+        {"starter": "plan_starter", "pro": "plan_pro", "max": "plan_max"},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        settings,
+        "whop_plan_topup",
+        {"20": "plan_top20", "40": "plan_top40", "80": "plan_top80", "160": "plan_top160", "240": "plan_top240"},
+        raising=False,
+    )
     monkeypatch.setattr(settings, "public_url", "https://app.example.test")
     with get_session_factory()() as db:
         affiliates.save_program(db, {})
@@ -97,7 +108,7 @@ def referral(email: str) -> Referral | None:
 
 
 def checkout(client: TestClient, plan_id: str, coupon: str | None = None):
-    body = {"kind": "subscription", "plan_id": plan_id, "provider": "volet"}
+    body = {"kind": "subscription", "plan_id": plan_id, "provider": "whop"}
     if coupon:
         body["coupon"] = coupon
     return client.post("/api/v1/billing/checkout", json=body)
@@ -324,7 +335,7 @@ def test_partner_coupon_and_commission_on_everything_the_customer_pays(admin):
     renewal = checkout(buyer, "pro")
     assert renewal.json()["amount"] == 89.0  # the coupon is for the first payment only
     pay(buyer_email, renewal.json()["order_id"])
-    topup = buyer.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 80, "provider": "volet"})
+    topup = buyer.post("/api/v1/billing/checkout", json={"kind": "topup", "amount": 80, "provider": "whop"})
     pay(buyer_email, topup.json()["order_id"])
 
     partner = creator.get("/api/v1/referrals/me").json()["partner"]

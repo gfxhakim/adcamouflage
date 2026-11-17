@@ -227,7 +227,7 @@ class AdminOrder(BaseModel):
     amount: float
     tokens: int
     status: str
-    provider: str  # btcpay | volet
+    provider: str  # whop
     created_at: datetime
     paid_at: datetime | None
     # How the Meta Purchase for a paid order went: sent / failed / no consent

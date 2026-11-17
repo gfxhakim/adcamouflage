@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <b>Billing records</b>: your plan, token balance and orders (amount, date, status). Payments are handled by
-          our payment providers (Volet and/or BTCPay Server); we never see or store card numbers or wallet keys.
+          our payment processor (Whop); we never see or store full card numbers or sensitive payment credentials.
         </li>
         <li>
           <b>Technical data</b>: IP address, browser type, pages visited and timestamps, used to keep the service
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
 
       <h2>Who we share it with</h2>
       <p>
-        Our hosting provider (Railway), our payment providers (Volet, BTCPay Server), our email provider (Resend) and,
+        Our hosting provider (Railway), our payment processor (Whop), our email provider (Resend) and,
         with your consent, Meta. We do not sell your personal data.
       </p>
 

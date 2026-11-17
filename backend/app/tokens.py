@@ -749,14 +749,13 @@ def new_order(
     tokens: int,
     *,
     bonus: int = 0,
-    provider: str = "btcpay",
+    provider: str = "whop",
     coupon_code: str | None = None,
     discount: float = 0.0,
 ) -> Order:
     """Record a purchase with the credit it was quoted at, so a later settlement applies exactly that.
 
-    ``provider`` names who will take the money ('btcpay' or 'volet'); the
-    route that starts the checkout fills in that provider's own ids after.
+    ``provider`` names who takes the payment (``'whop'``).
     """
 
     order = Order(
@@ -779,11 +778,12 @@ def new_order(
 
 
 # Statuses a settlement may move to 'paid'. An expired or invalid order was
-# never credited, so a payment that BTCPay confirms late is still applied once.
+# never credited, so a payment confirmed after marking it expired/invalid is
+# still applied once.
 SETTLEABLE = ("pending", "expired", "invalid")
 
 
-def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str = "", periods: int = 1) -> bool:
+def settle_order(db: Session, order: Order, *, source: str = "Whop", note: str = "", periods: int = 1) -> bool:
     """Apply a paid order exactly once. Returns False when it was already paid.
 
     Shared by the webhook, the order poll and the admin grant so there is one

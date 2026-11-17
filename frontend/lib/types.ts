@@ -279,13 +279,17 @@ export interface PublicPricing {
   promo?: PricePromo;
 }
 
-/** Where a checkout is paid: BTCPay's invoice page or Volet's hosted checkout. */
-export type PaymentProviderId = "btcpay" | "volet";
+/** Active payment provider (`whop`). Historical orders may still carry older names. */
+export type PaymentProviderId = "whop";
 
-const PAYMENT_PROVIDER_NAMES: Record<PaymentProviderId, string> = { btcpay: "BTCPay", volet: "Volet" };
+const PAYMENT_PROVIDER_NAMES: Record<string, string> = {
+  whop: "Whop",
+  btcpay: "BTCPay",
+  volet: "Volet",
+};
 
 /** The short name on an order row's provider tag; empty when the API sent none. */
-export function paymentProviderName(id: PaymentProviderId | null | undefined): string {
+export function paymentProviderName(id: string | null | undefined): string {
   if (!id) return "";
   return PAYMENT_PROVIDER_NAMES[id] ?? id;
 }

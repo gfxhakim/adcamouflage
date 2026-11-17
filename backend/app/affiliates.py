@@ -17,7 +17,7 @@ from Admin > Affiliates. Money is never moved by the app: a payout is the
 owner sending funds by hand and recording it here.
 
 Payments reach this module from one place, ``tokens.settle_order``, so
-BTCPay, Volet, manual approvals and Telegram approvals all count the same.
+Whop, manual approvals and Telegram approvals all count the same.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ def ip_hash(ip: str | None) -> str:
 
 
 def payer_hash(account: str | None) -> str:
-    """Hash of the account a payment came from (Volet's wallet id), when the provider gives one."""
+    """Hash of the account a payment came from (Whop buyer id or email), when provided."""
 
     return _hash((account or "").strip().upper())
 

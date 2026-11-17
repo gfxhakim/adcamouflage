@@ -5,7 +5,7 @@ The app can email customers automatically:
 | Email | When it goes out | Sent at most |
 | --- | --- | --- |
 | **Welcome** | Right after someone signs up | once per account |
-| **Plan activated** | When a plan payment is applied: Volet, BTCPay, the Admin grant button, or Approve in Telegram | once per paid order |
+| **Plan activated** | When a plan payment is applied: Whop webhook, the Admin grant button, or Approve in Telegram | once per paid order |
 | **Renewal reminder** | A few days (default 3, you choose 1-14) before a plan period ends | once per period |
 | **Plan ended** | Within a day after a period ends without a renewal | once per period |
 

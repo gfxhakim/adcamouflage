@@ -94,43 +94,20 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"
     cookie_domain: str | None = None
 
-    # --- billing (BTCPay Server) ------------------------------------------
-    # Token plans are sold through a self-hosted BTCPay Server (Greenfield
-    # API). Until all three of url, store id and API key are set, checkout
-    # answers 503 and the plan page says payments are being set up.
-    btcpay_url: str = ""  # e.g. https://pay.example.com, no trailing slash
-    btcpay_store_id: str = ""
-    btcpay_api_key: SecretStr | None = None
-    # Secret entered on the BTCPay webhook; every delivery is HMAC-checked.
-    btcpay_webhook_secret: SecretStr | None = None
-    # Site origin the payment provider sends the customer back to after
-    # paying. Empty means use the request's Origin/Referer, or a relative
-    # /app/plan link for BTCPay. Volet needs an absolute, short address, so
-    # its pay page refuses to run without one (see app/volet.py).
+    # --- billing (Whop) ---------------------------------------------------
+    # Token plans and top-ups are sold through Whop Embedded Checkout. Until both
+    # API key and webhook secret are set, checkout answers 503 and the plan page
+    # says payments are being set up.
+    whop_api_key: SecretStr | None = None
+    whop_webhook_secret: SecretStr | None = None
+    # Map internal subscription tiers ("starter", "pro", "max") and top-up dollar
+    # amounts ("20", "40", "80", "160", "240") to Whop dashboard `plan_xxx` ids.
+    # Accepts either JSON (`{"starter":"plan_..."}`) or comma-separated pairs
+    # (`starter=plan_...,pro=plan_...`).
+    whop_plan_subscription: Annotated[dict[str, str], NoDecode] = Field(default_factory=dict)
+    whop_plan_topup: Annotated[dict[str, str], NoDecode] = Field(default_factory=dict)
+    # Site origin used for Meta CAPI, Telegram approval webhook, and checkout returnUrl.
     public_url: str = ""
-
-    # --- billing (Volet Hosted Checkout, the "SCI") -----------------------
-    # A second way to take payment, usable alongside BTCPay or on its own:
-    # the customer's browser posts a signed form to Volet's hosted page and
-    # Volet calls back with a signed status notification. Needs the
-    # merchant's Volet account email, the name the gateway was given when it
-    # was created and its password (security word). The plan page offers
-    # whichever providers are set.
-    volet_account_email: str = ""
-    volet_sci_name: str = ""
-    volet_sci_secret: SecretStr | None = None
-    volet_sci_url: str = "https://account.volet.com/sci/"
-    # Addresses (or ranges such as 203.0.113.0/24) a Volet status notification
-    # may come from, comma separated. The default is the three senders Volet's
-    # SCI document lists plus the "notification server" address Volet's
-    # dashboard shows on a Hosted Checkout's Payment methods tab (seen
-    # 2026-10-30), which the document does not mention. The hash on a
-    # notification does not cover its status field, so a buyer who receives a
-    # genuine one could send it again as COMPLETED; checking the sender closes
-    # that. Empty turns the check off.
-    volet_notify_ips: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["50.7.115.5", "51.255.40.139", "13.53.55.89", "13.61.247.159"]
-    )
 
     # --- Meta Pixel + Conversions API ----------------------------------------
     # Both empty = no tracking at all. The Pixel id is public (the browser
@@ -217,14 +194,46 @@ class Settings(BaseSettings):
             return [str(email).strip().lower() for email in value if str(email).strip()]
         return value
 
-    @field_validator("volet_notify_ips", "notify_events", "notify_telegram_approver_ids", mode="before")
+    @field_validator("notify_events", "notify_telegram_approver_ids", mode="before")
     @classmethod
-    def _split_notify_ips(cls, value: object) -> object:
+    def _split_list(cls, value: object) -> object:
         if isinstance(value, str):
             return [entry.strip() for entry in value.split(",") if entry.strip()]
         if isinstance(value, list):
             return [str(entry).strip() for entry in value if str(entry).strip()]
         return value
+
+    @field_validator("whop_plan_subscription", "whop_plan_topup", mode="before")
+    @classmethod
+    def _parse_plan_map(cls, value: object) -> dict[str, str]:
+        if value is None or value == "":
+            return {}
+        if isinstance(value, dict):
+            return {str(k).strip().lower(): str(v).strip() for k, v in value.items() if str(k).strip() and str(v).strip()}
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return {}
+            if raw.startswith("{"):
+                import json
+
+                parsed = json.loads(raw)
+                if not isinstance(parsed, dict):
+                    raise ValueError("Plan map JSON must be an object.")
+                return {str(k).strip().lower(): str(v).strip() for k, v in parsed.items() if str(k).strip() and str(v).strip()}
+            out: dict[str, str] = {}
+            for pair in raw.split(","):
+                pair = pair.strip()
+                if not pair:
+                    continue
+                sep = "=" if "=" in pair else ":" if ":" in pair else ""
+                if not sep:
+                    raise ValueError(f"Expected key=plan_id entry, got {pair!r}.")
+                k, _, v = pair.partition(sep)
+                if k.strip() and v.strip():
+                    out[k.strip().lower()] = v.strip()
+            return out
+        raise ValueError("Plan map must be a JSON object or comma-separated key=plan_id pairs.")
 
     @field_validator("storage_root", mode="before")
     @classmethod
@@ -274,28 +283,18 @@ class Settings(BaseSettings):
         return url
 
     @property
-    def btcpay_configured(self) -> bool:
-        """True once BTCPay can be called: url, store id and API key all set."""
+    def whop_configured(self) -> bool:
+        """True once Whop API key and webhook secret are both set."""
 
-        key = self.btcpay_api_key.get_secret_value() if self.btcpay_api_key else ""
-        return bool(self.btcpay_url.strip() and self.btcpay_store_id.strip() and key.strip())
-
-    @property
-    def volet_configured(self) -> bool:
-        """True once a Volet form can be signed: account email, gateway name and password all set."""
-
-        secret = self.volet_sci_secret.get_secret_value() if self.volet_sci_secret else ""
-        return bool(self.volet_account_email.strip() and self.volet_sci_name.strip() and secret.strip())
+        key = self.whop_api_key.get_secret_value() if self.whop_api_key else ""
+        secret = self.whop_webhook_secret.get_secret_value() if self.whop_webhook_secret else ""
+        return bool(key.strip() and secret.strip())
 
     @property
     def billing_configured(self) -> bool:
-        """True when at least one payment provider is set up, so a checkout can be offered."""
+        """True when Whop is set up, so a checkout can be offered."""
 
-        return self.btcpay_configured or self.volet_configured
-
-    @property
-    def btcpay_base_url(self) -> str:
-        return self.btcpay_url.strip().rstrip("/")
+        return self.whop_configured
 
     @property
     def cookie_samesite_value(self) -> str:

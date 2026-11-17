@@ -47,8 +47,8 @@ function rolloverLine(plan: TokenPlanCard): string {
 
 /**
  * Starter, Pro and Max side by side. Buying any of them starts a fresh 30-day
- * period on BTCPay; the button says whether that is a first subscription, a
- * renewal, an upgrade or a switch down.
+ * period via Whop checkout; the button says whether that is a first
+ * subscription, a renewal, an upgrade or a switch down.
  */
 export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy, onBuy, offer }: TokenPlanCardsProps) {
   const currentPlan = current ? plans.find((p) => p.id === current.plan_id) : undefined;

@@ -4,10 +4,8 @@ offer ends."""
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta, timezone
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -19,13 +17,12 @@ from app.tokens import get_token_plans, save_price_promo
 from .test_billing import (  # noqa: F401  (fixtures)
     _clear_setting,
     _database,
-    _mock_btcpay,
     _reset_limiter,
     _session,
     _signed_in,
     address,
     admin,
-    btcpay_env,
+    whop_env,
 )
 
 
@@ -92,25 +89,18 @@ def test_price_flips_exactly_at_the_end_time():
         assert get_token_plans(db, now=ends)["max"].price == 199
 
 
-def test_checkout_bills_the_shown_price_before_and_after(btcpay_env, monkeypatch):
-    def handler(request: httpx.Request) -> httpx.Response:
-        sent.append(json.loads(request.content))
-        return httpx.Response(200, json={"id": f"inv_{len(sent)}", "checkoutLink": "https://pay.example.test/i/x"})
-
-    sent: list[dict] = []
-    _mock_btcpay(monkeypatch, handler)
-
+def test_checkout_bills_the_shown_price_before_and_after(whop_env):
     _offer(datetime.now(timezone.utc) + timedelta(hours=1))
     early = _signed_in(address("promo-early"))
     response = early.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter"})
     assert response.status_code == 201, response.text
-    assert response.json()["amount"] == 37.0 and sent[-1]["amount"] == "37.00"
+    assert response.json()["amount"] == 37.0 and response.json()["whop_plan"] == "plan_starter"
 
     _offer(datetime.now(timezone.utc) - timedelta(seconds=1))
     late = _signed_in(address("promo-late"))
     response = late.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter"})
     assert response.status_code == 201, response.text
-    assert response.json()["amount"] == 59 and sent[-1]["amount"] == "59.00"
+    assert response.json()["amount"] == 59 and response.json()["whop_plan"] == "plan_starter"
     assert response.json()["tokens"] == 1500
 
     # The earlier order keeps the price it was quoted.

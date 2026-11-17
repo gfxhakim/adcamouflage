@@ -17,17 +17,16 @@ from pydantic import SecretStr
 from app import notify
 from app.config import settings
 from app.main import app
-from tests.test_volet import (  # noqa: F401 - fixtures
-    STATUS_PATH,
+from tests.test_whop import (  # noqa: F401 - fixtures
     _checkout,
     _database,
-    _notification,
+    _post_whop,
     _reset_limiter,
     _signed_in,
-    _volet,
+    _whop_event,
     address,
     admin,
-    volet_env,
+    whop_env,
 )
 
 PLAN_CLICK = "/api/v1/notify/plan-click"
@@ -85,10 +84,10 @@ def test_event_filter(alerts, monkeypatch):
     assert alerts == []
 
 
-def test_checkout_and_payment_send_alerts(alerts, volet_env):
+def test_checkout_and_payment_send_alerts(alerts, whop_env):
     email = address("notify-buyer")
     client = _signed_in(email)
-    order_id = _checkout(client, "starter", provider="volet")["order_id"]
+    order_id = _checkout(client, "starter", provider="whop")["order_id"]
 
     titles = [title for title, _, _ in alerts]
     assert any("Checkout started: Starter subscription" in t for t in titles)
@@ -97,28 +96,28 @@ def test_checkout_and_payment_send_alerts(alerts, volet_env):
     assert any(line.startswith("Order: #") for line in lines)
 
     # Pressing Subscribe again reuses the order and stays quiet (deduped).
-    _checkout(client, "starter", provider="volet")
+    _checkout(client, "starter", provider="whop")
     assert len(alerts) == 1
 
-    assert _volet().post(STATUS_PATH, data=_notification(order_id)).text == "OK"
+    assert _post_whop(_whop_event(order_id, variant_id="plan_starter")).status_code == 200
     paid = [a for a in alerts if "PAID" in a[0]]
     assert len(paid) == 1
     assert "$37" in paid[0][0] and paid[0][2] == "high"
-    assert "Confirmed by: Volet" in paid[0][1]
+    assert "Confirmed by: Whop" in paid[0][1]
 
     # A repeated notification credits nothing and sends nothing.
-    _volet().post(STATUS_PATH, data=_notification(order_id))
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     assert len([a for a in alerts if "PAID" in a[0]]) == 1
 
 
-def test_mismatched_payment_asks_for_a_look(alerts, volet_env):
+def test_mismatched_payment_asks_for_a_look(alerts, whop_env):
     client = _signed_in(address("notify-mismatch"))
-    order_id = _checkout(client, "starter", provider="volet")["order_id"]
-    _volet().post(STATUS_PATH, data=_notification(order_id, amount="1.00"))
+    order_id = _checkout(client, "max", provider="whop")["order_id"]
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     assert any("needs a look" in title for title, _, _ in alerts)
 
 
-def test_a_broken_channel_never_blocks_checkout(volet_env, monkeypatch):
+def test_a_broken_channel_never_blocks_checkout(whop_env, monkeypatch):
     notify.reset()
     monkeypatch.setattr(settings, "notify_telegram_bot_token", SecretStr("123:bot-token-placeholder"))
     monkeypatch.setattr(settings, "notify_telegram_chat_id", "42")
@@ -128,7 +127,7 @@ def test_a_broken_channel_never_blocks_checkout(volet_env, monkeypatch):
 
     monkeypatch.setattr(notify, "_dispatch", explode)
     client = _signed_in(address("notify-broken"))
-    assert _checkout(client, "pro", provider="volet")["order_id"]
+    assert _checkout(client, "pro", provider="whop")["order_id"]
     notify.reset()
 
 

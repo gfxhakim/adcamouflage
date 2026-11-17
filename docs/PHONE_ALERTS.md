@@ -6,7 +6,7 @@ Get an instant message on your phone when:
 |---|---|
 | 👀 **Plan click** | a visitor presses **Choose** on a pricing card on the landing page |
 | 🛒 **Checkout started** | a signed-in customer presses Subscribe / Renew / Top up and an order opens |
-| ✅ **PAID** | Volet or BTCPay confirms the money and the plan turns on |
+| ✅ **PAID** | Whop confirms the payment and the plan turns on |
 | ⚠️ **Payment needs a look** | a payment notification was set aside (wrong amount, currency or gateway) |
 | 🆘 **Live agent requested** | a customer opens a support ticket: presses **Contact Live Agent**, types that they want a person, or waits 30 min in the support bot |
 | 💬 **New customer message** | the customer writes again (text or screenshot/video) in a ticket that is already open |
@@ -54,8 +54,8 @@ The 🛒 **Checkout started** and ⚠️ **Payment needs a look** alerts come wi
   Purchase event, and the ✅ **PAID** alert follows ("Confirmed by: approved in Telegram").
 - **Reject** asks once more, then marks the order invalid. If the payment provider confirms that order later
   anyway, it is still applied.
-- Pressing twice, or Volet confirming an order you already approved, never credits twice ("Already active").
-- Only use **Approve** when you can see the money arrived (for example in your Volet balance). A screenshot from a
+- Pressing twice, or Whop's webhook confirming an order you already approved, never credits twice ("Already active").
+- Only use **Approve** when you can see the money arrived (for example in your Whop dashboard). A screenshot from a
   customer is not proof on its own.
 
 **Turn the buttons on (once):**

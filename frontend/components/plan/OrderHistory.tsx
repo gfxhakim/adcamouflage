@@ -10,6 +10,8 @@ interface OrderHistoryProps {
   currency: string;
   /** Labels for plan ids, so a row reads "Pro period" rather than "pro". */
   planLabels: Record<string, string>;
+  /** Resume a pending embedded checkout order on the plan page. */
+  onResume?: (order: Order) => void;
 }
 
 const STATUS: Record<Order["status"], { text: string; tone: string }> = {
@@ -21,7 +23,7 @@ const STATUS: Record<Order["status"], { text: string; tone: string }> = {
 };
 
 /** Every checkout the user started, newest first, with its outcome. */
-export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps) {
+export function OrderHistory({ orders, currency, planLabels, onResume }: OrderHistoryProps) {
   if (orders.length === 0) {
     return <p className="py-4 text-center text-xs text-ink-faint">No orders yet.</p>;
   }
@@ -32,7 +34,6 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
         const status = STATUS[order.status] ?? STATUS.pending;
         const plan = planLabels[order.plan_id] ?? order.plan_id;
         const providerName = paymentProviderName(order.provider);
-        // A Volet order pays on this app's own /pay page, so the link is same-origin.
         const external = /^https?:/i.test(order.checkout_url ?? "");
         return (
           <li key={order.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
@@ -55,6 +56,14 @@ export function OrderHistory({ orders, currency, planLabels }: OrderHistoryProps
                 >
                   Pay <ExternalLink className="h-3 w-3" aria-hidden />
                 </a>
+              ) : order.status === "pending" && onResume && order.provider === "whop" ? (
+                <button
+                  type="button"
+                  onClick={() => onResume(order)}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-meta-600 hover:underline"
+                >
+                  Pay
+                </button>
               ) : null}
               {providerName ? <span className="chip !text-[10px] !text-ink-faint">{providerName}</span> : null}
               <span className={clsx("chip !text-[10px]", status.tone)}>{status.text}</span>

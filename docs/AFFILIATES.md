@@ -66,8 +66,8 @@ the plan tools for that.
 ## Self-referral checks
 
 A referral is blocked when the new account shares the referrer's mailbox
-(plus-tags and Gmail dots are ignored), the same browser, or, on Volet, the
-same paying account. The same network alone is only flagged, because friends
+(plus-tags and Gmail dots are ignored), the same browser, or the same
+paying Whop account. The same network alone is only flagged, because friends
 and offices share networks. You can **Allow** a blocked referral or **Cancel**
 any referral from the list.
 

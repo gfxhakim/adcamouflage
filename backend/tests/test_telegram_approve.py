@@ -13,20 +13,19 @@ from pydantic import SecretStr
 from app import notify, telegram_approve
 from app.config import settings
 from app.main import app
-from tests.test_volet import (  # noqa: F401 - fixtures
-    STATUS_PATH,
+from tests.test_whop import (  # noqa: F401 - fixtures
     _balances,
     _checkout,
     _database,
     _load,
-    _notification,
     _order,
+    _post_whop,
     _reset_limiter,
     _signed_in,
-    _volet,
+    _whop_event,
     address,
     admin,
-    volet_env,
+    whop_env,
 )
 
 OWNER = 5123456789
@@ -34,7 +33,7 @@ HOOK = telegram_approve.WEBHOOK_PATH
 
 
 @pytest.fixture
-def tg(monkeypatch, volet_env):
+def tg(monkeypatch, whop_env):
     """Telegram set up for a private chat with the owner; records what would be sent."""
 
     sent: list[dict] = []
@@ -90,7 +89,7 @@ def _buttons(alert: dict) -> dict[str, str]:
 def _open_order(tg, name: str) -> tuple[str, str, dict[str, str]]:
     sent, _ = tg
     email = address(name)
-    order_id = _checkout(_signed_in(email), "starter", provider="volet")["order_id"]
+    order_id = _checkout(_signed_in(email), "starter", provider="whop")["order_id"]
     alert = [a for a in sent if "Checkout" in a["title"]][-1]
     return email, order_id, _buttons(alert)
 
@@ -109,7 +108,7 @@ def test_checkout_alert_has_approve_and_reject(tg):
 def test_no_buttons_when_switched_off(tg, monkeypatch):
     monkeypatch.setattr(settings, "notify_telegram_buttons", False)
     sent, _ = tg
-    _checkout(_signed_in(address("tg-off")), "starter", provider="volet")
+    _checkout(_signed_in(address("tg-off")), "starter", provider="whop")
     assert sent[-1]["buttons"] is None
     # And the webhook does not exist.
     assert _hook("x").post(HOOK, json={}).status_code == 404
@@ -136,7 +135,7 @@ def test_approve_asks_then_activates_once(tg):
     # A second press (or the provider confirming later) credits nothing more.
     again = _press(confirm["✅ Yes, activate"])
     assert "Already active" in again.json()["text"]
-    assert _volet().post(STATUS_PATH, data=_notification(order_id)).text == "OK"
+    assert _post_whop(_whop_event(order_id, variant_id="plan_starter")).json() == {"ok": True, "applied": False}
     assert _balances(email) == (1500, 0)
 
 
@@ -215,8 +214,8 @@ def test_group_chat_needs_listed_approvers(tg, monkeypatch):
 def test_mismatched_payment_alert_has_buttons(tg):
     sent, _ = tg
     client = _signed_in(address("tg-review"))
-    order_id = _checkout(client, "starter", provider="volet")["order_id"]
-    _volet().post(STATUS_PATH, data=_notification(order_id, amount="1.00"))
+    order_id = _checkout(client, "max", provider="whop")["order_id"]
+    _post_whop(_whop_event(order_id, variant_id="plan_starter"))
     review = [a for a in sent if "needs a look" in a["title"]][-1]
     assert set(_buttons(review)) == {"✅ Approve", "❌ Reject"}
 

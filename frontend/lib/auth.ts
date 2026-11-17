@@ -303,12 +303,9 @@ export interface Order {
 
 export interface Checkout {
   order_id: string;
+  /** Whop plan id (`plan_xxx`) passed to `<WhopCheckout />`. */
+  whop_plan: string;
   provider: PaymentProviderId;
-  /**
-   * Where the browser goes to pay: BTCPay's invoice page, or the app's own
-   * /api/v1/billing/orders/{id}/pay page that forwards to Volet. Either way it
-   * comes back to /app/plan with ?order=.
-   */
   checkout_url: string;
   amount: number;
   tokens: number;
@@ -320,8 +317,7 @@ export interface SubscriptionState {
 }
 
 /**
- * Start a checkout for a plan period or a top-up on the current plan. The
- * provider is sent only when given; the server then uses the first one set up.
+ * Start a checkout for a plan period or a top-up on the current plan.
  */
 export function startCheckout(
   kind: OrderKind,
@@ -342,7 +338,7 @@ async function get<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** One order's status; the server also checks BTCPay if a webhook was missed. */
+/** One order's status (used while confirming a Whop payment). */
 export function fetchOrder(orderId: string) {
   return get<Order>(`/api/v1/billing/orders/${encodeURIComponent(orderId)}`);
 }

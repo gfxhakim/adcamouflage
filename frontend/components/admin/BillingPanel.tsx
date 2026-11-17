@@ -434,7 +434,7 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
             ) : null}
             <p className="text-[11px] text-ink-faint dark:text-slate-500">
               Extend adds days only. Bonus tokens go in the top-up bucket and never expire. Cancel now ends the period today and
-              writes off the subscription tokens left; money refunds are done in Volet / your wallet, not here.
+              writes off the subscription tokens left; money refunds are handled in your Whop dashboard, not here.
             </p>
           </div>
 

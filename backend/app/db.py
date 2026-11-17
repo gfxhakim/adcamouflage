@@ -219,11 +219,10 @@ class Order(Base):
     tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
     btcpay_invoice_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
-    # Which provider takes the money: 'btcpay' or 'volet'. Every order from
-    # before Volet was a BTCPay one, hence the default.
-    provider: Mapped[str] = mapped_column(String(16), default="btcpay", server_default="btcpay", nullable=False)
-    # The provider's own id for the payment when it is not a BTCPay invoice
-    # (Volet's transaction id, ``ac_transfer``, from the status notification).
+    # Which payment provider takes the money (currently 'whop'). Legacy rows
+    # may carry older provider names and remain readable.
+    provider: Mapped[str] = mapped_column(String(16), default="whop", server_default="whop", nullable=False)
+    # The provider's own id for the payment (Whop payment id `pay_...`).
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # JSON: the buyer's Meta attribution data from checkout, so the Purchase
     # sent when the payment is confirmed can be matched to the ad click.
