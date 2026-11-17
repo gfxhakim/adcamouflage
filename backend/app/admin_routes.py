@@ -21,6 +21,7 @@ from .app_settings import announcement, currency, get_setting, registration_open
 from .config import settings
 from . import meta_capi
 from . import purge as purge_mod
+from . import whop
 from .db import ActivityEvent, AdminAudit, BatchRecord, Order, TokenLedger, User, get_db
 from .plans import (
     PLAN_IDS,
@@ -1004,6 +1005,15 @@ def cancel_plan(
     if not immediately and user.sub_cancelled_at is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already cancelled; it runs to the period end.")
     reason = _clean(payload.reason)
+    if user.whop_membership_id and whop.configured():
+        try:
+            whop.cancel_membership(
+                user.whop_membership_id,
+                at_period_end=(not immediately),
+                reason=reason or f"Cancelled by admin {admin.email}",
+            )
+        except whop.WhopError:
+            pass
     result = cancel_period(db, user, immediately=immediately, reason=reason)
     db.commit()
     db.refresh(user)
@@ -1029,6 +1039,11 @@ def resume_plan(
     user = _load(db, user_id)
     if not subscription_active(user) or user.sub_cancelled_at is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no cancelled, running subscription to resume.")
+    if user.whop_membership_id and whop.configured():
+        try:
+            whop.resume_membership(user.whop_membership_id)
+        except whop.WhopError:
+            pass
     user.sub_cancelled_at = None
     db.commit()
     db.refresh(user)

@@ -2,20 +2,32 @@
 
 import clsx from "clsx";
 import {
+  Activity,
   AudioLines,
+  Cpu,
   Crop,
   Dices,
+  Eye,
+  Film,
+  Fingerprint,
   FlipHorizontal2,
   Gauge,
   Layers,
   Lock,
   Maximize2,
+  Move,
+  Music,
+  Music2,
+  Package,
   Palette,
+  Radar,
   RefreshCcw,
   Scissors,
   SlidersHorizontal,
   Sparkles,
+  Sun,
   Tags,
+  Wand2,
   Waves,
   Zap,
 } from "lucide-react";
@@ -119,7 +131,7 @@ const ADVANCED_TOGGLES: {
     badge: "Spatial",
     description:
       "Applies gentle sub-pixel perspective and lens alignment refinement without clipping subtitles or faces.",
-    icon: Maximize2,
+    icon: Move,
   },
   {
     key: "dct_jnd_perturbation",
@@ -127,7 +139,7 @@ const ADVANCED_TOGGLES: {
     badge: "Frequency",
     description:
       "Refines mid-band texture detail inside high-detail regions so exports stay crisp after social platform compression.",
-    icon: Waves,
+    icon: Radar,
   },
   {
     key: "lut_clahe_color",
@@ -135,7 +147,7 @@ const ADVANCED_TOGGLES: {
     badge: "Photometric",
     description:
       "Balances local contrast (LAB CLAHE) and refines shadow/highlight tones while protecting natural skin tones.",
-    icon: Palette,
+    icon: Sun,
   },
   {
     key: "optical_flow_timewarp",
@@ -143,7 +155,7 @@ const ADVANCED_TOGGLES: {
     badge: "Temporal",
     description:
       "Blends sub-frame temporal motion gradients across adjacent frames at a constant FPS without dropping hooks or CTAs.",
-    icon: Gauge,
+    icon: Activity,
   },
   {
     key: "adversarial_cnn_layer",
@@ -151,7 +163,7 @@ const ADVANCED_TOGGLES: {
     badge: "Detail",
     description:
       "Applies a subtle, edge-aware micro-contrast pass (±1–2 RGB levels) for clean visual separation on mobile screens.",
-    icon: Sparkles,
+    icon: Eye,
   },
   {
     key: "audio_allpass_phase",
@@ -167,7 +179,7 @@ const ADVANCED_TOGGLES: {
     badge: "Acoustic",
     description:
       "Gentle LFO vocal warmth (0.35–0.65 Hz) with formant EQ compensation—natural voice tone and zero lip-sync drift.",
-    icon: AudioLines,
+    icon: Music2,
   },
   {
     key: "psychoacoustic_rir",
@@ -183,7 +195,7 @@ const ADVANCED_TOGGLES: {
     badge: "Container",
     description:
       "Writes standard Rec.709 color atoms and clean track timescales for seamless compatibility across ad platforms.",
-    icon: Tags,
+    icon: Fingerprint,
   },
   {
     key: "macroblock_aq_variance",
@@ -191,7 +203,7 @@ const ADVANCED_TOGGLES: {
     badge: "Encoding",
     description:
       "Optimizes x264/VP9 adaptive quantization and rate-distortion curves for clean macroblock bit allocation.",
-    icon: Layers,
+    icon: Cpu,
   },
 ];
 
@@ -212,7 +224,7 @@ const TOGGLES: { key: ToggleKey; label: string; description: string; icon: Lucid
     key: "noise_injection",
     label: "Subtle film grain",
     description: "Low-opacity organic film texture that varies across frames.",
-    icon: Waves,
+    icon: Sparkles,
   },
   {
     key: "color_drift",
@@ -224,7 +236,7 @@ const TOGGLES: { key: ToggleKey; label: string; description: string; icon: Lucid
     key: "audio_mutation",
     label: "Audio pitch & tempo polish",
     description: "Subtle pitch and tempo tuning across exported variations.",
-    icon: AudioLines,
+    icon: Music,
   },
   {
     key: "temporal_trim",
@@ -248,25 +260,25 @@ const TOGGLES: { key: ToggleKey; label: string; description: string; icon: Lucid
     key: "container_bitrate_shuffle",
     label: "Container & bitrate tuning",
     description: "Optimizes MP4 atom ordering, chunk interleaving and CRF encoding curves.",
-    icon: Layers,
+    icon: Package,
   },
   {
     key: "chroma_matrix_shift",
     label: "Chroma matrix calibration",
     description: "Fine YUV color-space and chroma subsampling calibration.",
-    icon: Palette,
+    icon: SlidersHorizontal,
   },
   {
     key: "frequency_smoothing",
     label: "Chroma smoothing",
     description: "Applies bilateral chroma filtering to smooth high-frequency compression artifacts.",
-    icon: Waves,
+    icon: Wand2,
   },
   {
     key: "deep_scramble",
     label: "Dynamic film texture",
     description: "Per-frame OpenCV organic film grain and sub-pixel polish.",
-    icon: Sparkles,
+    icon: Film,
   },
   {
     key: "mirror",
@@ -275,6 +287,45 @@ const TOGGLES: { key: ToggleKey; label: string; description: string; icon: Lucid
     icon: FlipHorizontal2,
   },
 ];
+
+const ALL_LAYERS: { key: ToggleKey; label: string; icon: LucideIcon }[] = [...ADVANCED_TOGGLES, ...TOGGLES];
+
+const PRESET_DEFAULT_LAYERS: Record<Exclude<PresetId, "custom">, ToggleKey[]> = {
+  stealth: [
+    "elastic_mesh_warp",
+    "audio_allpass_phase",
+    "authentic_atom_spoof",
+    "macroblock_aq_variance",
+    "micro_crop",
+    "frame_rate_stagger",
+    "temporal_trim",
+    "strip_metadata",
+    "keyframe_gop_jitter",
+    "container_bitrate_shuffle",
+    "chroma_matrix_shift",
+  ],
+  balanced: [
+    "elastic_mesh_warp",
+    "dct_jnd_perturbation",
+    "lut_clahe_color",
+    "audio_allpass_phase",
+    "formant_pitch_lfo",
+    "authentic_atom_spoof",
+    "macroblock_aq_variance",
+    "micro_crop",
+    "frame_rate_stagger",
+    "noise_injection",
+    "color_drift",
+    "audio_mutation",
+    "temporal_trim",
+    "strip_metadata",
+    "keyframe_gop_jitter",
+    "container_bitrate_shuffle",
+    "chroma_matrix_shift",
+  ],
+  aggressive: ALL_LAYERS.map((l) => l.key).filter((key) => key !== "mirror"),
+  nuclear: ALL_LAYERS.map((l) => l.key),
+};
 
 export function OptionsPanel({
   options,
@@ -426,137 +477,94 @@ export function OptionsPanel({
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="label flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-meta-500" aria-hidden />
-            Gen-4 spatial, acoustic &amp; encoding layers
-          </p>
-          {engineLocked ? (
-            <UpgradeHint href={upgradeHref} />
-          ) : (
-            <span className="font-mono text-[10px] text-meta-600 dark:text-meta-300">
-              Zero quality loss · Broadcast ready
-            </span>
-          )}
-        </div>
-        {engineLocked ? (
-          <p className="mb-3 text-[11px] text-ink-subtle dark:text-slate-400">
-            Not included in your plan. These layers are available on Pro and Max.
-          </p>
-        ) : null}
-        <div className="grid gap-2 md:grid-cols-2">
-          {ADVANCED_TOGGLES.map(({ key, label, badge, description, icon: Icon }) => {
-            const locked = isLocked(key);
-            const active = !locked && Boolean(options[key]);
-            return (
-              <button
-                key={key}
-                type="button"
-                role="switch"
-                aria-checked={active}
-                aria-disabled={locked || undefined}
-                disabled={disabled || locked}
-                title={locked ? "Not included in your plan. Upgrade to Pro to use it." : undefined}
-                onClick={() => set(key, !active)}
-                className={clsx(
-                  "flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
-                  "disabled:cursor-not-allowed disabled:opacity-50",
-                  active
-                    ? "border-meta-500/60 bg-meta-50/90 dark:bg-meta-500/15 text-black dark:text-slate-100"
-                    : "border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] text-ink-subtle dark:text-slate-400 hover:border-black/15 dark:hover:border-white/15",
-                )}
-              >
-                <span
-                  className={clsx(
-                    "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
-                    active
-                      ? "border-meta-500/50 bg-meta-100 dark:bg-meta-500/25 text-meta-600 dark:text-meta-300"
-                      : "border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10 text-ink-subtle dark:text-slate-400",
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
-                    {label}
-                    <span className="rounded bg-meta-500/15 px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wide text-meta-700 dark:text-meta-300">
-                      {badge}
-                    </span>
-                    {locked ? <Lock className="h-3 w-3 text-ink-faint dark:text-slate-500" aria-label="Locked" /> : null}
-                    <span
-                      className={clsx(
-                        "ml-auto h-1.5 w-1.5 rounded-full transition-colors",
-                        active ? "bg-meta-500 shadow-meta-sm" : "bg-black/20 dark:bg-white/20",
-                      )}
-                      aria-hidden
-                    />
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle dark:text-slate-400">
-                    {description}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="label">Classic studio variation layers</p>
-          {lockedFeatures.includes("metadata_wipe") ? <UpgradeHint href={upgradeHref} /> : null}
+          <p className="label flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5 text-meta-500" aria-hidden />
+            Profile layers
+          </p>
+          {engineLocked || lockedFeatures.includes("metadata_wipe") ? (
+            <UpgradeHint href={upgradeHref} />
+          ) : null}
         </div>
-        <div className="grid gap-2 md:grid-cols-2">
-          {TOGGLES.map(({ key, label, description, icon: Icon }) => {
-            const locked = isLocked(key);
-            const active = !locked && options[key];
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {availablePresets.map((preset) => {
+            const presetSelected = options.preset === preset;
+            const copy = PRESET_COPY[preset];
+            const catalogueDefaults = catalogue?.presets.find((entry) => entry.id === preset)?.defaults;
+            const layersForPreset = ALL_LAYERS.filter(({ key }) =>
+              catalogueDefaults ? Boolean(catalogueDefaults[key]) : PRESET_DEFAULT_LAYERS[preset].includes(key),
+            );
             return (
-              <button
-                key={key}
-                type="button"
-                role="switch"
-                aria-checked={active}
-                aria-disabled={locked || undefined}
-                disabled={disabled || locked}
-                title={locked ? "Not included in your plan. Upgrade to Pro to use it." : undefined}
-                onClick={() => set(key, !active)}
+              <div
+                key={preset}
                 className={clsx(
-                  "flex items-start gap-2.5 rounded-lg border p-2.5 text-left transition-all duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
-                  "disabled:cursor-not-allowed disabled:opacity-50",
-                  active
-                    ? "border-meta-500/50 bg-meta-50 dark:bg-meta-500/10 text-black dark:text-slate-100"
-                    : "border-black/[0.08] dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.04] text-ink-subtle dark:text-slate-400 hover:border-black/15 dark:hover:border-white/15",
+                  "flex flex-col rounded-xl border p-3 transition-all duration-200",
+                  presetSelected
+                    ? "border-meta-500/60 bg-meta-50/70 shadow-meta-sm dark:border-meta-500/50 dark:bg-meta-500/10"
+                    : "border-black/[0.08] bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.04]",
                 )}
               >
-                <span
-                  className={clsx(
-                    "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
-                    active
-                      ? "border-meta-500/50 bg-meta-100 dark:bg-meta-500/20 text-meta-600 dark:text-meta-300"
-                      : "border-black/10 dark:border-white/10 bg-meta-50 dark:bg-meta-500/10 text-ink-subtle dark:text-slate-400",
-                  )}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => applyPreset(preset)}
+                  aria-pressed={presetSelected}
+                  className="mb-2.5 flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold">
-                    {label}
-                    {locked ? <Lock className="h-3 w-3 text-ink-faint dark:text-slate-500" aria-label="Locked" /> : null}
-                    <span
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-black dark:text-slate-100">
+                    <Zap
                       className={clsx(
-                        "h-1.5 w-1.5 rounded-full transition-colors",
-                        active ? "bg-meta-500 shadow-meta-sm" : "bg-black/20 dark:bg-white/20",
+                        "h-3.5 w-3.5 shrink-0",
+                        presetSelected ? "text-meta-500" : "text-ink-subtle dark:text-slate-400",
                       )}
                       aria-hidden
                     />
+                    {copy.title}
                   </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle dark:text-slate-400">
-                    {description}
-                  </span>
-                </span>
-              </button>
+                  <span
+                    className={clsx(
+                      "h-2 w-2 shrink-0 rounded-full transition-colors",
+                      presetSelected ? "bg-meta-500 shadow-meta-sm" : "bg-black/15 dark:bg-white/20",
+                    )}
+                    aria-hidden
+                  />
+                </button>
+                <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5">
+                  {layersForPreset.map(({ key, label, icon: Icon }) => {
+                    const locked = isLocked(key);
+                    const active = !locked && Boolean(options[key]);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        role="switch"
+                        aria-checked={active}
+                        aria-disabled={locked || undefined}
+                        aria-label={label}
+                        title={locked ? `${label} (Upgrade to Pro)` : label}
+                        disabled={disabled || locked}
+                        onClick={() => set(key, !active)}
+                        className={clsx(
+                          "relative grid aspect-square w-full place-items-center rounded-lg border transition-all duration-150",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
+                          "disabled:cursor-not-allowed disabled:opacity-40",
+                          active
+                            ? "border-meta-500/60 bg-meta-100/90 text-meta-700 dark:bg-meta-500/25 dark:text-meta-200"
+                            : "border-black/[0.08] bg-white/60 text-ink-subtle hover:border-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 dark:hover:border-white/20",
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" aria-hidden />
+                        {locked ? (
+                          <Lock
+                            className="absolute right-0.5 top-0.5 h-2.5 w-2.5 text-amber-600 dark:text-amber-300"
+                            aria-hidden
+                          />
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>

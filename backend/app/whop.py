@@ -186,5 +186,208 @@ def payer_id_from_event(event: dict[str, Any]) -> str:
     return ""
 
 
+def membership_id_from_event(event: dict[str, Any]) -> str:
+    """Pull Whop's membership id (``mem_...``) from a payment or membership event."""
+
+    data = _event_data(event)
+    mid = data.get("membership_id")
+    if mid:
+        return str(mid).strip()
+    membership = data.get("membership")
+    if isinstance(membership, dict) and membership.get("id"):
+        return str(membership["id"]).strip()
+    etype = event_type(event)
+    if etype.startswith("membership.") and data.get("id"):
+        return str(data["id"]).strip()
+    return ""
+
+
+def billing_reason_from_event(event: dict[str, Any]) -> str:
+    """Return Whop's payment billing reason (e.g. ``subscription_create`` or ``subscription_cycle``)."""
+
+    return str(_event_data(event).get("billing_reason") or "").strip().lower()
+
+
+def _parse_money(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, dict) and isinstance(value.get("amount"), (int, float)):
+        return float(value["amount"])
+    return None
+
+
+def usd_amount_from_event(event: dict[str, Any]) -> float | None:
+    """Return the USD payment total from a payment event, if present."""
+
+    data = _event_data(event)
+    for key in ("usd_total", "total", "subtotal"):
+        parsed = _parse_money(data.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def plan_for_whop_id(whop_plan_id: str) -> tuple[str, str] | None:
+    """Reverse lookup a Whop ``plan_xxx`` back to ``('subscription' | 'topup', key)``."""
+
+    target = (whop_plan_id or "").strip()
+    if not target:
+        return None
+    for plan_id, mapped in settings.whop_plan_subscription.items():
+        if mapped.strip() == target:
+            return ("subscription", plan_id)
+    for amount, mapped in settings.whop_plan_topup.items():
+        if mapped.strip() == target:
+            return ("topup", amount)
+    return None
+
+
+def refund_id_from_event(event: dict[str, Any]) -> str:
+    """Pull Whop's refund id (``rf_...``) from a refund webhook event."""
+
+    data = _event_data(event)
+    return str(data.get("id") or "").strip()
+
+
+def refund_payment_id_from_event(event: dict[str, Any]) -> str:
+    """Pull the related Whop payment id (``pay_...``) from a refund or dispute webhook event."""
+
+    data = _event_data(event)
+    if data.get("payment_id"):
+        return str(data["payment_id"]).strip()
+    payment = data.get("payment")
+    if isinstance(payment, dict) and payment.get("id"):
+        return str(payment["id"]).strip()
+    return ""
+
+
+def refund_status_from_event(event: dict[str, Any]) -> str:
+    """Return the refund's processing status (``pending``, ``succeeded``, ``failed``, etc.)."""
+
+    return str(_event_data(event).get("status") or "").strip().lower()
+
+
+def dispute_status_from_event(event: dict[str, Any]) -> str:
+    """Return a dispute's lifecycle status (``needs_response``, ``won``, ``lost``, etc.)."""
+
+    return str(_event_data(event).get("status") or "").strip().lower()
+
+
+def dispute_reason_from_event(event: dict[str, Any]) -> str:
+    """Return the dispute reason string, if present."""
+
+    data = _event_data(event)
+    if data.get("reason"):
+        return str(data["reason"]).strip()
+    dispute = data.get("dispute")
+    if isinstance(dispute, dict) and dispute.get("reason"):
+        return str(dispute["reason"]).strip()
+    return ""
+
+
+def _sdk_client():
+    key = settings.whop_api_key.get_secret_value().strip() if settings.whop_api_key else ""
+    if not key:
+        raise WhopError("The Whop API key is not set.")
+    try:
+        from whop_sdk import Whop  # type: ignore[import-not-found]
+    except Exception as exc:  # noqa: BLE001
+        raise WhopError("The Whop SDK is not installed.") from exc
+    return Whop(token=key, timeout=15.0)
+
+
+def _error_detail(exc: Exception) -> str:
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+        if body.get("message"):
+            return str(body["message"])
+    return str(exc) or exc.__class__.__name__
+
+
+def retrieve_payment_membership_id(payment_id: str) -> str:
+    """Fetch a payment from Whop and return its ``membership_id`` (``mem_...``), or empty string."""
+
+    if not payment_id:
+        return ""
+    client = _sdk_client()
+    try:
+        payment = client.payments.retrieve(id=payment_id)
+    except Exception as exc:  # noqa: BLE001
+        raise WhopError(f"Could not read payment from Whop: {_error_detail(exc)}") from exc
+    return str(getattr(payment, "membership_id", None) or "").strip()
+
+
+def cancel_membership(membership_id: str, *, at_period_end: bool = True, reason: str = "") -> None:
+    """Cancel a Whop membership either at period end (stops auto-renewal) or immediately."""
+
+    if not membership_id:
+        raise WhopError("Missing Whop membership id.")
+    client = _sdk_client()
+    kwargs: dict[str, Any] = {"cancel_at_period_end": at_period_end}
+    cleaned = reason.strip()[:200]
+    if cleaned:
+        kwargs["reason"] = cleaned
+    try:
+        client.memberships.cancel(id=membership_id, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        detail = _error_detail(exc)
+        if "already cancel" in detail.lower() or "already ended" in detail.lower():
+            logger.info("Whop membership %s was already cancelled (%s)", membership_id, detail)
+            return
+        raise WhopError(f"Whop cancellation failed: {detail}") from exc
+
+
+def resume_membership(membership_id: str) -> None:
+    """Reverse a pending period-end cancellation on Whop so auto-renewal resumes."""
+
+    if not membership_id:
+        raise WhopError("Missing Whop membership id.")
+    client = _sdk_client()
+    try:
+        client.memberships.update(id=membership_id, cancel_at_period_end=False)
+    except Exception as exc:  # noqa: BLE001
+        raise WhopError(f"Could not resume Whop subscription: {_error_detail(exc)}") from exc
+
+
+def refund_payment(
+    payment_id: str,
+    *,
+    amount: float | None = None,
+    metadata: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Refund a Whop payment back to the buyer's original payment method."""
+
+    if not payment_id:
+        raise WhopError("This order has no Whop payment id to refund.")
+    client = _sdk_client()
+    kwargs: dict[str, Any] = {}
+    if amount is not None:
+        kwargs["partial_amount"] = float(amount)
+    if metadata:
+        kwargs["metadata"] = metadata
+    try:
+        payment = client.payments.refund(id=payment_id, **kwargs)
+    except Exception as exc:  # noqa: BLE001
+        raise WhopError(f"Whop refund failed: {_error_detail(exc)}") from exc
+
+    refund_id = ""
+    try:
+        page = client.refunds.list(payment_id=payment_id)
+        data = getattr(page, "data", None) or []
+        if data:
+            refund_id = str(getattr(data[0], "id", "") or "").strip()
+    except Exception:  # noqa: BLE001 - refund already succeeded; id lookup is best-effort
+        logger.debug("Could not look up Whop refund id for payment %s", payment_id, exc_info=True)
+
+    return {
+        "payment_id": str(getattr(payment, "id", payment_id) or payment_id),
+        "refund_id": refund_id,
+        "substatus": str(getattr(payment, "substatus", "") or ""),
+    }
+
+
 def event_type(event: dict[str, Any]) -> str:
     return str(event.get("type") or event.get("event") or "").strip()

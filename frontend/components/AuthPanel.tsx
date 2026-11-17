@@ -66,6 +66,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   const [current, setCurrent] = useState<UserProfile | null>(null);
 
   const next = params.get("next");
+  const refundSubmitted = mode === "signin" && params.get("refund") === "requested";
   const destination = safeDestination(next);
   const otherPage = (mode === "signup" ? "/login" : "/signup") + (next ? `?next=${encodeURIComponent(next)}` : "");
 
@@ -248,6 +249,16 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       ) : null}
 
       <SocialButtons next={next} mode={mode} />
+
+      {refundSubmitted ? (
+        <div
+          role="status"
+          className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200"
+        >
+          Your refund request has been submitted and your account has been paused while we process your request. Once
+          our team approves it, Whop will refund the payment back to your card or payment method.
+        </div>
+      ) : null}
 
       <form onSubmit={submit} className="space-y-4" noValidate>
         {mode === "signup" ? (

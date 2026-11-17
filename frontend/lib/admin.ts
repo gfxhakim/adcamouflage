@@ -846,6 +846,7 @@ export interface AdminRefundRequest {
   user_id: number;
   email: string;
   name: string | null;
+  user_is_active?: boolean;
   order: {
     id: string;
     ref: string;
@@ -873,6 +874,6 @@ export interface AdminRefunds {
 export const getRefundRequests = (state: "pending" | "all") => call<AdminRefunds>(`/refunds?state=${state}`);
 export const approveRefund = (id: number, body: { note: string; refund_tx: string; remove_access: boolean }) =>
   call<AdminRefundRequest>(`/refunds/${id}/approve`, json("POST", body));
-export const rejectRefund = (id: number, note: string) =>
-  call<AdminRefundRequest>(`/refunds/${id}/reject`, json("POST", { note }));
+export const rejectRefund = (id: number, note: string, reactivateAccount = false) =>
+  call<AdminRefundRequest>(`/refunds/${id}/reject`, json("POST", { note, reactivate_account: reactivateAccount }));
 export const saveRefundRules = (rules: RefundRules) => call<RefundRules>("/refunds/rules", json("PUT", rules));

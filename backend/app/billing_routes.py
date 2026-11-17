@@ -21,12 +21,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import affiliates, meta_capi, notify, whop
+from . import affiliates, meta_capi, notify, refunds, whop
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
 from .db import Order, User, get_db
 from .tokens import (
+    cancel_period,
     get_token_plans,
     get_topups,
     new_order,
@@ -34,6 +35,7 @@ from .tokens import (
     subscription_active,
     topup_bonus,
     topup_tokens,
+    void_order,
 )
 
 logger = logging.getLogger(__name__)
@@ -277,35 +279,176 @@ def checkout(
 
 
 # --------------------------------------------------------------------------
-# Whop webhook
+# Whop membership & webhook helpers
 # --------------------------------------------------------------------------
 
 
-@router.post("/whop/webhook")
-async def whop_webhook(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
-    """Receive signed Whop Standard Webhooks events and settle paid orders."""
+def _resolve_user_whop_membership(db: Session, user: User) -> str:
+    """Return the user's Whop ``mem_...`` id from user row, paid orders, or Whop API fallback."""
 
-    raw = await request.body()
-    try:
-        event = whop.verify_webhook(raw, request.headers)
-    except whop.WhopError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    if user.whop_membership_id:
+        return user.whop_membership_id.strip()
 
-    etype = whop.event_type(event)
-    if etype != whop.SETTLED_EVENT:
-        return JSONResponse({"ok": True, "ignored": etype or "unknown event"})
+    last_sub = db.execute(
+        select(Order)
+        .where(
+            Order.user_id == user.id,
+            Order.kind == "subscription",
+            Order.status == "paid",
+            Order.provider == whop.PROVIDER,
+        )
+        .order_by(Order.paid_at.desc().nullslast(), Order.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if last_sub is None:
+        return ""
+    if last_sub.whop_membership_id:
+        user.whop_membership_id = last_sub.whop_membership_id.strip()
+        db.commit()
+        return user.whop_membership_id
+    if last_sub.provider_ref and whop.configured():
+        try:
+            mem_id = whop.retrieve_payment_membership_id(last_sub.provider_ref)
+        except whop.WhopError:
+            mem_id = ""
+        if mem_id:
+            last_sub.whop_membership_id = mem_id
+            user.whop_membership_id = mem_id
+            db.commit()
+            return mem_id
+    return ""
 
+
+def _record_whop_payment_refs(
+    db: Session,
+    order: Order,
+    *,
+    payment_id: str,
+    membership_id: str,
+    payer_id: str,
+) -> None:
+    changed = False
+    if payment_id and not order.provider_ref:
+        order.provider_ref = payment_id[:128]
+        changed = True
+    if membership_id and not order.whop_membership_id:
+        order.whop_membership_id = membership_id[:128]
+        changed = True
+    if payer_id and not order.payer_hash:
+        order.payer_hash = affiliates.payer_hash(payer_id) or None
+        changed = True
+    if membership_id and order.kind == "subscription":
+        owner = db.get(User, order.user_id)
+        if owner is not None and owner.whop_membership_id != membership_id:
+            owner.whop_membership_id = membership_id[:128]
+            changed = True
+    if changed:
+        db.commit()
+
+
+def _settle_whop_renewal(
+    db: Session,
+    event: dict,
+    *,
+    prior_order: Order | None,
+    payment_id: str,
+    membership_id: str,
+    paid_plan: str,
+    payer_id: str,
+) -> JSONResponse:
+    if payment_id:
+        duplicate = db.execute(
+            select(Order.id).where(Order.provider == whop.PROVIDER, Order.provider_ref == payment_id).limit(1)
+        ).scalar_one_or_none()
+        if duplicate is not None:
+            return JSONResponse({"ok": True, "applied": False})
+
+    user: User | None = None
+    ref_order = prior_order
+    if ref_order is not None:
+        user = db.get(User, ref_order.user_id)
+    if user is None and membership_id:
+        user = db.execute(select(User).where(User.whop_membership_id == membership_id).limit(1)).scalar_one_or_none()
+        if user is None:
+            ref_order = db.execute(
+                select(Order)
+                .where(Order.whop_membership_id == membership_id)
+                .order_by(Order.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if ref_order is not None:
+                user = db.get(User, ref_order.user_id)
+    if user is None:
+        logger.info("Whop renewal for unknown membership %s / payment %s", membership_id or "(none)", payment_id or "(none)")
+        return JSONResponse({"ok": True, "ignored": "unknown membership"})
+
+    plans = get_token_plans(db)
+    plan = None
+    if paid_plan:
+        mapped = whop.plan_for_whop_id(paid_plan)
+        if mapped and mapped[0] == "subscription":
+            plan = plans.get(mapped[1])
+    if plan is None and user.sub_plan:
+        plan = plans.get(user.sub_plan)
+    if plan is None and ref_order is not None:
+        plan = plans.get(ref_order.plan_id)
+    if plan is None:
+        logger.warning("Whop renewal ignored for user %s: unknown plan (%s)", user.id, paid_plan)
+        return JSONResponse({"ok": True, "ignored": "unknown plan"})
+
+    if not user.is_active:
+        logger.warning("Whop renewal charge arrived for inactive/refunded user %s (payment %s)", user.id, payment_id)
+        if ref_order is not None:
+            notify.needs_review(
+                ref_order,
+                user.email,
+                f"Whop renewal payment {payment_id} arrived on disabled account",
+                name=user.display_name,
+            )
+        return JSONResponse({"ok": True, "ignored": "inactive account"})
+
+    amount = whop.usd_amount_from_event(event)
+    if amount is None or amount <= 0:
+        amount = plan.price
+    renewal = new_order(db, user, "subscription", plan, amount, plan.tokens, provider=whop.PROVIDER)
+    _record_whop_payment_refs(db, renewal, payment_id=payment_id, membership_id=membership_id, payer_id=payer_id)
+    applied = settle_order(db, renewal, source="Whop")
+    return JSONResponse({"ok": True, "applied": applied, "renewal": True})
+
+
+def _handle_payment_succeeded(db: Session, event: dict) -> JSONResponse:
     order_id = whop.order_id_from_event(event)
+    payment_id = whop.payment_id_from_event(event)
+    membership_id = whop.membership_id_from_event(event)
+    billing_reason = whop.billing_reason_from_event(event)
+    paid_plan = whop.plan_id_from_event(event)
+    payer_id = whop.payer_id_from_event(event)
+
     order = db.get(Order, order_id) if order_id else None
+    is_new_cycle = (
+        billing_reason == "subscription_cycle"
+        or (order is not None and order.status == "paid" and bool(payment_id) and bool(order.provider_ref) and order.provider_ref != payment_id)
+        or (order is None and bool(membership_id))
+    )
+    if is_new_cycle:
+        return _settle_whop_renewal(
+            db,
+            event,
+            prior_order=order,
+            payment_id=payment_id,
+            membership_id=membership_id,
+            paid_plan=paid_plan,
+            payer_id=payer_id,
+        )
+
     if order is None:
-        logger.info("Whop %s for an unknown order %s", etype, order_id or "(missing)")
+        logger.info("Whop payment.succeeded for an unknown order %s", order_id or "(missing)")
         return JSONResponse({"ok": True, "ignored": "unknown order"})
 
     if order.provider != whop.PROVIDER:
         logger.warning("Whop webhook for order %s ignored: provider is %s", order.id, order.provider)
         return JSONResponse({"ok": True, "ignored": "wrong provider"})
 
-    paid_plan = whop.plan_id_from_event(event)
     if paid_plan:
         try:
             expected_plan = whop.plan_id_for(order.kind, order.plan_id, order.amount_usd)
@@ -323,20 +466,162 @@ async def whop_webhook(request: Request, db: Session = Depends(get_db)) -> JSONR
             )
             return JSONResponse({"ok": True, "ignored": "plan mismatch"})
 
-    payment_id = whop.payment_id_from_event(event)
-    payer_id = whop.payer_id_from_event(event)
-    changed = False
-    if payment_id and not order.provider_ref:
-        order.provider_ref = payment_id[:128]
-        changed = True
-    if payer_id and not order.payer_hash:
-        order.payer_hash = affiliates.payer_hash(payer_id) or None
-        changed = True
-    if changed:
-        db.commit()
-
+    _record_whop_payment_refs(db, order, payment_id=payment_id, membership_id=membership_id, payer_id=payer_id)
     applied = settle_order(db, order, source="Whop")
     return JSONResponse({"ok": True, "applied": applied})
+
+
+def _handle_payment_failed(db: Session, event: dict) -> JSONResponse:
+    order_id = whop.order_id_from_event(event)
+    membership_id = whop.membership_id_from_event(event)
+    order = db.get(Order, order_id) if order_id else None
+    if order is not None and order.provider == whop.PROVIDER and order.status == "pending":
+        void_order(db, order, "invalid")
+        log_activity(db, order.user_id, "payment", f"Whop payment failed for order {order.id}")
+        return JSONResponse({"ok": True, "failed_order": order.id})
+
+    user: User | None = db.get(User, order.user_id) if order is not None else None
+    if user is None and membership_id:
+        user = db.execute(select(User).where(User.whop_membership_id == membership_id).limit(1)).scalar_one_or_none()
+    if user is not None:
+        log_activity(db, user.id, "payment", "Whop renewal payment failed")
+        if order is not None:
+            notify.needs_review(order, user.email, "Whop renewal payment failed", name=user.display_name)
+        return JSONResponse({"ok": True, "failed_noted": True})
+    return JSONResponse({"ok": True, "ignored": "payment.failed"})
+
+
+def _handle_membership_deactivated(db: Session, event: dict) -> JSONResponse:
+    mem_id = whop.membership_id_from_event(event)
+    if not mem_id:
+        return JSONResponse({"ok": True, "ignored": "missing membership id"})
+
+    user = db.execute(select(User).where(User.whop_membership_id == mem_id).limit(1)).scalar_one_or_none()
+    if user is None:
+        order = db.execute(
+            select(Order).where(Order.whop_membership_id == mem_id).order_by(Order.created_at.desc()).limit(1)
+        ).scalar_one_or_none()
+        if order is not None:
+            user = db.get(User, order.user_id)
+    if user is None:
+        return JSONResponse({"ok": True, "ignored": "unknown membership"})
+
+    data = whop._event_data(event)
+    cancel_at_end = data.get("cancel_at_period_end")
+    if cancel_at_end is not True:
+        cancel_period(db, user, immediately=True, reason="Membership deactivated on Whop")
+        db.commit()
+        log_activity(db, user.id, "subscription", f"Membership {user.sub_plan or 'subscription'} deactivated on Whop")
+        return JSONResponse({"ok": True, "synced": "deactivated"})
+
+    if user.sub_cancelled_at is None:
+        user.sub_cancelled_at = datetime.now(timezone.utc)
+        db.commit()
+        log_activity(db, user.id, "subscription", f"Cancelled {user.sub_plan or 'subscription'} auto-renewal on Whop")
+    return JSONResponse({"ok": True, "synced": "cancelled"})
+
+
+def _handle_refund_event(db: Session, event: dict) -> JSONResponse:
+    payment_id = whop.refund_payment_id_from_event(event)
+    refund_id = whop.refund_id_from_event(event)
+    r_status = whop.refund_status_from_event(event)
+
+    if not payment_id:
+        return JSONResponse({"ok": True, "ignored": "missing payment id"})
+
+    order = db.execute(
+        select(Order).where(Order.provider == whop.PROVIDER, Order.provider_ref == payment_id).limit(1)
+    ).scalar_one_or_none()
+    if order is None:
+        return JSONResponse({"ok": True, "ignored": "unknown payment"})
+
+    if r_status == "failed":
+        owner = db.get(User, order.user_id)
+        notify.needs_review(
+            order,
+            owner.email if owner else None,
+            f"Whop refund {refund_id or ''} failed",
+            name=owner.display_name if owner else None,
+        )
+        return JSONResponse({"ok": True, "ignored": "refund failed"})
+
+    was_paid = order.status == "paid"
+    refunds.apply_provider_refund(db, order, refund_id=refund_id, reason="Refunded via Whop")
+    if was_paid:
+        log_activity(db, order.user_id, "payment", f"Order of ${order.amount_usd:g} refunded on Whop; account stopped")
+    return JSONResponse({"ok": True, "refunded": True})
+
+
+def _handle_dispute_event(db: Session, etype: str, event: dict) -> JSONResponse:
+    payment_id = whop.refund_payment_id_from_event(event)
+    d_status = whop.dispute_status_from_event(event)
+    d_reason = whop.dispute_reason_from_event(event)
+    if not payment_id:
+        return JSONResponse({"ok": True, "ignored": "missing payment id"})
+
+    order = db.execute(
+        select(Order).where(Order.provider == whop.PROVIDER, Order.provider_ref == payment_id).limit(1)
+    ).scalar_one_or_none()
+    if order is None:
+        return JSONResponse({"ok": True, "ignored": "unknown payment"})
+
+    owner = db.get(User, order.user_id)
+    if d_status in ("won", "warning_closed"):
+        log_activity(db, order.user_id, "payment", f"Whop dispute for order {order.id} resolved ({d_status})")
+        notify.needs_review(
+            order,
+            owner.email if owner else None,
+            f"Whop dispute resolved ({d_status})",
+            name=owner.display_name if owner else None,
+        )
+        return JSONResponse({"ok": True, "dispute": d_status})
+
+    reason_text = f"Whop dispute ({d_status or etype})" + (f": {d_reason}" if d_reason else "")
+    if d_status == "lost":
+        refunds.apply_provider_refund(db, order, reason=reason_text)
+    elif owner is not None:
+        cancel_period(db, owner, immediately=True, reason=reason_text)
+        owner.is_active = False
+        owner.token_version += 1
+        db.commit()
+
+    log_activity(db, order.user_id, "payment", f"{reason_text}; plan & account stopped")
+    notify.needs_review(
+        order,
+        owner.email if owner else None,
+        f"{reason_text} — account stopped",
+        name=owner.display_name if owner else None,
+    )
+    return JSONResponse({"ok": True, "dispute_handled": True})
+
+
+# --------------------------------------------------------------------------
+# Whop webhook
+# --------------------------------------------------------------------------
+
+
+@router.post("/whop/webhook")
+async def whop_webhook(request: Request, db: Session = Depends(get_db)) -> JSONResponse:
+    """Receive signed Whop Standard Webhooks events for payments, memberships, refunds, and disputes."""
+
+    raw = await request.body()
+    try:
+        event = whop.verify_webhook(raw, request.headers)
+    except whop.WhopError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    etype = whop.event_type(event)
+    if etype == whop.SETTLED_EVENT:
+        return _handle_payment_succeeded(db, event)
+    if etype == "payment.failed":
+        return _handle_payment_failed(db, event)
+    if etype == "membership.deactivated":
+        return _handle_membership_deactivated(db, event)
+    if etype in ("refund.created", "refund.updated"):
+        return _handle_refund_event(db, event)
+    if etype in ("dispute.created", "dispute.updated"):
+        return _handle_dispute_event(db, etype, event)
+    return JSONResponse({"ok": True, "ignored": etype or "unknown event"})
 
 
 # --------------------------------------------------------------------------
@@ -380,14 +665,21 @@ class CancelIn(BaseModel):
 def cancel_subscription(
     payload: CancelIn | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> SubscriptionState:
-    """Stop at the end of the paid period. Access continues until then; the next purchase gets no rollover."""
+    """Stop auto-renewal on Whop at period end; days and tokens left stay active until then."""
 
     if not subscription_active(user):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no active subscription to cancel.")
+    reason = " ".join((payload.reason if payload else "").split())
+    mem_id = _resolve_user_whop_membership(db, user)
+    if mem_id and whop.configured():
+        try:
+            whop.cancel_membership(mem_id, at_period_end=True, reason=reason or "Cancelled by customer")
+        except whop.WhopError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
     if user.sub_cancelled_at is None:
         user.sub_cancelled_at = datetime.now(timezone.utc)
         db.commit()
-        reason = " ".join((payload.reason if payload else "").split())
         log_activity(
             db, user.id, "subscription", f"Cancelled the {user.sub_plan} subscription" + (f" ({reason})" if reason else "")
         )
@@ -405,6 +697,12 @@ def cancel_subscription(
 def resume_subscription(user: User = Depends(current_user), db: Session = Depends(get_db)) -> SubscriptionState:
     if not subscription_active(user):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no active subscription to resume.")
+    mem_id = _resolve_user_whop_membership(db, user)
+    if mem_id and whop.configured():
+        try:
+            whop.resume_membership(mem_id)
+        except whop.WhopError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     if user.sub_cancelled_at is not None:
         user.sub_cancelled_at = None
         db.commit()

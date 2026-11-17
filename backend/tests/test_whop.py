@@ -414,7 +414,7 @@ def test_non_settled_events_and_unknown_orders_are_ignored(whop_env):
     client = _signed_in(email)
     order_id = _checkout(client, "pro")["order_id"]
 
-    for ev_type in ("payment.failed", "payment.pending", "membership.activated"):
+    for ev_type in ("payment.pending", "membership.activated"):
         res = _post_whop(_whop_event(order_id, event_type=ev_type, variant_id="plan_pro"))
         assert res.status_code == 200 and res.json() == {"ok": True, "ignored": ev_type}
         assert _order(order_id).status == "pending"
@@ -456,3 +456,136 @@ def test_webhook_logs_and_settles_flat_metadata_shape(whop_env, caplog):
     flat_event = {"event": "payment.succeeded", "metadata": {"order_id": order_id}, "plan_id": "plan_starter"}
     assert _post_whop(flat_event).json() == {"ok": True, "applied": True}
     assert _balances(email) == (1500, 0)
+
+
+# --------------------------------------------------------------------------
+# subscription lifecycle, renewals, refunds & disputes (all 7 webhook events)
+# --------------------------------------------------------------------------
+
+
+def test_whop_renewal_cancel_resume_and_deactivated_events(whop_env, monkeypatch):
+    email = address("lifecycle")
+    client = _signed_in(email)
+    order_id = _checkout(client, "starter")["order_id"]
+
+    # Initial payment stores membership id and payment id.
+    first_evt = _whop_event(
+        order_id,
+        payment_id="pay_init_1",
+        variant_id="plan_starter",
+        extra_data={"membership": {"id": "mem_life_1"}, "billing_reason": "subscription_create"},
+    )
+    assert _post_whop(first_evt).json() == {"ok": True, "applied": True}
+    assert _load(email).whop_membership_id == "mem_life_1"
+    assert _order(order_id).whop_membership_id == "mem_life_1"
+
+    # Cancel in app delegates cancel_at_period_end=True to Whop while keeping days & tokens.
+    calls: list[tuple[str, str, bool]] = []
+    monkeypatch.setattr(
+        whop,
+        "cancel_membership",
+        lambda mem_id, *, at_period_end=True, reason="": calls.append(("cancel", mem_id, at_period_end)) or {},
+    )
+    monkeypatch.setattr(
+        whop,
+        "resume_membership",
+        lambda mem_id: calls.append(("resume", mem_id, False)) or {},
+    )
+
+    c_res = client.post("/api/v1/billing/cancel", json={"reason": "Taking a break"})
+    assert c_res.status_code == 200 and c_res.json()["cancelled"] is True
+    assert _balances(email) == (1500, 0)
+    assert _load(email).is_active is True
+
+    r_res = client.post("/api/v1/billing/resume")
+    assert r_res.status_code == 200 and r_res.json()["cancelled"] is False
+    assert calls == [("cancel", "mem_life_1", True), ("resume", "mem_life_1", False)]
+
+    # Recurring subscription cycle payment settles a fresh renewal order.
+    cycle_evt = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "payment.succeeded",
+        "data": {
+            "id": "pay_cycle_2",
+            "membership_id": "mem_life_1",
+            "billing_reason": "subscription_cycle",
+            "plan": {"id": "plan_starter"},
+            "final_amount": 37,
+        },
+    }
+    res_cycle = _post_whop(cycle_evt)
+    assert res_cycle.status_code == 200 and res_cycle.json() == {"ok": True, "applied": True, "renewal": True}
+    assert _balances(email) == (3000, 0)
+    # Re-delivering the same cycle payment id does not double-credit.
+    assert _post_whop(cycle_evt).json() == {"ok": True, "applied": False}
+    assert _balances(email) == (3000, 0)
+
+    # membership.deactivated with cancel_at_period_end=True turns off auto-renewal but keeps remaining tokens.
+    deact_end = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "membership.deactivated",
+        "data": {"id": "mem_life_1", "cancel_at_period_end": True},
+    }
+    assert _post_whop(deact_end).json() == {"ok": True, "synced": "cancelled"}
+    assert _load(email).sub_cancelled_at is not None and _balances(email) == (3000, 0)
+
+    # membership.deactivated without cancel_at_period_end ends access now.
+    deact_now = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "membership.deactivated",
+        "data": {"id": "mem_life_1", "cancel_at_period_end": False},
+    }
+    assert _post_whop(deact_now).json() == {"ok": True, "synced": "deactivated"}
+    assert _balances(email) == (0, 0)
+
+
+def test_whop_payment_failed_and_refund_webhooks(whop_env):
+    email = address("refundwh")
+    client = _signed_in(email)
+
+    pending_id = _checkout(client, "pro")["order_id"]
+    failed_evt = _whop_event(pending_id, event_type="payment.failed", payment_id="pay_fail_1", variant_id="plan_pro")
+    assert _post_whop(failed_evt).json() == {"ok": True, "failed_order": pending_id}
+    assert _order(pending_id).status == "invalid"
+
+    paid_id = _checkout(client, "pro")["order_id"]
+    assert _post_whop(
+        _whop_event(paid_id, payment_id="pay_ok_wh_1", variant_id="plan_pro", extra_data={"membership": {"id": "mem_wh_r1"}})
+    ).json() == {"ok": True, "applied": True}
+    assert _balances(email) == (4500, 0)
+
+    refund_evt = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "refund.created",
+        "data": {"id": "re_wh_1", "payment": {"id": "pay_ok_wh_1"}, "status": "succeeded"},
+    }
+    assert _post_whop(refund_evt).json() == {"ok": True, "refunded": True}
+    assert _order(paid_id).status == "refunded"
+    assert _balances(email) == (0, 0)
+    assert _load(email).is_active is False
+
+
+def test_whop_dispute_webhooks_stop_account_and_refund_on_loss(whop_env):
+    email = address("dispute")
+    client = _signed_in(email)
+    order_id = _checkout(client, "starter")["order_id"]
+    assert _post_whop(_whop_event(order_id, payment_id="pay_disp_1", variant_id="plan_starter")).json() == {
+        "ok": True,
+        "applied": True,
+    }
+
+    dispute_open = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "dispute.created",
+        "data": {"id": "disp_1", "payment": {"id": "pay_disp_1"}, "status": "needs_response", "reason": "fraudulent"},
+    }
+    assert _post_whop(dispute_open).json() == {"ok": True, "dispute_handled": True}
+    assert _load(email).is_active is False and _balances(email) == (0, 0)
+
+    dispute_lost = {
+        "id": f"msg_{uuid.uuid4().hex[:12]}",
+        "type": "dispute.updated",
+        "data": {"id": "disp_1", "payment": {"id": "pay_disp_1"}, "status": "lost", "reason": "fraudulent"},
+    }
+    assert _post_whop(dispute_lost).json() == {"ok": True, "dispute_handled": True}
+    assert _order(order_id).status == "refunded"

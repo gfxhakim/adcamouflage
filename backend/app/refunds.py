@@ -21,13 +21,13 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import affiliates, audit, mailer, notify
-from .accounts import current_user, require_admin
+from . import affiliates, audit, mailer, notify, whop
+from .accounts import clear_session_cookie, current_user, require_admin
 from .activity import log_activity
 from .app_settings import currency, get_setting, set_setting
 from .db import Order, RefundRequest, TokenLedger, User, get_db
@@ -218,16 +218,18 @@ class RefundIn(BaseModel):
     order_id: str = Field(min_length=1, max_length=64)
     reason: str = Field(pattern="^(" + "|".join(REASONS) + ")$")
     details: str = Field(default="", max_length=1000)
-    network: str = Field(pattern="^(" + "|".join(NETWORKS) + ")$")
-    address: str = Field(min_length=1, max_length=120)
+    network: str = Field(default="", max_length=32)
+    address: str = Field(default="", max_length=120)
 
 
 def check_address(network: str, address: str) -> str:
     """The cleaned wallet address, or a 422 that says what is wrong with it."""
 
+    spec = NETWORKS.get(network)
+    if spec is None:
+        raise HTTPException(status_code=422, detail="Pick a supported refund coin and network.")
     cleaned = address.strip()
-    spec = NETWORKS[network]
-    if not re.match(spec["pattern"], cleaned):
+    if not cleaned or not re.match(spec["pattern"], cleaned):
         raise HTTPException(
             status_code=422,
             detail=f"That does not look like a {spec['label']} address. Check it and the network you picked.",
@@ -267,6 +269,7 @@ def my_refunds(user: User = Depends(current_user), db: Session = Depends(get_db)
                 "tokens": order.tokens,
                 "tokens_used": used,
                 "paid_at": aware(order.paid_at) or aware(order.created_at),
+                "provider": order.provider,
                 "status": order.status,
                 "can_request": ok,
                 "why_not": why,
@@ -289,7 +292,12 @@ def my_refunds(user: User = Depends(current_user), db: Session = Depends(get_db)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def request_refund(payload: RefundIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def request_refund(
+    payload: RefundIn,
+    response: Response,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     order = db.get(Order, payload.order_id)
     if order is None or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found.")
@@ -302,23 +310,48 @@ def request_refund(payload: RefundIn, user: User = Depends(current_user), db: Se
     if not ok:
         raise HTTPException(status_code=409, detail=why)
     details = " ".join(payload.details.split())[:1000]
-    wallet = check_address(payload.network, payload.address)
+    net_raw = (payload.network or "").strip()
+    addr_raw = (payload.address or "").strip()
+    if order.provider != whop.PROVIDER or net_raw or addr_raw:
+        if not net_raw or net_raw not in NETWORKS:
+            raise HTTPException(status_code=422, detail="Pick a supported refund coin and network.")
+        network = net_raw
+        wallet = check_address(network, addr_raw)
+        refund_to = f"{NETWORKS[network]['label']} {wallet}"
+    else:
+        network = "whop_card"
+        wallet = (order.provider_ref or "")[:120]
+        refund_to = "Original card / payment method via Whop"
+
     row = RefundRequest(
         order_id=order.id,
         user_id=user.id,
         reason=payload.reason,
         details=details,
         tokens_used=used,
-        refund_network=payload.network,
+        refund_network=network,
         refund_address=wallet,
     )
     db.add(row)
+
+    # Stop future renewals on Whop best-effort while the request is reviewed.
+    mem_id = (order.whop_membership_id or user.whop_membership_id or "").strip()
+    if mem_id and whop.configured():
+        try:
+            whop.cancel_membership(mem_id, at_period_end=True, reason="Customer requested refund")
+        except whop.WhopError:
+            logger.warning("Could not cancel Whop membership %s on refund request for %s", mem_id, order.id, exc_info=True)
+
+    # Stop plan and deactivate account immediately so no further rendering can occur.
+    cancel_period(db, user, immediately=True, reason="Refund requested by customer")
+    user.is_active = False
+    user.token_version += 1
     db.commit()
     db.refresh(row)
+    clear_session_cookie(response)
 
     reason_text = REASONS[payload.reason] + (f": {details}" if details else "")
-    refund_to = f"{NETWORKS[payload.network]['label']} {wallet}"
-    log_activity(db, user.id, "refund", f"Asked for a refund of ${order.amount_usd:g} ({reason_text})")
+    log_activity(db, user.id, "refund", f"Asked for a refund of ${order.amount_usd:g} ({reason_text}); account stopped")
     plan = get_token_plans(db).get(order.plan_id)
     notify.refund_requested(
         order, user.email, plan.label if plan else order.plan_id, currency(db), reason_text, used,
@@ -330,7 +363,8 @@ def request_refund(payload: RefundIn, user: User = Depends(current_user), db: Se
         "refund_requested",
         {"plan": _label(db, order), "reason": reason_text, "refund_to": refund_to, **mailer._order_values(db, order)},
     )
-    return _request_out(row)  # type: ignore[return-value]
+    out = _request_out(row) or {}
+    return {**out, "account_stopped": True}
 
 
 @router.post("/{request_id}/withdraw")
@@ -397,10 +431,44 @@ def take_back(db: Session, order: Order, user: User, now: datetime | None = None
 
 class DecisionIn(BaseModel):
     note: str = Field(default="", max_length=1000)
-    # Approve only: the transaction hash / reference of the refund the owner sent.
+    # Approve only: optional reference/tx hash (populated automatically on Whop refunds).
     refund_tx: str = Field(default="", max_length=200)
     # Approve only: take the order's tokens back and end the period it paid for.
     remove_access: bool = True
+    # Reject only: optionally reactivate a customer account that stopped when requesting a refund.
+    reactivate_account: bool = False
+
+
+def apply_provider_refund(
+    db: Session,
+    order: Order,
+    *,
+    refund_id: str = "",
+    reason: str = "Refunded via Whop",
+) -> str:
+    """Finalize a refund triggered via Whop webhook: take back tokens, stop account & plan, undo affiliates."""
+
+    now = _now()
+    user = db.get(User, order.user_id)
+    already = order.status == "refunded"
+    removed = 0
+    if user is not None and not already:
+        removed = int(take_back(db, order, user, now)["removed"])
+    order.status = "refunded"
+    row = _latest_request(db, order.id)
+    if row is not None and row.status == "pending":
+        row.status = "approved"
+        row.decided_at = now
+        row.decided_by = "whop_webhook"
+        row.tokens_removed = removed
+        if refund_id:
+            row.refund_tx = refund_id[:200]
+    if user is not None:
+        cancel_period(db, user, immediately=True, reason=reason, now=now)
+        user.is_active = False
+        user.token_version += 1
+    db.commit()
+    return "" if already else affiliates.on_order_refunded(db, order)
 
 
 def _admin_row(db: Session, row: RefundRequest, rules: dict[str, Any]) -> dict[str, Any]:
@@ -411,13 +479,18 @@ def _admin_row(db: Session, row: RefundRequest, rules: dict[str, Any]) -> dict[s
     why = ""
     if order is not None and row.status == "pending":
         in_rules, why, _used = eligibility(db, order, rules, aware(row.created_at))
+    net_label = (
+        "Whop (original card / payment method)"
+        if row.refund_network == "whop_card"
+        else NETWORKS.get(row.refund_network or "", {}).get("label", row.refund_network or "")
+    )
     return {
         "id": row.id,
         "status": row.status,
         "reason": REASONS.get(row.reason, row.reason),
         "details": row.details,
-        "network": NETWORKS.get(row.refund_network or "", {}).get("label", row.refund_network or ""),
-        "address": row.refund_address,
+        "network": net_label,
+        "address": None if row.refund_network == "whop_card" else row.refund_address,
         "refund_tx": row.refund_tx,
         "admin_note": row.admin_note,
         "created_at": aware(row.created_at),
@@ -427,6 +500,7 @@ def _admin_row(db: Session, row: RefundRequest, rules: dict[str, Any]) -> dict[s
         "user_id": row.user_id,
         "email": user.email if user else "",
         "name": user.display_name if user else None,
+        "user_is_active": bool(user.is_active) if user else False,
         "order": None
         if order is None
         else {
@@ -482,16 +556,31 @@ def _load_pending(db: Session, request_id: int) -> tuple[RefundRequest, Order, U
 def admin_approve(
     request_id: int, payload: DecisionIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
-    """The owner refunded the payment at the provider: record it and take back what the order gave."""
+    """Send the refund via Whop back to the customer's card (when paid via Whop), revoke access, and undo affiliates."""
 
     row, order, user = _load_pending(db, request_id)
     if order.status not in ("paid", "refunded"):
         raise HTTPException(status_code=409, detail="Only a paid order can be refunded.")
     already = order.status == "refunded"
+
+    refund_tx = " ".join(payload.refund_tx.split())
+    if not already and order.provider == whop.PROVIDER and order.provider_ref and whop.configured():
+        try:
+            res = whop.refund_payment(
+                order.provider_ref,
+                metadata={"refund_request_id": str(row.id), "order_id": order.id, "reviewed_by": admin.email},
+            )
+            refund_tx = res.get("refund_id") or refund_tx or order.provider_ref
+        except whop.WhopError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
     now = _now()
     result = {"removed": 0, "ended": False}
     if payload.remove_access:
         result = take_back(db, order, user, now)
+        cancel_period(db, user, immediately=True, reason="Refund approved", now=now)
+    user.is_active = False
+    user.token_version += 1
     order.status = "refunded"
     note = " ".join(payload.note.split())
     row.status = "approved"
@@ -499,7 +588,7 @@ def admin_approve(
     row.decided_at = now
     row.decided_by = admin.email
     row.tokens_removed = int(result["removed"])
-    row.refund_tx = " ".join(payload.refund_tx.split())
+    row.refund_tx = refund_tx[:200]
     db.commit()
     reversed_ = "" if already else affiliates.on_order_refunded(db, order)
 
@@ -512,6 +601,11 @@ def admin_approve(
         detail += f" ({note})"
     audit.record(db, admin, user, "refund_approved", detail)
     log_activity(db, user.id, "refund", f"Refund of ${order.amount_usd:g} approved")
+    refund_to_label = (
+        "Original card / payment method via Whop"
+        if row.refund_network == "whop_card"
+        else f"{NETWORKS.get(row.refund_network or '', {}).get('label', '')} {row.refund_address or ''}".strip()
+    )
     mailer.send_kind(
         db,
         user,
@@ -520,7 +614,7 @@ def admin_approve(
             "plan": _label(db, order),
             "reason": REASONS.get(row.reason, row.reason),
             "note": note,
-            "refund_to": f"{NETWORKS.get(row.refund_network or '', {}).get('label', '')} {row.refund_address or ''}".strip(),
+            "refund_to": refund_to_label,
             "refund_tx": row.refund_tx or "-",
             **mailer._order_values(db, order),
         },
@@ -538,8 +632,15 @@ def admin_reject(
     row.admin_note = note
     row.decided_at = _now()
     row.decided_by = admin.email
+    if payload.reactivate_account:
+        user.is_active = True
     db.commit()
-    audit.record(db, admin, user, "refund_rejected", f"Rejected the ${order.amount_usd:g} refund" + (f" ({note})" if note else ""))
+    detail = f"Rejected the ${order.amount_usd:g} refund"
+    if payload.reactivate_account:
+        detail += " and reactivated account"
+    if note:
+        detail += f" ({note})"
+    audit.record(db, admin, user, "refund_rejected", detail)
     log_activity(db, user.id, "refund", f"Refund of ${order.amount_usd:g} not approved")
     mailer.send_kind(
         db,

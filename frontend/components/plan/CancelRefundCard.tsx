@@ -35,9 +35,10 @@ function orderTitle(order: RefundableOrder, labels: Record<string, string>, curr
 }
 
 /**
- * Account settings: cancel the plan (it stays usable until the paid period
- * ends) and ask for a refund on any paid plan or top-up, with the crypto
- * wallet the money should go back to.
+ * Account settings: cancel the plan on Whop (auto-renewal stops, while days
+ * and remaining tokens stay active until the paid period ends) and request a
+ * refund back to the original Whop payment method (pausing the account once
+ * submitted until admin decides).
  */
 export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCardProps) {
   const current = sub.subscription;
@@ -56,6 +57,7 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
   const [details, setDetails] = useState("");
   const [network, setNetwork] = useState("");
   const [address, setAddress] = useState("");
+  const [confirmStop, setConfirmStop] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -74,6 +76,11 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
   }, [load]);
 
   const currency = data?.currency ?? sub.currency;
+  const activeOrder = useMemo(
+    () => data?.orders.find((o) => o.order_id === openFor) ?? null,
+    [data, openFor],
+  );
+  const isWhopOrder = !activeOrder || !activeOrder.provider || activeOrder.provider === "whop";
   const placeholder = useMemo(
     () => data?.networks.find((n) => n.id === network)?.placeholder ?? "Pick a coin and network first",
     [data, network],
@@ -113,6 +120,7 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
     setDetails("");
     setNetwork("");
     setAddress("");
+    setConfirmStop(false);
     setFormError(null);
     setDone(null);
   };
@@ -121,14 +129,28 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
     event.preventDefault();
     if (!openFor) return;
     if (!reason) return setFormError("Pick a reason.");
-    if (!network) return setFormError("Pick the coin and network to be refunded on.");
-    if (!address.trim()) return setFormError("Enter a refund address.");
+    if (!isWhopOrder) {
+      if (!network) return setFormError("Pick the coin and network to be refunded on.");
+      if (!address.trim()) return setFormError("Enter a refund address.");
+    }
+    if (!confirmStop) {
+      return setFormError("Confirm that submitting this refund request stops your plan and pauses your account immediately.");
+    }
     setBusy(true);
     setFormError(null);
     try {
-      await requestRefund({ order_id: openFor, reason, details: details.trim(), network, address: address.trim() });
+      const res = await requestRefund({
+        order_id: openFor,
+        reason,
+        details: details.trim(),
+        ...(isWhopOrder ? {} : { network, address: address.trim() }),
+      });
       setOpenFor(null);
-      setDone("Request sent. We emailed you a copy and will answer by email, usually within 2 business days.");
+      if (res.account_stopped) {
+        window.location.href = "/login?refund=requested";
+        return;
+      }
+      setDone("Request sent. Once approved, your refund goes back to your original payment method.");
       await load();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Could not send the request.");
@@ -170,9 +192,13 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
           current.cancelled ? (
             <div className="mt-2 rounded-xl border border-amber-400/40 bg-amber-50/70 p-3 text-sm">
               <p className="font-medium text-black">
-                {current.plan_label} is cancelled. You can keep using the app until {formatDate(current.period_end)}.
+                {current.plan_label} is cancelled. Auto-renewal is off; you keep your days and tokens until{" "}
+                {formatDate(current.period_end)}.
               </p>
-              <p className="mt-1 text-xs text-ink-muted">Nothing renews after that. Resume to keep rolling tokens over.</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                No payment will be charged next month. Resume before {formatDate(current.period_end)} to turn
+                auto-renewal back on.
+              </p>
               <button type="button" className="btn-primary mt-3 !py-2 !text-xs" disabled={cancelBusy} onClick={() => void doResume()}>
                 {cancelBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <PlayCircle className="h-3.5 w-3.5" aria-hidden />}
                 Resume plan
@@ -182,8 +208,8 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
             <div className="mt-2 rounded-xl border border-black/10 bg-white p-3 text-sm">
               <p className="font-medium text-black">Cancel your {current.plan_label} plan?</p>
               <p className="mt-1 text-xs text-ink-muted">
-                You keep full access and your tokens until {formatDate(current.period_end)}. After that it does not renew, and
-                unused plan tokens do not roll over.
+                Auto-renewal turns off on Whop so you are not charged next month. Your remaining days and tokens keep
+                working until {formatDate(current.period_end)}, and unused plan tokens do not roll over.
               </p>
               <label className="mt-3 block">
                 <span className="label">Why are you leaving? (optional)</span>
@@ -264,8 +290,16 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
 
                   {request?.status === "pending" ? (
                     <div className="mt-2 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-ink-muted">
-                      Sent {formatDate(request.created_at)} · {request.reason_label} · refund to {request.network_label}{" "}
-                      <span className="break-all font-mono text-black">{request.address}</span>
+                      Sent {formatDate(request.created_at)} · {request.reason_label}
+                      {request.network === "whop_card" || !request.address ? (
+                        <> · refund back to your card via Whop</>
+                      ) : (
+                        <>
+                          {" "}
+                          · refund to {request.network_label}{" "}
+                          <span className="break-all font-mono text-black">{request.address}</span>
+                        </>
+                      )}
                       <button
                         type="button"
                         className="ml-2 font-semibold text-meta-600 hover:underline"
@@ -305,43 +339,71 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
                           onChange={(e) => setDetails(e.target.value)}
                         />
                       </label>
-                      <div>
-                        <span className="label flex items-center gap-1.5">
-                          <Wallet className="h-3 w-3" aria-hidden /> Refund to
-                        </span>
-                        <div className="mt-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                          {data.networks.map((n) => (
-                            <button
-                              key={n.id}
-                              type="button"
-                              onClick={() => setNetwork(n.id)}
-                              aria-pressed={network === n.id}
-                              className={clsx(
-                                "rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors",
-                                network === n.id
-                                  ? "border-meta-500 bg-meta-50 text-meta-700"
-                                  : "border-black/10 text-black hover:border-meta-400",
-                              )}
-                            >
-                              {n.label}
-                            </button>
-                          ))}
+                      {isWhopOrder ? (
+                        <div className="rounded-lg border border-amber-400/50 bg-amber-50/80 px-3 py-2.5 text-xs text-amber-900">
+                          <p className="font-semibold">Immediate account pause &amp; Whop card refund</p>
+                          <p className="mt-1">
+                            Once approved by our team, Whop refunds this payment directly back to the card or payment
+                            method used at checkout.
+                          </p>
+                          <p className="mt-1 font-medium">
+                            Submitting this request immediately stops your plan and pauses your account so you can no
+                            longer render.
+                          </p>
                         </div>
-                      </div>
-                      <label className="block">
-                        <span className="label">Refund address</span>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="label flex items-center gap-1.5">
+                              <Wallet className="h-3 w-3" aria-hidden /> Refund to
+                            </span>
+                            <div className="mt-1 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                              {data.networks.map((n) => (
+                                <button
+                                  key={n.id}
+                                  type="button"
+                                  onClick={() => setNetwork(n.id)}
+                                  aria-pressed={network === n.id}
+                                  className={clsx(
+                                    "rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors",
+                                    network === n.id
+                                      ? "border-meta-500 bg-meta-50 text-meta-700"
+                                      : "border-black/10 text-black hover:border-meta-400",
+                                  )}
+                                >
+                                  {n.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <label className="block">
+                            <span className="label">Refund address</span>
+                            <input
+                              className={clsx("field mt-1 font-mono", formError && !address.trim() ? "!border-red-400" : "")}
+                              value={address}
+                              onChange={(e) => setAddress(e.target.value)}
+                              placeholder={placeholder}
+                              autoComplete="off"
+                              spellCheck={false}
+                              maxLength={120}
+                              required
+                            />
+                            <span className="mt-1 block text-[11px] text-ink-faint">
+                              Double-check it: crypto sent to a wrong address or network cannot be recovered.
+                            </span>
+                          </label>
+                        </>
+                      )}
+                      <label className="flex items-start gap-2 text-xs text-black">
                         <input
-                          className={clsx("field mt-1 font-mono", formError && !address.trim() ? "!border-red-400" : "")}
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          placeholder={placeholder}
-                          autoComplete="off"
-                          spellCheck={false}
-                          maxLength={120}
-                          required
+                          type="checkbox"
+                          className="mt-0.5 accent-meta-500"
+                          checked={confirmStop}
+                          onChange={(e) => setConfirmStop(e.target.checked)}
                         />
-                        <span className="mt-1 block text-[11px] text-ink-faint">
-                          Double-check it: crypto sent to a wrong address or network cannot be recovered.
+                        <span>
+                          I understand my plan and account stop working immediately when I submit this refund request
+                          {order.kind === "subscription" ? " and my Whop subscription will not renew" : ""}.
                         </span>
                       </label>
                       {formError ? <p className="text-xs text-red-700">{formError}</p> : null}
@@ -354,10 +416,6 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
                           Never mind
                         </button>
                       </div>
-                      <p className="text-[11px] text-ink-faint">
-                        If it is approved, the tokens from this payment are taken off your account
-                        {order.kind === "subscription" ? " and the plan it paid for ends" : ""}.
-                      </p>
                     </form>
                   ) : null}
                 </li>

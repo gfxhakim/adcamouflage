@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import select
 
-from app import mailer, notify, refunds
+from app import mailer, notify, refunds, whop
 from app.auth_routes import login_limiter
 from app.config import settings
 from app.db import Order, RefundRequest, User, get_session_factory, init_db
@@ -114,35 +114,64 @@ def test_customer_cancel_sends_email_and_alert(sent):
     assert len(sent["mails"]) == 1
 
 
-def test_refund_request_then_approve_takes_back_plan_and_tokens(admin, sent):
+def test_refund_request_stops_account_then_approve_refunds_via_whop(admin, sent, monkeypatch):
     email = address("refund")
     client = client_for(email)
     order_id = buy(client, email)
+    with session() as db:
+        order = db.get(Order, order_id)
+        order.provider_ref = "pay_whop_refund_1"
+        order.whop_membership_id = "mem_whop_refund_1"
+        db.commit()
+
+    cancel_calls: list[tuple[str, bool]] = []
+    refund_calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        whop,
+        "cancel_membership",
+        lambda mem_id, *, at_period_end=True, reason="": cancel_calls.append((mem_id, at_period_end)) or {},
+    )
+    monkeypatch.setattr(
+        whop,
+        "refund_payment",
+        lambda payment_id, *, metadata=None: refund_calls.append((payment_id, metadata or {})) or {"refund_id": "re_whop_1", "status": "pending"},
+    )
 
     listed = client.get("/api/v1/billing/refunds").json()
     row = next(o for o in listed["orders"] if o["order_id"] == order_id)
-    assert row["can_request"] is True and row["tokens_used"] == 0
+    assert row["can_request"] is True and row["tokens_used"] == 0 and row["provider"] == "whop"
 
-    asked = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "mistake", "details": "wrong plan", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"})
+    # Submitting a Whop refund request needs no crypto address and stops plan & account immediately.
+    asked = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "mistake", "details": "wrong plan"})
     assert asked.status_code == 201, asked.text
-    assert asked.json()["status"] == "pending"
+    body = asked.json()
+    assert body["status"] == "pending" and body["account_stopped"] is True
+    assert cancel_calls == [("mem_whop_refund_1", True)]
     assert ("refund_requested" in [k for k, _ in sent["mails"]]) and any(e == "refund" for e, _ in sent["alerts"])
-    # One open request per order.
-    again = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"})
-    assert again.status_code == 409
+
+    # Account is immediately paused and cannot call authenticated endpoints or render.
+    assert client.get("/api/v1/auth/me").status_code == 401
+    with session() as db:
+        stopped_user = user_of(db, email)
+        assert stopped_user.is_active is False
+        assert stopped_user.sub_cancelled_at is not None
+        assert stopped_user.sub_period_end <= datetime.now(timezone.utc).replace(tzinfo=stopped_user.sub_period_end.tzinfo)
 
     pending = admin.get("/api/v1/admin/refunds").json()
     mine = next(r for r in pending["requests"] if r["order"]["id"] == order_id)
-    assert mine["status"] == "pending" and mine["in_rules"] is True
+    assert mine["status"] == "pending" and mine["in_rules"] is True and mine["user_is_active"] is False
 
-    approved = admin.post(f"/api/v1/admin/refunds/{mine['id']}/approve", json={"note": "Sent", "refund_tx": "abc123"})
+    approved = admin.post(f"/api/v1/admin/refunds/{mine['id']}/approve", json={"note": "Refunded to card"})
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved" and approved.json()["tokens_removed"] == 4500
+    assert approved.json()["refund_tx"] == "re_whop_1"
+    assert len(refund_calls) == 1 and refund_calls[0][0] == "pay_whop_refund_1"
     assert "refund_approved" in [k for k, _ in sent["mails"]]
     with session() as db:
         user = user_of(db, email)
         assert db.get(Order, order_id).status == "refunded"
         assert balances(db, user)[0] == 0
+        assert user.is_active is False
         assert user.sub_cancelled_at is not None
         assert user.sub_period_end <= datetime.now(timezone.utc).replace(tzinfo=user.sub_period_end.tzinfo)
     assert admin.post(f"/api/v1/admin/refunds/{mine['id']}/reject", json={}).status_code == 409
@@ -155,41 +184,48 @@ def test_topup_refund_takes_back_only_whats_left(admin, sent):
     top = buy(client, email, kind="topup", amount=20)
     with session() as db:
         before = bucket_totals(db, user_of(db, email))[TOPUP]
-    asked = client.post("/api/v1/billing/refunds", json={"order_id": top, "reason": "duplicate", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"})
+    asked = client.post("/api/v1/billing/refunds", json={"order_id": top, "reason": "duplicate"})
     assert asked.status_code == 201, asked.text
     rid = asked.json()["id"]
     assert admin.post(f"/api/v1/admin/refunds/{rid}/approve", json={}).status_code == 200
     with session() as db:
         user = user_of(db, email)
         assert bucket_totals(db, user)[TOPUP] == 0 and before > 0
-        # The plan itself stays on.
-        assert user.sub_cancelled_at is None
+        assert user.is_active is False
 
 
-def test_rules_block_late_or_used_orders_and_reject_sends_note(admin, sent):
+def test_rules_block_late_or_used_orders_and_reject_sends_note_and_can_reactivate(admin, sent):
     email = address("rules")
     client = client_for(email)
     order_id = buy(client, email)
     spend(email, 15)  # 15 x 90 = 1,350 of 4,500 tokens = 30% used
     row = next(o for o in client.get("/api/v1/billing/refunds").json()["orders"] if o["order_id"] == order_id)
     assert row["can_request"] is False and "20%" in row["why_not"]
-    assert client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"}).status_code == 409
+    assert client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other"}).status_code == 409
 
     saved = admin.put(
         "/api/v1/admin/refunds/rules",
         json={"enabled": True, "window_days": 7, "max_used_percent": 50, "allow_subscriptions": True, "allow_topups": True},
     )
     assert saved.status_code == 200 and saved.json()["max_used_percent"] == 50
-    asked = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "quality", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"})
-    assert asked.status_code == 201
-    rejected = admin.post(f"/api/v1/admin/refunds/{asked.json()['id']}/reject", json={"note": "Most tokens were used."})
+    asked = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "quality"})
+    assert asked.status_code == 201 and asked.json()["account_stopped"] is True
+    rejected = admin.post(
+        f"/api/v1/admin/refunds/{asked.json()['id']}/reject",
+        json={"note": "Most tokens were used.", "reactivate_account": True},
+    )
     assert rejected.status_code == 200 and rejected.json()["status"] == "rejected"
+    assert rejected.json()["user_is_active"] is True
     kind, values = sent["mails"][-1]
     assert kind == "refund_rejected" and values["note"] == "Most tokens were used."
-    row = next(o for o in client.get("/api/v1/billing/refunds").json()["orders"] if o["order_id"] == order_id)
-    assert row["request"]["status"] == "rejected" and row["request"]["admin_note"] == "Most tokens were used."
     with session() as db:
         assert db.get(Order, order_id).status == "paid"
+        assert user_of(db, email).is_active is True
+
+    # Log back in now that admin reactivated the account and check order status.
+    assert client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD}).status_code == 200
+    row = next(o for o in client.get("/api/v1/billing/refunds").json()["orders"] if o["order_id"] == order_id)
+    assert row["request"]["status"] == "rejected" and row["request"]["admin_note"] == "Most tokens were used."
 
     # Outside the window.
     with session() as db:
@@ -199,25 +235,27 @@ def test_rules_block_late_or_used_orders_and_reject_sends_note(admin, sent):
         assert ok is False and "7 days" in why
 
 
-def test_customer_can_withdraw_and_cannot_touch_others(sent):
+def test_refund_stops_customer_and_other_cannot_touch_request(sent):
     email = address("withdraw")
     client = client_for(email)
     order_id = buy(client, email)
-    rid = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "not_needed", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"}).json()["id"]
+    rid = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "not_needed"}).json()["id"]
     other = client_for(address("other"))
     assert other.post(f"/api/v1/billing/refunds/{rid}/withdraw").status_code == 404
-    assert other.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"}).status_code == 404
-    assert client.post(f"/api/v1/billing/refunds/{rid}/withdraw").json()["status"] == "withdrawn"
-    with session() as db:
-        assert db.get(RefundRequest, rid).status == "withdrawn"
-    # A withdrawn request can be asked again.
-    assert client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other", "network": "usdt_trc20", "address": "TXk3fJq8uK1e7P4m9yWbN2cR5sD6vH8gZa"}).status_code == 201
+    assert other.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other"}).status_code == 404
+    # Customer cannot self-serve withdraw or sign in after submitting while account is paused.
+    assert client.post(f"/api/v1/billing/refunds/{rid}/withdraw").status_code == 401
+    assert client.post("/api/v1/auth/login", json={"email": email, "password": PASSWORD}).status_code == 401
 
 
-def test_wallet_address_is_required_and_checked(sent):
+def test_legacy_crypto_wallet_checked_when_non_whop_or_provided(sent):
     email = address("wallet")
     client = client_for(email)
     order_id = buy(client, email)
+    with session() as db:
+        order = db.get(Order, order_id)
+        order.provider = "btcpay"
+        db.commit()
     missing = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "other"})
     assert missing.status_code == 422
     wrong = client.post(

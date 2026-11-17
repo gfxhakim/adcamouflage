@@ -441,6 +441,7 @@ export interface RefundableOrder {
   ref: string;
   kind: "subscription" | "topup";
   plan_id: string;
+  provider?: string;
   amount: number;
   tokens: number;
   tokens_used: number;
@@ -463,8 +464,18 @@ export function fetchRefunds() {
   return get<RefundOverview>("/api/v1/billing/refunds");
 }
 
-export function requestRefund(body: { order_id: string; reason: string; details: string; network: string; address: string }) {
-  return post<RefundRequestInfo>("/api/v1/billing/refunds", body);
+export interface RefundRequestResult extends RefundRequestInfo {
+  account_stopped?: boolean;
+}
+
+export function requestRefund(body: {
+  order_id: string;
+  reason: string;
+  details: string;
+  network?: string;
+  address?: string;
+}) {
+  return post<RefundRequestResult>("/api/v1/billing/refunds", body);
 }
 
 export function withdrawRefund(id: number) {

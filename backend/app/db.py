@@ -93,6 +93,8 @@ class User(Base):
     # Snapshot of the plan's tokens_per_generation at purchase, used to price
     # every batch for the rest of the period even if the admin reprices plans.
     sub_tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Whop recurring membership id (`mem_...`) from the customer's subscription checkout.
+    whop_membership_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     # Set when the user unsubscribes from group emails (Admin > Customer
     # emails > Send to a group). Account emails (welcome, receipts,
@@ -282,6 +284,8 @@ class Order(Base):
     provider: Mapped[str] = mapped_column(String(16), default="whop", server_default="whop", nullable=False)
     # The provider's own id for the payment (Whop payment id `pay_...`).
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Whop membership id (`mem_...`) when the payment is for a subscription.
+    whop_membership_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     # JSON: the buyer's Meta attribution data from checkout, so the Purchase
     # sent when the payment is confirmed can be matched to the ad click.
     tracking: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -713,6 +717,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "coupon_code", "VARCHAR(40)"),
     ("orders", "discount_usd", "FLOAT NOT NULL DEFAULT 0"),
     ("orders", "payer_hash", "VARCHAR(64)"),
+    ("users", "whop_membership_id", "VARCHAR(128)"),
+    ("orders", "whop_membership_id", "VARCHAR(128)"),
 ]
 
 

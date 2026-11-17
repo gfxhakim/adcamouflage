@@ -61,16 +61,18 @@ function RequestRow({
   const [note, setNote] = useState("");
   const [tx, setTx] = useState("");
   const [removeAccess, setRemoveAccess] = useState(true);
+  const [reactivate, setReactivate] = useState(false);
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const order = row.order;
+  const isWhop = row.network === "whop_card" || order?.provider === "whop";
 
   const decide = async (action: "approve" | "reject") => {
     setBusy(action);
     setError(null);
     try {
-      if (action === "approve") await approveRefund(row.id, { note, refund_tx: tx, remove_access: removeAccess });
-      else await rejectRefund(row.id, note);
+      if (action === "approve") await approveRefund(row.id, { note, refund_tx: isWhop ? "" : tx, remove_access: removeAccess });
+      else await rejectRefund(row.id, note, reactivate);
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "That did not go through.");
@@ -99,7 +101,12 @@ function RequestRow({
           ) : null}
           <p className="text-[11px] text-ink-faint dark:text-slate-500">Asked {timeAgo(row.created_at)}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {row.user_is_active === false ? (
+            <span className="chip !border-amber-400/50 !bg-amber-50 !text-[10px] !text-amber-700">
+              Account stopped
+            </span>
+          ) : null}
           {row.status === "pending" && !row.in_rules ? (
             <span className="chip !border-red-300 !bg-red-50 !text-[10px] !text-red-700" title={row.outside_rules}>
               Outside rules
@@ -114,7 +121,16 @@ function RequestRow({
           <span className="font-semibold text-black dark:text-slate-100">Why:</span> {row.reason}
           {row.details ? ` · ${row.details}` : ""}
         </p>
-        {row.address ? (
+        {row.network === "whop_card" ? (
+          <p className="mt-1 flex flex-wrap items-center gap-x-2">
+            <span className="font-semibold text-black dark:text-slate-100">Refund to:</span> Original card / payment method via Whop
+            {order?.provider_ref ? (
+              <span className="break-all font-mono text-[11px] text-ink-faint dark:text-slate-400">
+                ({order.provider_ref})
+              </span>
+            ) : null}
+          </p>
+        ) : row.address ? (
           <p className="mt-1 flex flex-wrap items-center gap-x-2">
             <span className="font-semibold text-black dark:text-slate-100">Refund to:</span> {row.network}
             <span className="break-all font-mono text-black dark:text-slate-100">{row.address}</span>
@@ -125,7 +141,7 @@ function RequestRow({
         {row.status !== "pending" && row.status !== "withdrawn" ? (
           <p className="mt-1">
             {row.status === "approved" ? `Approved, ${row.tokens_removed.toLocaleString()} tokens taken back` : "Rejected"}
-            {row.refund_tx ? ` · tx ${row.refund_tx}` : ""}
+            {row.refund_tx ? ` · ${isWhop ? "Whop ref" : "tx"} ${row.refund_tx}` : ""}
             {row.admin_note ? ` · "${row.admin_note}"` : ""}
             {row.decided_by ? ` · by ${row.decided_by}` : ""}
           </p>
@@ -135,16 +151,20 @@ function RequestRow({
       {row.status === "pending" ? (
         <div className="mt-3 space-y-2">
           <p className="text-[11px] text-ink-faint dark:text-slate-500">
-            Send the refund to the address above first, then paste the transaction hash and approve.
+            {isWhop
+              ? "Approving sends the refund through Whop back to the customer's card/payment method."
+              : "Send the refund to the address above first, then paste the transaction hash and approve."}
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              className="field !py-2 !text-xs font-mono"
-              placeholder="Refund transaction hash (goes in the customer's email)"
-              value={tx}
-              maxLength={200}
-              onChange={(e) => setTx(e.target.value)}
-            />
+          <div className={clsx("grid gap-2", isWhop ? "sm:grid-cols-1" : "sm:grid-cols-2")}>
+            {!isWhop ? (
+              <input
+                className="field !py-2 !text-xs font-mono"
+                placeholder="Refund transaction hash (goes in the customer's email)"
+                value={tx}
+                maxLength={200}
+                onChange={(e) => setTx(e.target.value)}
+              />
+            ) : null}
             <input
               className="field !py-2 !text-xs"
               placeholder="Note to the customer (shown when you reject)"
@@ -157,10 +177,16 @@ function RequestRow({
             <input type="checkbox" checked={removeAccess} onChange={(e) => setRemoveAccess(e.target.checked)} />
             Take back this order&apos;s tokens{order?.kind === "subscription" ? " and end the period it paid for" : ""}
           </label>
+          {row.user_is_active === false ? (
+            <label className="flex items-center gap-2 text-xs text-black dark:text-slate-100">
+              <input type="checkbox" checked={reactivate} onChange={(e) => setReactivate(e.target.checked)} />
+              Reactivate customer&apos;s account if rejecting this request
+            </label>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn-primary !py-2 !text-xs" disabled={busy !== null} onClick={() => void decide("approve")}>
               {busy === "approve" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />}
-              Approve (refund sent)
+              {isWhop ? "Approve & refund via Whop" : "Approve (refund sent)"}
             </button>
             <button type="button" className="btn-ghost !py-2 !text-xs" disabled={busy !== null} onClick={() => void decide("reject")}>
               {busy === "reject" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <X className="h-3.5 w-3.5" aria-hidden />}
