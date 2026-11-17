@@ -413,8 +413,62 @@ export function fetchOrders() {
 }
 
 /** Stop at the end of the paid period; access continues until then. */
-export function cancelSubscription() {
-  return post<SubscriptionState>("/api/v1/billing/cancel");
+export function cancelSubscription(reason = "") {
+  return post<SubscriptionState>("/api/v1/billing/cancel", { reason });
+}
+
+// --- refund requests -------------------------------------------------------
+
+export type RefundStatus = "pending" | "approved" | "rejected" | "withdrawn";
+
+export interface RefundRequestInfo {
+  id: number;
+  status: RefundStatus;
+  reason: string;
+  reason_label: string;
+  details: string;
+  network: string | null;
+  network_label: string;
+  address: string | null;
+  /** The owner's note, shown on a declined request. */
+  admin_note: string;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface RefundableOrder {
+  order_id: string;
+  ref: string;
+  kind: "subscription" | "topup";
+  plan_id: string;
+  amount: number;
+  tokens: number;
+  tokens_used: number;
+  paid_at: string;
+  status: "paid" | "refunded";
+  can_request: boolean;
+  why_not: string;
+  request: RefundRequestInfo | null;
+}
+
+export interface RefundOverview {
+  rules: { enabled: boolean; window_days: number; max_used_percent: number };
+  reasons: { id: string; label: string }[];
+  networks: { id: string; label: string; placeholder: string }[];
+  currency: string;
+  orders: RefundableOrder[];
+}
+
+export function fetchRefunds() {
+  return get<RefundOverview>("/api/v1/billing/refunds");
+}
+
+export function requestRefund(body: { order_id: string; reason: string; details: string; network: string; address: string }) {
+  return post<RefundRequestInfo>("/api/v1/billing/refunds", body);
+}
+
+export function withdrawRefund(id: number) {
+  return post<RefundRequestInfo>(`/api/v1/billing/refunds/${id}/withdraw`);
 }
 
 export function resumeSubscription() {

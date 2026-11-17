@@ -303,6 +303,41 @@ class Order(Base):
     discount_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0", nullable=False)
 
 
+class RefundRequest(Base):
+    """A customer asking for their money back on one paid order (see app/refunds.py).
+
+    The app never moves money: the owner refunds through the payment provider,
+    then Approve here marks the order refunded and takes back what it gave.
+    ``status`` is pending -> approved | rejected, or withdrawn by the customer.
+    """
+
+    __tablename__ = "refund_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_id: Mapped[str] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    reason: Mapped[str] = mapped_column(String(40), nullable=False)
+    details: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    # Tokens from this order the customer had already used when they asked.
+    tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # What the owner wrote back (shown to the customer on a rejection).
+    admin_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    tokens_removed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Where the customer wants the money back: refunds.NETWORKS id + wallet.
+    refund_network: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    refund_address: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # The transaction hash / reference of the refund the owner sent.
+    refund_tx: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
 # --------------------------------------------------------------------------
 # referral and partner program (see app/affiliates.py)
 # --------------------------------------------------------------------------

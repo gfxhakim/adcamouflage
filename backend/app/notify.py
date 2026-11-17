@@ -18,6 +18,8 @@ Events (ADCAM_NOTIFY_EVENTS picks which, all by default):
 - ``support``     a customer opened a live-agent support ticket (pressed
                   Contact Agent, asked for a person, or waited 30 min in the bot)
 - ``support_reply`` the customer wrote again in a ticket that is already open
+- ``cancel``      a customer cancelled their plan from Account settings
+- ``refund``      a customer asked for a refund on a paid order
 
 Sending happens on a background thread, so a slow or broken Telegram never
 slows or breaks a checkout or a payment notification. The same alert
@@ -46,7 +48,7 @@ from .db import User, get_db
 
 logger = logging.getLogger(__name__)
 
-EVENTS = ("plan_click", "checkout", "paid", "review", "support", "support_reply")
+EVENTS = ("plan_click", "checkout", "paid", "review", "support", "support_reply", "cancel", "refund")
 # Hard ceiling across every event: past this the extra alerts are dropped
 # (and logged) until the minute rolls over.
 MAX_PER_MINUTE = 20
@@ -330,6 +332,56 @@ def needs_review(order: Any, email: str | None, reason: str, name: str | None = 
         key=f"review:{order.id}:{reason}",
         priority="high",
         buttons=_approve_buttons(order),
+    )
+
+
+def admin_sales_link() -> str:
+    """Admin > Sales, where refund requests are decided (empty without ADCAM_PUBLIC_URL)."""
+
+    base = settings.public_url.strip().rstrip("/")
+    return f"{base}/admin#sales" if base else ""
+
+
+def cancelled(email: str, plan_label: str, period_end: Any, reason: str = "", name: str | None = None) -> bool:
+    end = f"{period_end:%d %b %Y}" if period_end else "-"
+    return alert(
+        "cancel",
+        f"🛑 Plan cancelled: {plan_label}",
+        [
+            f"Customer: {_customer(email, name)}",
+            f"Access until: {end}",
+            f"Why: {_short(reason, 300)}" if reason else "",
+        ],
+        key=f"cancel:{email}",
+    )
+
+
+def refund_requested(
+    order: Any,
+    email: str,
+    plan_label: str,
+    currency: str,
+    reason: str,
+    tokens_used: int,
+    name: str | None = None,
+    refund_to: str = "",
+) -> bool:
+    what = f"{plan_label} subscription" if order.kind == "subscription" else f"Top-up on {plan_label}"
+    link = admin_sales_link()
+    buttons = [[{"text": "↩️ Open Admin > Sales", "url": link}]] if link.startswith("https://") else None
+    return alert(
+        "refund",
+        f"↩️ Refund requested {_money(order.amount_usd, currency)}: {what}",
+        [
+            f"Customer: {_customer(email, name)}",
+            f"Order: {order_ref(order)}",
+            f"Tokens used: {tokens_used:,} of {order.tokens:,}",
+            f"Why: {_short(reason, 300)}",
+            f"Refund to: {refund_to}" if refund_to else "",
+        ],
+        key=f"refund:{order.id}",
+        priority="high",
+        buttons=buttons,
     )
 
 

@@ -13,6 +13,8 @@ const EVENT_LABELS: Record<string, string> = {
   review: "Payment that needs a look",
   support: "Support ticket: customer wants a live agent",
   support_reply: "Customer wrote again in an open ticket",
+  cancel: "Customer cancelled their plan",
+  refund: "Customer asked for a refund",
 };
 
 /** Shows whether phone alerts are set up on the server and sends a test one. */
