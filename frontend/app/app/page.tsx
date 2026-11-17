@@ -303,6 +303,10 @@ export default function WorkspacePage() {
             .finally(() => window.location.assign("/"));
           return;
         }
+        if (profile.account_role === "affiliate") {
+          window.location.assign("/affiliates/dashboard");
+          return;
+        }
         setUser(profile);
         void loadBilling(profile);
       })

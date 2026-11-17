@@ -593,3 +593,102 @@ def test_a_reward_is_only_ever_given_once():
         assert affiliates.give_reward(second, row_b, now=later) == "rewarded"  # sees it is done, pays nothing
     with session() as db:
         assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 750
+
+
+def test_public_program_and_affiliate_only_account_isolation():
+    pub = TestClient(app).get("/api/v1/referrals/public-program")
+    assert pub.status_code == 200
+    data = pub.json()
+    assert data["partner"]["discount_pct"] == 15.0
+    assert [t["pct"] for t in data["partner"]["tiers"]] == [25.0, 30.0, 35.0]
+    assert data["partner"]["hold_days"] == 30 and data["partner"]["min_payout"] == 50.0
+
+    # Sign up from the affiliate join flow using email + password.
+    aff_email = address("affonly")
+    client = TestClient(app)
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"email": aff_email, "password": PASSWORD, "display_name": "Creator Sam", "account_role": "affiliate"},
+    )
+    assert reg.status_code == 201, reg.text
+    assert reg.json()["account_role"] == "affiliate"
+
+    # Can log back in later with the same email & password.
+    client.post("/api/v1/auth/logout")
+    logged = client.post("/api/v1/auth/login", json={"email": aff_email, "password": PASSWORD})
+    assert logged.status_code == 200 and logged.json()["account_role"] == "affiliate"
+    assert client.get("/api/v1/auth/me").json()["account_role"] == "affiliate"
+
+    # Has full access to their partner affiliate dashboard, with friend-token referrals turned off.
+    prog = client.get("/api/v1/referrals/me")
+    assert prog.status_code == 200 and prog.json()["friend"]["enabled"] is False
+    applied = client.post(
+        "/api/v1/referrals/partner/apply",
+        json={"code": f"SAM{RUN_ID[:4].upper()}", "audience": "YouTube ad creative channel (45k subscribers)"},
+    )
+    assert applied.status_code == 201 or applied.status_code == 200
+    assert applied.json()["status"] == "pending"
+
+    # Strictly blocked from workspace/render/billing/team (403) and admin panel (404).
+    assert client.get("/api/v1/auth/batches").status_code == 403
+    assert client.get("/api/v1/auth/subscription").status_code == 403
+    assert client.get("/api/v1/billing/orders").status_code == 403
+    assert client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"}).status_code == 403
+    assert client.get("/api/v1/billing/refunds").status_code == 403
+    assert client.get("/api/v1/team").status_code == 403
+    assert client.get("/api/v1/admin/settings").status_code == 404
+
+
+def test_visitor_offer_and_landing_discount_preview():
+    from app.db import AffiliatePartner, ReferralCode, get_session_factory
+
+    # Approved affiliate creates a partner code.
+    aff_email = address("visaff")
+    aff_client = TestClient(app)
+    reg = aff_client.post(
+        "/api/v1/auth/register",
+        json={"email": aff_email, "password": PASSWORD, "display_name": "Partner Maya", "account_role": "affiliate"},
+    )
+    assert reg.status_code == 201, reg.text
+    code = f"VISIT{RUN_ID[:4].upper()}"
+    applied = aff_client.post(
+        "/api/v1/referrals/partner/apply",
+        json={"code": code, "audience": "Performance marketing agency"},
+    )
+    assert applied.status_code in (200, 201), applied.text
+    with get_session_factory()() as db:
+        partner = db.query(AffiliatePartner).filter(AffiliatePartner.requested_code == code).one()
+        partner.status = "approved"
+        db.add(ReferralCode(user_id=partner.user_id, code=code, channel="partner", status="active"))
+        db.commit()
+
+    # Normal visitor sees no active promo offer.
+    visitor = TestClient(app, headers={"x-device-id": f"dev-visitor-{RUN_ID}"})
+    before = visitor.get("/api/v1/referrals/visitor-offer")
+    assert before.status_code == 200 and before.json()["offer"] is None
+
+    # Visitor arrives via ?ref=CODE or enters promo code on landing page -> reduced prices immediately.
+    click = visitor.post("/api/v1/referrals/click", json={"code": code.lower(), "landing_path": "/"})
+    assert click.status_code == 200, click.text
+    offer = click.json()["offer"]
+    assert offer is not None
+    assert offer["code"] == code
+    assert offer["channel"] == "partner"
+    assert offer["discount_pct"] == 15.0
+    assert offer["prices"]["starter"] == 31.45
+    assert offer["prices"]["pro"] == 75.65
+    assert offer["prices"]["max"] == 126.65
+
+    after = visitor.get("/api/v1/referrals/visitor-offer")
+    assert after.status_code == 200
+    assert after.json()["offer"]["prices"]["pro"] == 75.65
+
+    # After registering with email while keeping the pf_ref cookie, the new customer retains their reduced pricing.
+    buyer_email = address("visbuyer")
+    buyer_reg = visitor.post("/api/v1/auth/register", json={"email": buyer_email, "password": PASSWORD})
+    assert buyer_reg.status_code == 201, buyer_reg.text
+    me_offer = visitor.get("/api/v1/referrals/visitor-offer")
+    assert me_offer.status_code == 200 and me_offer.json()["offer"]["code"] == code
+    me_prog = visitor.get("/api/v1/referrals/me")
+    assert me_prog.status_code == 200 and me_prog.json()["my_offer"]["prices"]["pro"] == 75.65
+

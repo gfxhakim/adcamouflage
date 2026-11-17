@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import affiliates, audit, mailer, notify, whop
-from .accounts import clear_session_cookie, current_user, require_admin
+from .accounts import clear_session_cookie, require_admin, require_studio_user
 from .activity import log_activity
 from .app_settings import currency, get_setting, set_setting
 from .db import Order, RefundRequest, TokenLedger, User, get_db
@@ -238,7 +238,7 @@ def check_address(network: str, address: str) -> str:
 
 
 @router.get("")
-def my_refunds(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def my_refunds(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> dict[str, Any]:
     """Every paid or refunded order with whether a refund can be asked for, and any request on it."""
 
     rules = get_rules(db)
@@ -295,7 +295,7 @@ def my_refunds(user: User = Depends(current_user), db: Session = Depends(get_db)
 def request_refund(
     payload: RefundIn,
     response: Response,
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     order = db.get(Order, payload.order_id)
@@ -343,7 +343,9 @@ def request_refund(
             logger.warning("Could not cancel Whop membership %s on refund request for %s", mem_id, order.id, exc_info=True)
 
     # Stop plan and deactivate account immediately so no further rendering can occur.
-    cancel_period(db, user, immediately=True, reason="Refund requested by customer")
+    cancel_res = cancel_period(db, user, immediately=True, reason="Refund requested by customer")
+    if order.kind == "subscription":
+        row.tokens_removed = min(int(order.tokens or 0), int(cancel_res.get("expired", 0)))
     user.is_active = False
     user.token_version += 1
     db.commit()
@@ -368,7 +370,7 @@ def request_refund(
 
 
 @router.post("/{request_id}/withdraw")
-def withdraw_refund(request_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def withdraw_refund(request_id: int, user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> dict[str, Any]:
     row = db.get(RefundRequest, request_id)
     if row is None or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found.")
@@ -587,7 +589,7 @@ def admin_approve(
     row.admin_note = note
     row.decided_at = now
     row.decided_by = admin.email
-    row.tokens_removed = int(result["removed"])
+    row.tokens_removed = int(row.tokens_removed or 0) + int(result["removed"])
     row.refund_tx = refund_tx[:200]
     db.commit()
     reversed_ = "" if already else affiliates.on_order_refunded(db, order)

@@ -61,8 +61,9 @@ import { trackCheckout, trackPurchase } from "@/lib/meta";
 import { fetchMyReferrals, type MyReferrals } from "@/lib/referrals";
 import type { TokenPlanCard } from "@/lib/types";
 
-/** After the payment provider sends the browser back, ask about the order this often, for this long. */
+/** How often we check order status while checkout is open or validating. */
 const ORDER_POLL_MS = 3000;
+const VALIDATING_POLL_MS = 1500;
 const ORDER_POLL_LIMIT_MS = 120_000;
 
 interface Toast {
@@ -70,11 +71,19 @@ interface Toast {
   text: string;
 }
 
+type CheckoutModalStage = "checkout" | "validating" | "thank_you" | "error";
+
 interface ActiveCheckout {
   orderId: string;
   whopPlan: string;
+  whopCheckoutConfig?: string | null;
   label: string;
   amount: number;
+  originalAmount?: number | null;
+  discount?: number;
+  promoCode?: string | null;
+  whopPromoToPrefill?: string | null;
+  whopMetadata?: Record<string, string>;
   tokens: number;
   returnUrl: string;
 }
@@ -93,12 +102,12 @@ export default function PlanPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   /** The plan id or "topup" whose checkout is being created. */
   const [checkoutBusy, setCheckoutBusy] = useState<string | null>(null);
-  const [waitingOrder, setWaitingOrder] = useState<string | null>(null);
   const [activeCheckout, setActiveCheckout] = useState<ActiveCheckout | null>(null);
-  const [confirmingCheckout, setConfirmingCheckout] = useState(false);
+  const [checkoutStage, setCheckoutStage] = useState<CheckoutModalStage>("checkout");
+  const [settledOrder, setSettledOrder] = useState<Order | null>(null);
+  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
   /** The payment method the user picked; the first one the server offers until then. */
   const [pickedProvider, setPickedProvider] = useState<PaymentProviderId | null>(null);
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Plan labels for the settlement toast, which runs outside the render.
   const labelsRef = useRef<Record<string, string>>({});
   // The site currency for Meta events, read inside callbacks.
@@ -113,8 +122,17 @@ export default function PlanPage() {
 
   const load = useCallback(async () => {
     try {
-      const [profile, subscription, history, orderList, program] = await Promise.all([
-        fetchMe(),
+      const profile = await fetchMe();
+      if (!profile) {
+        await signOut().catch(() => undefined);
+        window.location.assign("/");
+        return;
+      }
+      if (profile.account_role === "affiliate") {
+        window.location.assign("/affiliates/dashboard");
+        return;
+      }
+      const [subscription, history, orderList, program] = await Promise.all([
         fetchSubscription(),
         fetchMyBatches(),
         fetchOrders().catch(() => [] as Order[]),
@@ -122,7 +140,7 @@ export default function PlanPage() {
       ]);
       setReferrals(program);
       // Same recovery as the workspace: a cookie the API rejects is cleared first.
-      if (!profile || !subscription) {
+      if (!subscription) {
         await signOut().catch(() => undefined);
         window.location.assign("/");
         return;
@@ -147,7 +165,7 @@ export default function PlanPage() {
       : `Payment received. ${formatTokens(order.tokens)} top-up tokens were added.`;
   }, []);
 
-  // --- back from the payment provider: wait for the order to settle ---------
+  // --- back from off-site 3DS / redirect: open the in-page validating popup ---
   useEffect(() => {
     if (returned.current === null) {
       const params = new URLSearchParams(window.location.search);
@@ -164,70 +182,34 @@ export default function PlanPage() {
     const { orderId, backedOut } = returned.current;
     if (!orderId && !backedOut) return;
     if (backedOut || !orderId) {
-      // Customer cancelled or off-site verification failed: nothing was charged.
       setToast({ tone: "error", text: "Payment cancelled — nothing was charged." });
       return;
     }
-    setWaitingOrder(orderId);
-    setToast({ tone: "info", text: "Waiting for your payment to be confirmed…" });
+    setSettledOrder(null);
+    setCheckoutNotice(null);
+    setCheckoutStage("validating");
+    setActiveCheckout({
+      orderId,
+      whopPlan: "",
+      whopCheckoutConfig: null,
+      label: "Your subscription",
+      amount: 0,
+      tokens: 0,
+      returnUrl: `${window.location.origin}/app/plan?order=${encodeURIComponent(orderId)}`,
+    });
+  }, []);
 
-    let cancelled = false;
-    const startedAt = Date.now();
-
-    const check = async () => {
-      if (cancelled) return;
-      try {
-        const order = await fetchOrder(orderId);
-        if (cancelled) return;
-        if (order.status === "paid") {
-          setWaitingOrder(null);
-          // Confirmed by Whop webhook; the server sends the same event.
-          void trackPurchase(order.id, order.amount, currencyRef.current, order.plan_id);
-          setToast({ tone: "success", text: paidToastText(order) });
-          await load();
-          return;
-        }
-        if (order.status === "expired" || order.status === "invalid") {
-          setWaitingOrder(null);
-          setToast({
-            tone: "error",
-            text:
-              order.status === "expired"
-                ? "The checkout expired before payment completed. Nothing was charged; start again when you are ready."
-                : "This payment was marked as invalid. If you did pay, contact support with the order id.",
-          });
-          await load();
-          return;
-        }
-      } catch {
-        /* A failed poll is retried on the next tick. */
-      }
-      if (Date.now() - startedAt >= ORDER_POLL_LIMIT_MS) {
-        setWaitingOrder(null);
-        setToast({
-          tone: "info",
-          text: "Still waiting for payment confirmation. It will show here as soon as it settles; you can leave this page.",
-        });
-        await load();
-        return;
-      }
-      pollTimer.current = setTimeout(() => void check(), ORDER_POLL_MS);
-    };
-
-    void check();
-    return () => {
-      cancelled = true;
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-    };
-  }, [load, paidToastText]);
-
-  // --- poll active embedded Whop checkout until webhook settles -------------
+  // --- poll active checkout / validating popup until Whop webhook settles ---
   useEffect(() => {
     if (!activeCheckout) return;
+    if (checkoutStage !== "checkout" && checkoutStage !== "validating") return;
+
     const orderId = activeCheckout.orderId;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const intervalMs = confirmingCheckout ? 2000 : ORDER_POLL_MS;
+    const validating = checkoutStage === "validating";
+    const intervalMs = validating ? VALIDATING_POLL_MS : ORDER_POLL_MS;
+    const startedAt = Date.now();
 
     const poll = async () => {
       if (cancelled) return;
@@ -235,48 +217,59 @@ export default function PlanPage() {
         const order = await fetchOrder(orderId);
         if (cancelled) return;
         if (order.status === "paid") {
-          setActiveCheckout(null);
-          setConfirmingCheckout(false);
           void trackPurchase(order.id, order.amount, currencyRef.current, order.plan_id);
-          setToast({ tone: "success", text: paidToastText(order) });
           await load();
+          if (cancelled) return;
+          setSettledOrder(order);
+          setCheckoutNotice(null);
+          setCheckoutStage("thank_you");
+          setToast({ tone: "success", text: paidToastText(order) });
           return;
         }
         if (order.status === "expired" || order.status === "invalid") {
-          setActiveCheckout(null);
-          setConfirmingCheckout(false);
-          setToast({
-            tone: "error",
-            text:
-              order.status === "expired"
-                ? "The checkout expired before payment completed. Nothing was charged; start again when you are ready."
-                : "This payment was marked as invalid. If you did pay, contact support with the order id.",
-          });
+          setCheckoutNotice(
+            order.status === "expired"
+              ? "The checkout expired before payment completed. Nothing was charged; you can start again anytime."
+              : "This payment was marked as invalid. If you were charged, contact support with order " + order.id + ".",
+          );
+          setCheckoutStage("error");
           await load();
           return;
         }
       } catch {
         /* Retry on next tick. */
       }
+      if (validating && Date.now() - startedAt >= ORDER_POLL_LIMIT_MS) {
+        setCheckoutNotice(
+          "Payment confirmation is taking a little longer than usual. Your plan and tokens will activate automatically as soon as Whop finishes settling.",
+        );
+        setCheckoutStage("error");
+        await load();
+        return;
+      }
       if (!cancelled) timer = setTimeout(() => void poll(), intervalMs);
     };
 
-    timer = setTimeout(() => void poll(), intervalMs);
+    if (validating) {
+      void poll();
+    } else {
+      timer = setTimeout(() => void poll(), intervalMs);
+    }
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [activeCheckout, confirmingCheckout, load, paidToastText]);
+  }, [activeCheckout, checkoutStage, load, paidToastText]);
 
-  // Close inline checkout dialog on Escape (unless already confirming payment).
+  // Close checkout dialog on Escape (unless currently validating payment or on thank-you summary).
   useEffect(() => {
-    if (!activeCheckout) return;
+    if (!activeCheckout || checkoutStage === "validating") return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !confirmingCheckout) setActiveCheckout(null);
+      if (event.key === "Escape") setActiveCheckout(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeCheckout, confirmingCheckout]);
+  }, [activeCheckout, checkoutStage]);
 
   // --- payment method ------------------------------------------------------
   const providers = sub?.payment_providers ?? [];
@@ -299,12 +292,20 @@ export default function PlanPage() {
             : `${formatMoney(checkout.amount, currencyRef.current)} top-up`;
         const returnUrl = `${window.location.origin}/app/plan?order=${encodeURIComponent(checkout.order_id)}`;
         if (checkout.whop_plan) {
-          setConfirmingCheckout(false);
+          setSettledOrder(null);
+          setCheckoutNotice(null);
+          setCheckoutStage("checkout");
           setActiveCheckout({
             orderId: checkout.order_id,
             whopPlan: checkout.whop_plan,
+            whopCheckoutConfig: checkout.whop_checkout_config,
             label,
             amount: checkout.amount,
+            originalAmount: checkout.original_amount,
+            discount: checkout.discount,
+            promoCode: checkout.promo_code,
+            whopPromoToPrefill: checkout.whop_promo_to_prefill,
+            whopMetadata: checkout.whop_metadata,
             tokens: checkout.tokens,
             returnUrl,
           });
@@ -337,8 +338,8 @@ export default function PlanPage() {
     [buy],
   );
   const handleCheckoutComplete = useCallback(() => {
-    // UI state only — access is granted exclusively by the signed Whop webhook.
-    setConfirmingCheckout(true);
+    // UI state only — Whop embed unmounts immediately and polling waits for the webhook settlement.
+    setCheckoutStage((prev) => (prev === "thank_you" ? prev : "validating"));
   }, []);
 
   // --- derived -------------------------------------------------------------
@@ -377,17 +378,13 @@ export default function PlanPage() {
                     : "border-meta-500/30 bg-meta-50 text-meta-900",
               )}
             >
-              {waitingOrder ? (
-                <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-meta-600" aria-hidden />
-              ) : toast.tone === "success" ? (
+              {toast.tone === "success" ? (
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
               ) : null}
               <span className="min-w-0 flex-1">{toast.text}</span>
-              {!waitingOrder ? (
-                <button type="button" className="shrink-0 rounded-md p-0.5 hover:bg-black/5" aria-label="Dismiss" onClick={() => setToast(null)}>
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              ) : null}
+              <button type="button" className="shrink-0 rounded-md p-0.5 hover:bg-black/5" aria-label="Dismiss" onClick={() => setToast(null)}>
+                <X className="h-4 w-4" aria-hidden />
+              </button>
             </div>
           ) : null}
 
@@ -656,51 +653,167 @@ export default function PlanPage() {
 
       {activeCheckout ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="whop-checkout-title"
           onClick={(event) => {
-            if (event.target === event.currentTarget && !confirmingCheckout) setActiveCheckout(null);
+            if (event.target === event.currentTarget && checkoutStage !== "validating") setActiveCheckout(null);
           }}
         >
           <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-black/10 bg-white p-5 shadow-2xl sm:p-6">
-            <div className="mb-4 flex items-start justify-between gap-3 border-b border-black/[0.06] pb-3.5">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">
-                  <Lock className="h-3 w-3 text-meta-500" aria-hidden /> Secure Whop checkout
+            {checkoutStage === "checkout" ? (
+              <>
+                <div className="mb-4 flex items-start justify-between gap-3 border-b border-black/[0.06] pb-3.5">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">
+                      <Lock className="h-3 w-3 text-meta-500" aria-hidden /> Secure Whop checkout
+                    </p>
+                    <h2 id="whop-checkout-title" className="mt-1 truncate text-base font-semibold text-black">
+                      {activeCheckout.label} · {formatMoney(activeCheckout.amount, currencyRef.current)}
+                    </h2>
+                    {activeCheckout.promoCode && activeCheckout.discount && activeCheckout.discount > 0 ? (
+                      <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                        Code {activeCheckout.promoCode} applied · saved{" "}
+                        {formatMoney(activeCheckout.discount, currencyRef.current)}
+                        {activeCheckout.originalAmount
+                          ? ` off ${formatMoney(activeCheckout.originalAmount, currencyRef.current)}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-ink-muted">
+                      Includes {formatTokens(activeCheckout.tokens)} tokens · instant activation after payment
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close checkout"
+                    onClick={() => setActiveCheckout(null)}
+                    className="rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+
+                <WhopCheckout
+                  planId={activeCheckout.whopPlan}
+                  checkoutConfigId={activeCheckout.whopCheckoutConfig}
+                  buyerEmail={user?.email}
+                  orderId={activeCheckout.orderId}
+                  returnUrl={activeCheckout.returnUrl}
+                  promoCode={activeCheckout.whopPromoToPrefill ?? undefined}
+                  metadata={activeCheckout.whopMetadata}
+                  onComplete={handleCheckoutComplete}
+                />
+              </>
+            ) : checkoutStage === "validating" ? (
+              <div className="py-6 text-center">
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-meta-500/30 bg-meta-50 text-meta-600">
+                  <Loader2 className="h-7 w-7 animate-spin" aria-hidden />
+                </span>
+                <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.16em] text-meta-600">
+                  Please stay on this page
                 </p>
-                <h2 id="whop-checkout-title" className="mt-1 truncate text-base font-semibold text-black">
-                  {activeCheckout.label} · {formatMoney(activeCheckout.amount, currencyRef.current)}
+                <h2 id="whop-checkout-title" className="mt-1 font-display text-3xl font-normal text-black">
+                  Validating payment…
                 </h2>
-                <p className="text-xs text-ink-muted">
-                  Includes {formatTokens(activeCheckout.tokens)} tokens · instant activation after payment
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-muted">
+                  Thank you for joining ProteusFlow. We are confirming your payment with Whop and activating your plan and tokens right now.
                 </p>
+                {activeCheckout.tokens > 0 ? (
+                  <div className="mx-auto mt-5 flex max-w-sm items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 text-left text-xs">
+                    <div>
+                      <p className="font-semibold text-black">{activeCheckout.label}</p>
+                      <p className="text-ink-subtle">Order {activeCheckout.orderId.slice(0, 12)}</p>
+                    </div>
+                    <span className="rounded-full bg-meta-50 px-2.5 py-1 font-mono font-semibold text-meta-700">
+                      +{formatTokens(activeCheckout.tokens)} tokens
+                    </span>
+                  </div>
+                ) : null}
               </div>
-              <button
-                type="button"
-                aria-label="Close checkout"
-                disabled={confirmingCheckout}
-                onClick={() => setActiveCheckout(null)}
-                className="rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black disabled:opacity-40"
-              >
-                <X className="h-4 w-4" aria-hidden />
-              </button>
-            </div>
+            ) : checkoutStage === "thank_you" ? (
+              <div className="py-5 text-center">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setActiveCheckout(null)}
+                  className="absolute right-4 top-4 rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-emerald-300 bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-8 w-8" aria-hidden />
+                </span>
+                <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+                  <Sparkles className="h-3 w-3" aria-hidden />
+                  Payment validated
+                </p>
+                <h2 id="whop-checkout-title" className="mt-2 font-display text-3xl font-normal text-black sm:text-4xl">
+                  {settledOrder?.kind === "topup" ? "Tokens added to your account!" : "Thank you for joining us!"}
+                </h2>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-muted">
+                  {settledOrder?.kind === "topup"
+                    ? `Your top-up payment is confirmed and ${formatTokens(settledOrder.tokens)} tokens have been credited to your profile.`
+                    : `Your ${planLabels[settledOrder?.plan_id ?? ""] ?? sub?.subscription?.plan_label ?? "ProteusFlow"} plan is now active and ${formatTokens(settledOrder?.tokens ?? activeCheckout.tokens)} tokens are ready on your profile.`}
+                </p>
 
-            {confirmingCheckout ? (
-              <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-meta-500/30 bg-meta-50 px-3.5 py-2.5 text-xs font-medium text-meta-900">
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-meta-600" aria-hidden />
-                <span>Confirming your payment with Whop… Tokens will credit automatically in a moment.</span>
+                <div className="mt-5 grid grid-cols-2 gap-3 text-left">
+                  <div className="rounded-xl border border-black/10 bg-black/[0.02] p-3.5">
+                    <p className="label flex items-center gap-1">
+                      <Crown className="h-3 w-3 text-meta-500" aria-hidden /> Active plan
+                    </p>
+                    <p className="mt-1 text-base font-bold text-black">
+                      {sub?.subscription?.plan_label ?? planLabels[settledOrder?.plan_id ?? ""] ?? "Active"}
+                    </p>
+                    <p className="text-[11px] font-medium text-emerald-700">Activated &amp; ready</p>
+                  </div>
+                  <div className="rounded-xl border border-meta-500/25 bg-meta-50/70 p-3.5">
+                    <p className="label flex items-center gap-1 text-meta-700">
+                      <Coins className="h-3 w-3 text-meta-600" aria-hidden /> Profile tokens
+                    </p>
+                    <p className="mt-1 text-base font-bold tabular-nums text-black">
+                      {formatTokens(sub?.balance.usable_tokens ?? user?.tokens_usable ?? settledOrder?.tokens ?? activeCheckout.tokens)}
+                    </p>
+                    <p className="text-[11px] text-meta-800">Visible in your sidebar &amp; plan</p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
+                  <Link href="/app" className="btn-primary !py-2.5 !text-sm" onClick={() => setActiveCheckout(null)}>
+                    Go to Workspace
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCheckout(null)}
+                    className="btn-ghost !py-2.5 !text-sm"
+                  >
+                    Stay on My Plan
+                  </button>
+                </div>
               </div>
-            ) : null}
-
-            <WhopCheckout
-              planId={activeCheckout.whopPlan}
-              orderId={activeCheckout.orderId}
-              returnUrl={activeCheckout.returnUrl}
-              onComplete={handleCheckoutComplete}
-            />
+            ) : (
+              <div className="py-5 text-center">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setActiveCheckout(null)}
+                  className="absolute right-4 top-4 rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+                <p className="label text-amber-700">Payment status</p>
+                <h2 id="whop-checkout-title" className="mt-1 font-display text-2xl font-normal text-black">
+                  Could not confirm right away
+                </h2>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-ink-muted">
+                  {checkoutNotice ?? "Nothing was charged if you cancelled checkout."}
+                </p>
+                <button type="button" onClick={() => setActiveCheckout(null)} className="btn-primary mt-5 !py-2 !text-sm">
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ) : null}

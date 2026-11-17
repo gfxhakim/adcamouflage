@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from . import __version__, costs
-from .accounts import current_user, ensure_admin_account
+from .accounts import ensure_admin_account, require_studio_user
 from .activity import log_activity
 from .admin_routes import router as admin_router
 from .affiliate_routes import admin_router as affiliate_admin_router
@@ -304,7 +304,7 @@ async def create_batch(
         list[UploadFile] | None,
         File(description="Additional overlay images, one per layer in options.overlays, in order."),
     ] = None,
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
     db: Session = Depends(get_db),
 ) -> BatchCreated:
     if not files:
@@ -537,7 +537,7 @@ def _summarise(batch: Batch, assets: list[AssetJob]) -> BatchStatus:
 
 
 @app.get("/api/v1/batches/{batch_id}", response_model=BatchStatus, tags=["batches"])
-async def get_batch(batch_id: str, user: User = Depends(current_user)) -> BatchStatus:
+async def get_batch(batch_id: str, user: User = Depends(require_studio_user)) -> BatchStatus:
     store = get_store()
     batch = _owned_batch(batch_id, user)
     asset_ids = batch.asset_ids or store.list_asset_ids(batch_id)
@@ -546,7 +546,7 @@ async def get_batch(batch_id: str, user: User = Depends(current_user)) -> BatchS
 
 
 @app.get("/api/v1/assets/{asset_id}", response_model=AssetJob, tags=["assets"])
-async def get_asset(asset_id: str, user: User = Depends(current_user)) -> AssetJob:
+async def get_asset(asset_id: str, user: User = Depends(require_studio_user)) -> AssetJob:
     asset = get_store().get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found or expired.")
@@ -555,7 +555,7 @@ async def get_asset(asset_id: str, user: User = Depends(current_user)) -> AssetJ
 
 
 @app.post("/api/v1/assets/{asset_id}/cancel", tags=["assets"], dependencies=[Depends(require_api_key)])
-async def cancel(asset_id: str, user: User = Depends(current_user)) -> dict[str, str]:
+async def cancel(asset_id: str, user: User = Depends(require_studio_user)) -> dict[str, str]:
     asset = get_store().get_asset(asset_id)
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found or expired.")
@@ -588,7 +588,7 @@ def _output_filename(asset: AssetJob) -> str:
 async def download_asset(
     asset_id: str,
     token: Annotated[str, Query(description="Signed download token.")],
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
 ) -> FileResponse:
     if not verify_download(token, asset_id):
         raise HTTPException(status_code=403, detail="This download link is invalid or has expired.")
@@ -617,7 +617,7 @@ async def download_asset(
 async def download_poster(
     asset_id: str,
     token: Annotated[str, Query(description="Signed download token.")],
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
 ) -> FileResponse:
     if not verify_download(token, asset_id):
         raise HTTPException(status_code=403, detail="This poster link is invalid or has expired.")
@@ -661,7 +661,7 @@ async def download_archive(
     batch_id: str,
     token: Annotated[str, Query(description="Signed download token.")],
     background: BackgroundTasks = None,  # type: ignore[assignment]
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
 ) -> FileResponse:
     if not verify_download(token, batch_id):
         raise HTTPException(status_code=403, detail="This download link is invalid or has expired.")
@@ -690,7 +690,7 @@ async def download_archive(
 
 
 @app.delete("/api/v1/batches/{batch_id}", tags=["batches"], dependencies=[Depends(require_api_key)])
-async def delete_batch(batch_id: str, user: User = Depends(current_user)) -> dict[str, Any]:
+async def delete_batch(batch_id: str, user: User = Depends(require_studio_user)) -> dict[str, Any]:
     store = get_store()
     batch = _owned_batch(batch_id, user)
 

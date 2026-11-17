@@ -3,7 +3,7 @@
 import { Gift, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { offerLine, recordClick, type ReferralOffer } from "@/lib/referrals";
+import { dispatchVisitorOffer, offerLine, recordClick, type ReferralOffer } from "@/lib/referrals";
 
 const SEEN_KEY = "pf_ref_offer";
 
@@ -22,6 +22,7 @@ export default function RefCapture() {
     recordClick(code)
       .then((result) => {
         if (cancelled || !result.valid || !result.offer) return;
+        dispatchVisitorOffer(result.offer);
         try {
           if (window.sessionStorage.getItem(SEEN_KEY) === result.offer.code) return;
         } catch {
@@ -51,8 +52,8 @@ export default function RefCapture() {
       <div className="pointer-events-auto flex max-w-md items-start gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-black shadow-xl">
         <Gift className="mt-0.5 h-4 w-4 shrink-0 text-meta-500" aria-hidden />
         <p className="min-w-0 flex-1 leading-relaxed">
-          Code <span className="font-semibold">{offer.code}</span> is saved for you: {offerLine(offer)}. It applies by
-          itself when you sign up.
+          Code <span className="font-semibold">{offer.code}</span> activated: {offerLine(offer)}. Reduced pricing is
+          shown now and applies automatically on Whop checkout.
         </p>
         <button type="button" className="shrink-0 rounded-md p-0.5 hover:bg-black/5" aria-label="Dismiss" onClick={dismiss}>
           <X className="h-4 w-4" aria-hidden />

@@ -86,6 +86,44 @@ export interface MyReferrals {
   partner: PartnerProgram;
 }
 
+export interface PublicAffiliateProgram {
+  link_days: number;
+  currency: string;
+  plans: { id: string; label: string; price: number }[];
+  partner: {
+    enabled: boolean;
+    applications_open: boolean;
+    discount_pct: number;
+    plans: string[];
+    tiers: { min: number; pct: number }[];
+    hold_days: number;
+    min_payout: number;
+  };
+}
+
+export const FALLBACK_PUBLIC_AFFILIATE_PROGRAM: PublicAffiliateProgram = {
+  link_days: 30,
+  currency: "USD",
+  plans: [
+    { id: "starter", label: "Starter", price: 37 },
+    { id: "pro", label: "Pro", price: 89 },
+    { id: "max", label: "Max", price: 149 },
+  ],
+  partner: {
+    enabled: true,
+    applications_open: true,
+    discount_pct: 15,
+    plans: ["starter", "pro", "max"],
+    tiers: [
+      { min: 0, pct: 25 },
+      { min: 20, pct: 30 },
+      { min: 50, pct: 35 },
+    ],
+    hold_days: 30,
+    min_payout: 50,
+  },
+};
+
 const DEVICE_KEY = "pf_device";
 
 /**
@@ -141,9 +179,17 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const send = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const fetchMyReferrals = () => call<MyReferrals>("/me");
+export const fetchVisitorOffer = () => call<{ offer: ReferralOffer | null }>("/visitor-offer");
 export const recordClick = (code: string) =>
   call<{ valid: boolean; offer?: ReferralOffer }>("/click", send("POST", { code }));
 export const applyCode = (code: string) => call<{ offer: ReferralOffer }>("/apply", send("POST", { code }));
+
+export const VISITOR_OFFER_EVENT = "pf:ref-offer";
+
+export function dispatchVisitorOffer(offer: ReferralOffer | null): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<ReferralOffer | null>(VISITOR_OFFER_EVENT, { detail: offer }));
+}
 export const applyAsPartner = (body: { code: string; audience: string; payout_method: string; payout_address: string }) =>
   call<PartnerProgram>("/partner/apply", send("POST", body));
 export const savePayoutDetails = (body: { payout_method: string; payout_address: string }) =>
@@ -159,4 +205,28 @@ export function offerLine(offer: ReferralOffer, labels: Record<string, string> =
   const names = offer.plans.map((id) => labels[id] ?? id.replace(/^\w/, (c) => c.toUpperCase()));
   const where = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names[0] ?? "a plan";
   return `${offer.discount_pct}% off your first ${where} payment`;
+}
+
+export async function loadPublicAffiliateProgram(serverSide = false): Promise<PublicAffiliateProgram> {
+  const base = serverSide ? (process.env.API_ORIGIN || "http://127.0.0.1:8000").replace(/\/+$/, "") : API_BASE;
+  try {
+    const response = await fetch(`${base}/api/v1/referrals/public-program`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2500),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as Partial<PublicAffiliateProgram>;
+      if (data.partner && Array.isArray(data.partner.tiers) && data.partner.tiers.length > 0) {
+        return {
+          link_days: data.link_days ?? FALLBACK_PUBLIC_AFFILIATE_PROGRAM.link_days,
+          currency: data.currency || "USD",
+          plans: data.plans?.length ? data.plans : FALLBACK_PUBLIC_AFFILIATE_PROGRAM.plans,
+          partner: data.partner,
+        };
+      }
+    }
+  } catch {
+    /* Fall back cleanly to built-in strategy defaults */
+  }
+  return FALLBACK_PUBLIC_AFFILIATE_PROGRAM;
 }

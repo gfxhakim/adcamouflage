@@ -26,6 +26,10 @@ export function useRequireUser(): UserProfile | null {
             .finally(() => window.location.assign("/"));
           return;
         }
+        if (profile.account_role === "affiliate") {
+          window.location.assign("/affiliates/dashboard");
+          return;
+        }
         setUser(profile);
       })
       .catch(() => undefined);

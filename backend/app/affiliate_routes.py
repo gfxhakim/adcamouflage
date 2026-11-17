@@ -10,9 +10,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from . import affiliates, audit, costs, meta_capi
-from .accounts import current_user, optional_user, require_admin
+from . import affiliates, audit, costs, meta_capi, whop
+from .accounts import current_user, is_affiliate_only, optional_user, require_admin, require_studio_user
 from .activity import log_activity
+from .app_settings import currency
 from .config import settings
 from .db import (
     AffiliateCommission,
@@ -65,14 +66,25 @@ class ClickIn(BaseModel):
 
 
 @router.post("/click")
-def click(payload: ClickIn, request: Request, response: Response, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """A visitor arrived through a link: remember it for ``link_days`` and count the click."""
+def click(
+    payload: ClickIn,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(optional_user),
+) -> dict[str, Any]:
+    """A visitor arrived through a link or typed a promo code: remember it for ``link_days`` and count the click."""
 
     program = affiliates.get_program(db)
     code = affiliates.find_code(db, payload.code)
     if code is None or affiliates.code_usable(db, code, program):
         return {"valid": False}
     device, ip = _fingerprint(request)
+    if user is not None and not is_affiliate_only(user) and not affiliates.has_paid(db, user):
+        try:
+            affiliates.attribute(db, user, code, source="link", device=device, ip=ip)
+        except affiliates.AttributionError:
+            pass
     affiliates.record_click(db, code, device, ip)
     response.set_cookie(
         key=affiliates.COOKIE,
@@ -93,7 +105,7 @@ class ApplyIn(BaseModel):
 
 @router.post("/apply")
 def apply_code(
-    payload: ApplyIn, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)
+    payload: ApplyIn, request: Request, user: User = Depends(require_studio_user), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
     """A signed-in customer types a coupon before their first payment."""
 
@@ -219,9 +231,75 @@ def _partner_block(db: Session, user: User, program: dict[str, Any]) -> dict[str
     return block
 
 
-@router.get("/me")
-def my_program(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+@router.get("/public-program")
+def public_program(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Live partner affiliate strategy numbers for the public /affiliates and landing pages."""
+
     program = affiliates.get_program(db)
+    partner_cfg = program[PARTNER]
+    plans = get_token_plans(db)
+    return {
+        "link_days": program["link_days"],
+        "currency": currency(db),
+        "plans": [
+            {"id": p.id, "label": p.label, "price": p.price}
+            for p in plans.values()
+            if p.id in partner_cfg["plans"]
+        ],
+        "partner": {
+            "enabled": bool(partner_cfg["enabled"]),
+            "applications_open": bool(partner_cfg["applications_open"]),
+            "discount_pct": partner_cfg["discount_pct"],
+            "plans": partner_cfg["plans"],
+            "tiers": partner_cfg["tiers"],
+            "hold_days": partner_cfg["hold_days"],
+            "min_payout": partner_cfg["min_payout"],
+        },
+    }
+
+
+@router.get("/visitor-offer")
+def visitor_offer(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(optional_user),
+) -> dict[str, Any]:
+    """Return the active first-payment discount for this visitor or unpaid signed-in user."""
+
+    program = affiliates.get_program(db)
+    if user is not None:
+        if is_affiliate_only(user) or affiliates.has_paid(db, user):
+            return {"offer": None}
+        offer = _my_offer(db, user, program)
+        if offer is not None:
+            return {"offer": offer}
+    code = affiliates.code_from_cookie(db, request.cookies.get(affiliates.COOKIE), program)
+    if code is None or affiliates.code_usable(db, code, program):
+        return {"offer": None}
+    return {"offer": _offer(db, code, program)}
+
+
+@router.get("/me")
+def my_program(
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    program = affiliates.get_program(db)
+    if is_affiliate_only(user):
+        friend = _friend_block(db, user, program)
+        friend["enabled"] = False
+        friend["eligible"] = False
+        return {
+            "link_days": program["link_days"],
+            "my_offer": None,
+            "friend": friend,
+            "partner": _partner_block(db, user, program),
+        }
+    # If a pre-existing unpaid user arrived via an affiliate link cookie, tie attribution safely.
+    if affiliates.referral_of(db, user.id) is None and not affiliates.has_paid(db, user):
+        device, ip = _fingerprint(request)
+        affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
     return {
         "link_days": program["link_days"],
         "my_offer": _my_offer(db, user, program),
@@ -460,9 +538,25 @@ def admin_partner_decision(
         detail = f"Partner suspended; {voided} pending commissions cancelled"
     else:
         detail = "Partner note updated"
+    program = affiliates.get_program(db)
     db.commit()
+    final_code = code.code if code is not None else wanted if payload.action in ("approve", "reinstate") else ""
+    if payload.action in ("approve", "reinstate") and final_code:
+        whop.sync_partner_promo_code(
+            code=final_code,
+            discount_pct=float(program[PARTNER]["discount_pct"]),
+            plan_ids=list(program[PARTNER]["plans"]),
+            active=True,
+        )
+    elif payload.action == "suspend" and code is not None:
+        whop.sync_partner_promo_code(
+            code=code.code,
+            discount_pct=float(program[PARTNER]["discount_pct"]),
+            plan_ids=list(program[PARTNER]["plans"]),
+            active=False,
+        )
     audit.record(db, admin, user, f"partner_{payload.action}", detail)
-    return _partner_row(db, partner, user, affiliates.get_program(db))
+    return _partner_row(db, partner, user, program)
 
 
 @admin_router.get("/partners/{user_id}")

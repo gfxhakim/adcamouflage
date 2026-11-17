@@ -7,7 +7,7 @@ payment processor.
 
 | Variable | What it is | Example |
 |---|---|---|
-| `ADCAM_WHOP_API_KEY` | Whop company API key (with `membership:cancel`, `membership:update`, `payment:read`, `payment:refund` permissions) | `whop_...` |
+| `ADCAM_WHOP_API_KEY` | Whop company API key (with `membership:cancel`, `membership:update`, `payment:read`, `payment:refund`, `variant:read`, `checkout_configuration:create`, `promo_code:create` permissions) | `whop_...` |
 | `ADCAM_WHOP_WEBHOOK_SECRET` | Webhook signing secret from Whop Dashboard (must include `ws_` prefix) | `ws_...` |
 | `ADCAM_WHOP_PLAN_SUBSCRIPTION` | Map internal plan ids (`starter`, `pro`, `max`) to Whop `plan_xxx` ids | `{"starter":"plan_xxx","pro":"plan_yyy","max":"plan_zzz"}` |
 | `ADCAM_WHOP_PLAN_TOPUP` | Map top-up dollar amounts (`20`, `40`, `80`, `160`, `240`) to Whop `plan_xxx` ids | `{"20":"plan_a","40":"plan_b","80":"plan_c","160":"plan_d","240":"plan_e"}` |
@@ -41,8 +41,8 @@ comma-separated `key=plan_id` format (e.g. `starter=plan_xxx,pro=plan_yyy,max=pl
 
 1. User clicks **Subscribe / Renew / Upgrade / Top up** on `/app/plan`.
 2. Frontend calls `POST /api/v1/billing/checkout { kind, plan_id | amount, provider: "whop" }`.
-3. Backend validates the plan/top-up, creates a pending `Order`, looks up the matching `plan_xxx` id via `whop.plan_id_for`, and returns `{ order_id, whop_plan }`.
-4. Frontend opens `<WhopCheckout planId={whop_plan} orderId={order_id} returnUrl={...} />`, mounting Whop's Elements script with `metadata: { order_id }`.
-5. When the buyer pays on Whop, Whop delivers a signed `payment.succeeded` webhook to `/api/v1/billing/whop/webhook` carrying `data.metadata.order_id`.
+3. Backend validates the plan/top-up, applies any active friend/affiliate promo code, creates a pending `Order`, and (when discounted) calls `whop.create_discounted_checkout` to build a Whop `CheckoutConfiguration` whose inline renewal variant charges the reduced first-month price (`renewal_price` = standard monthly price) — or falls back to syncing a Whop `PromoCode` + `promoCode` prefill.
+4. Frontend opens `<WhopCheckout planId={whop_plan} orderId={order_id} promoCode={whop_promo_to_prefill} metadata={whop_metadata} returnUrl={...} />`, mounting Whop's Elements script with `order_id` plus promo/referral metadata (`coupon_code`, `promo_code`, `affiliate_channel`, `referral_code`).
+5. When the buyer pays on Whop, Whop delivers a signed `payment.succeeded` webhook to `/api/v1/billing/whop/webhook` carrying `data.metadata.order_id` (and any promo code applied on Whop).
 6. Backend verifies the Standard Webhooks signature via `whop_sdk.lib.verify_webhook.unwrap`, checks that the paid Whop plan matches the order (if present in payload), stores Whop's `pay_...` id in `order.provider_ref`, and runs `tokens.settle_order` atomically (idempotent — guaranteed to credit at most once).
 7. Meanwhile, `/app/plan` polls `GET /api/v1/billing/orders/{order_id}` until `status === "paid"` and immediately updates the balance and shows confirmation.

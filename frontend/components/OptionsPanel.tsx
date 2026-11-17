@@ -1,43 +1,12 @@
 "use client";
 
 import clsx from "clsx";
-import {
-  Activity,
-  AudioLines,
-  Cpu,
-  Crop,
-  Dices,
-  Eye,
-  Film,
-  Fingerprint,
-  FlipHorizontal2,
-  Gauge,
-  Layers,
-  Lock,
-  Maximize2,
-  Move,
-  Music,
-  Music2,
-  Package,
-  Palette,
-  Radar,
-  RefreshCcw,
-  Scissors,
-  SlidersHorizontal,
-  Sparkles,
-  Sun,
-  Tags,
-  Wand2,
-  Waves,
-  Zap,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Dices, Layers, Lock, Maximize2, SlidersHorizontal, Sparkles, Zap } from "lucide-react";
 
 import type { MutationOptions, PresetCatalogue, PresetId, QualityTier } from "@/lib/types";
 import { UPSCALE_HEIGHTS } from "@/lib/types";
-import { applyPlanLocks, lockingFeature, type PlanFeatureId } from "@/lib/plan-features";
+import { applyPlanLocks, type PlanFeatureId } from "@/lib/plan-features";
 import Link from "next/link";
-import NeonCard from "./NeonCard";
 
 interface OptionsPanelProps {
   options: MutationOptions;
@@ -93,240 +62,6 @@ const QUALITY_TIERS: { id: QualityTier; label: string; blurb: string }[] = [
   { id: "compact", label: "Compact", blurb: "Smallest files for fast upload." },
 ];
 
-type ToggleKey =
-  | "micro_crop"
-  | "frame_rate_stagger"
-  | "noise_injection"
-  | "color_drift"
-  | "audio_mutation"
-  | "strip_metadata"
-  | "keyframe_gop_jitter"
-  | "container_bitrate_shuffle"
-  | "chroma_matrix_shift"
-  | "frequency_smoothing"
-  | "deep_scramble"
-  | "mirror"
-  | "temporal_trim"
-  | "elastic_mesh_warp"
-  | "dct_jnd_perturbation"
-  | "lut_clahe_color"
-  | "optical_flow_timewarp"
-  | "adversarial_cnn_layer"
-  | "audio_allpass_phase"
-  | "formant_pitch_lfo"
-  | "psychoacoustic_rir"
-  | "authentic_atom_spoof"
-  | "macroblock_aq_variance";
-
-const ADVANCED_TOGGLES: {
-  key: ToggleKey;
-  label: string;
-  badge: string;
-  description: string;
-  icon: LucideIcon;
-}[] = [
-  {
-    key: "elastic_mesh_warp",
-    label: "Sub-pixel perspective & lens polish",
-    badge: "Spatial",
-    description:
-      "Applies gentle sub-pixel perspective and lens alignment refinement without clipping subtitles or faces.",
-    icon: Move,
-  },
-  {
-    key: "dct_jnd_perturbation",
-    label: "Fine texture detail enhancement",
-    badge: "Frequency",
-    description:
-      "Refines mid-band texture detail inside high-detail regions so exports stay crisp after social platform compression.",
-    icon: Radar,
-  },
-  {
-    key: "lut_clahe_color",
-    label: "Skin-protected 3D LUT & CLAHE",
-    badge: "Photometric",
-    description:
-      "Balances local contrast (LAB CLAHE) and refines shadow/highlight tones while protecting natural skin tones.",
-    icon: Sun,
-  },
-  {
-    key: "optical_flow_timewarp",
-    label: "Temporal motion smoothing",
-    badge: "Temporal",
-    description:
-      "Blends sub-frame temporal motion gradients across adjacent frames at a constant FPS without dropping hooks or CTAs.",
-    icon: Activity,
-  },
-  {
-    key: "adversarial_cnn_layer",
-    label: "Micro-contrast edge refinement",
-    badge: "Detail",
-    description:
-      "Applies a subtle, edge-aware micro-contrast pass (±1–2 RGB levels) for clean visual separation on mobile screens.",
-    icon: Eye,
-  },
-  {
-    key: "audio_allpass_phase",
-    label: "All-pass phase alignment",
-    badge: "Acoustic",
-    description:
-      "Uses 4-stage biquad all-pass filters to align phase and waveform dynamics while keeping EQ and voice tone 100% natural.",
-    icon: AudioLines,
-  },
-  {
-    key: "formant_pitch_lfo",
-    label: "Formant-locked vocal modulation",
-    badge: "Acoustic",
-    description:
-      "Gentle LFO vocal warmth (0.35–0.65 Hz) with formant EQ compensation—natural voice tone and zero lip-sync drift.",
-    icon: Music2,
-  },
-  {
-    key: "psychoacoustic_rir",
-    label: "Studio room ambiance (micro-RIR)",
-    badge: "Acoustic",
-    description:
-      "Adds ultra-short studio early reflections (5–15ms) below the echo threshold for broadcast audio depth.",
-    icon: Waves,
-  },
-  {
-    key: "authentic_atom_spoof",
-    label: "Standard NLE / Rec.709 atom packaging",
-    badge: "Container",
-    description:
-      "Writes standard Rec.709 color atoms and clean track timescales for seamless compatibility across ad platforms.",
-    icon: Fingerprint,
-  },
-  {
-    key: "macroblock_aq_variance",
-    label: "Adaptive quantization (AQ) tuning",
-    badge: "Encoding",
-    description:
-      "Optimizes x264/VP9 adaptive quantization and rate-distortion curves for clean macroblock bit allocation.",
-    icon: Cpu,
-  },
-];
-
-const TOGGLES: { key: ToggleKey; label: string; description: string; icon: LucideIcon }[] = [
-  {
-    key: "micro_crop",
-    label: "Smart edge framing",
-    description: "Trims 2-4px per side and resamples cleanly to source resolution.",
-    icon: Crop,
-  },
-  {
-    key: "frame_rate_stagger",
-    label: "Broadcast frame-rate cadence",
-    description: "Re-times delivery to a standard broadcast cadence, e.g. 29.97fps.",
-    icon: Gauge,
-  },
-  {
-    key: "noise_injection",
-    label: "Subtle film grain",
-    description: "Low-opacity organic film texture that varies across frames.",
-    icon: Sparkles,
-  },
-  {
-    key: "color_drift",
-    label: "Color & tone balance",
-    description: "Subtle brightness, gamma, saturation and hue calibration.",
-    icon: Palette,
-  },
-  {
-    key: "audio_mutation",
-    label: "Audio pitch & tempo polish",
-    description: "Subtle pitch and tempo tuning across exported variations.",
-    icon: Music,
-  },
-  {
-    key: "temporal_trim",
-    label: "Endpoint frame trim",
-    description: "Trims a few milliseconds off the tail to give each variation a clean duration.",
-    icon: Scissors,
-  },
-  {
-    key: "strip_metadata",
-    label: "Clean project metadata",
-    description: "Removes legacy EXIF, camera serials, and timeline editor history.",
-    icon: Tags,
-  },
-  {
-    key: "keyframe_gop_jitter",
-    label: "Keyframe & GOP optimization",
-    description: "Varies I-frame intervals and scene-cut thresholds across exported copies.",
-    icon: RefreshCcw,
-  },
-  {
-    key: "container_bitrate_shuffle",
-    label: "Container & bitrate tuning",
-    description: "Optimizes MP4 atom ordering, chunk interleaving and CRF encoding curves.",
-    icon: Package,
-  },
-  {
-    key: "chroma_matrix_shift",
-    label: "Chroma matrix calibration",
-    description: "Fine YUV color-space and chroma subsampling calibration.",
-    icon: SlidersHorizontal,
-  },
-  {
-    key: "frequency_smoothing",
-    label: "Chroma smoothing",
-    description: "Applies bilateral chroma filtering to smooth high-frequency compression artifacts.",
-    icon: Wand2,
-  },
-  {
-    key: "deep_scramble",
-    label: "Dynamic film texture",
-    description: "Per-frame OpenCV organic film grain and sub-pixel polish.",
-    icon: Film,
-  },
-  {
-    key: "mirror",
-    label: "Horizontal flip",
-    description: "Flips the visual composition horizontally for A/B layout testing.",
-    icon: FlipHorizontal2,
-  },
-];
-
-const ALL_LAYERS: { key: ToggleKey; label: string; icon: LucideIcon }[] = [...ADVANCED_TOGGLES, ...TOGGLES];
-
-const PRESET_DEFAULT_LAYERS: Record<Exclude<PresetId, "custom">, ToggleKey[]> = {
-  stealth: [
-    "elastic_mesh_warp",
-    "audio_allpass_phase",
-    "authentic_atom_spoof",
-    "macroblock_aq_variance",
-    "micro_crop",
-    "frame_rate_stagger",
-    "temporal_trim",
-    "strip_metadata",
-    "keyframe_gop_jitter",
-    "container_bitrate_shuffle",
-    "chroma_matrix_shift",
-  ],
-  balanced: [
-    "elastic_mesh_warp",
-    "dct_jnd_perturbation",
-    "lut_clahe_color",
-    "audio_allpass_phase",
-    "formant_pitch_lfo",
-    "authentic_atom_spoof",
-    "macroblock_aq_variance",
-    "micro_crop",
-    "frame_rate_stagger",
-    "noise_injection",
-    "color_drift",
-    "audio_mutation",
-    "temporal_trim",
-    "strip_metadata",
-    "keyframe_gop_jitter",
-    "container_bitrate_shuffle",
-    "chroma_matrix_shift",
-  ],
-  aggressive: ALL_LAYERS.map((l) => l.key).filter((key) => key !== "mirror"),
-  nuclear: ALL_LAYERS.map((l) => l.key),
-};
-
 export function OptionsPanel({
   options,
   onChange,
@@ -338,14 +73,6 @@ export function OptionsPanel({
   // Every change goes through the plan locks, so a preset can never switch a locked option on.
   const emit = (next: MutationOptions) => onChange(applyPlanLocks(next, lockedFeatures));
   const engineLocked = lockedFeatures.includes("full_engine");
-  const isLocked = (key: keyof MutationOptions) => lockingFeature(key, lockedFeatures) !== null;
-
-  const set = <K extends keyof MutationOptions>(key: K, value: MutationOptions[K]) => {
-    if (isLocked(key)) return;
-    // Changing any individual switch means the profile is no longer a preset.
-    const preset: PresetId = key === "preset" ? (value as PresetId) : "custom";
-    emit({ ...options, [key]: value, preset });
-  };
 
   const applyPreset = (preset: PresetId) => {
     const defaults = catalogue?.presets.find((entry) => entry.id === preset)?.defaults ?? {};
@@ -400,8 +127,9 @@ export function OptionsPanel({
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="label">Variation profile</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {options.preset === "custom" ? <span className="chip !text-[10px]">custom</span> : null}
+            {engineLocked ? <UpgradeHint href={upgradeHref} /> : null}
             <button
               type="button"
               disabled={disabled || engineLocked}
@@ -443,128 +171,6 @@ export function OptionsPanel({
                 </span>
                 <span className="mt-1 block text-[11px] leading-relaxed opacity-80">{copy.blurb}</span>
               </button>
-            );
-          })}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-2 flex items-baseline justify-between">
-          <label htmlFor="intensity" className="label">
-            Variation intensity
-          </label>
-          <span className="font-mono text-sm text-meta-500">{options.intensity}</span>
-        </div>
-        <input
-          id="intensity"
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          value={options.intensity}
-          disabled={disabled}
-          onChange={(event) => set("intensity", Number(event.target.value))}
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-black/[0.08] dark:bg-white/10 accent-meta-500 disabled:cursor-not-allowed disabled:opacity-50"
-          style={{
-            backgroundImage: `linear-gradient(90deg, #22d3ee 0%, #a855f7 ${options.intensity}%, var(--track-empty, rgb(30 41 59)) ${options.intensity}%)`,
-          }}
-        />
-        <div className="mt-1.5 flex justify-between text-[10px] uppercase tracking-wider text-ink-faint dark:text-slate-500">
-          <span>Subtle</span>
-          <span>Balanced</span>
-          <span>Maximum</span>
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="label flex items-center gap-1.5">
-            <Layers className="h-3.5 w-3.5 text-meta-500" aria-hidden />
-            Profile layers
-          </p>
-          {engineLocked || lockedFeatures.includes("metadata_wipe") ? (
-            <UpgradeHint href={upgradeHref} />
-          ) : null}
-        </div>
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          {availablePresets.map((preset) => {
-            const presetSelected = options.preset === preset;
-            const copy = PRESET_COPY[preset];
-            const catalogueDefaults = catalogue?.presets.find((entry) => entry.id === preset)?.defaults;
-            const layersForPreset = ALL_LAYERS.filter(({ key }) =>
-              catalogueDefaults ? Boolean(catalogueDefaults[key]) : PRESET_DEFAULT_LAYERS[preset].includes(key),
-            );
-            return (
-              <div
-                key={preset}
-                className={clsx(
-                  "flex flex-col rounded-xl border p-3 transition-all duration-200",
-                  presetSelected
-                    ? "border-meta-500/60 bg-meta-50/70 shadow-meta-sm dark:border-meta-500/50 dark:bg-meta-500/10"
-                    : "border-black/[0.08] bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.04]",
-                )}
-              >
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => applyPreset(preset)}
-                  aria-pressed={presetSelected}
-                  className="mb-2.5 flex w-full items-center justify-between gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-black dark:text-slate-100">
-                    <Zap
-                      className={clsx(
-                        "h-3.5 w-3.5 shrink-0",
-                        presetSelected ? "text-meta-500" : "text-ink-subtle dark:text-slate-400",
-                      )}
-                      aria-hidden
-                    />
-                    {copy.title}
-                  </span>
-                  <span
-                    className={clsx(
-                      "h-2 w-2 shrink-0 rounded-full transition-colors",
-                      presetSelected ? "bg-meta-500 shadow-meta-sm" : "bg-black/15 dark:bg-white/20",
-                    )}
-                    aria-hidden
-                  />
-                </button>
-                <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5">
-                  {layersForPreset.map(({ key, label, icon: Icon }) => {
-                    const locked = isLocked(key);
-                    const active = !locked && Boolean(options[key]);
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        role="switch"
-                        aria-checked={active}
-                        aria-disabled={locked || undefined}
-                        aria-label={label}
-                        title={locked ? `${label} (Upgrade to Pro)` : label}
-                        disabled={disabled || locked}
-                        onClick={() => set(key, !active)}
-                        className={clsx(
-                          "relative grid aspect-square w-full place-items-center rounded-lg border transition-all duration-150",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
-                          "disabled:cursor-not-allowed disabled:opacity-40",
-                          active
-                            ? "border-meta-500/60 bg-meta-100/90 text-meta-700 dark:bg-meta-500/25 dark:text-meta-200"
-                            : "border-black/[0.08] bg-white/60 text-ink-subtle hover:border-black/20 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400 dark:hover:border-white/20",
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5" aria-hidden />
-                        {locked ? (
-                          <Lock
-                            className="absolute right-0.5 top-0.5 h-2.5 w-2.5 text-amber-600 dark:text-amber-300"
-                            aria-hidden
-                          />
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
             );
           })}
         </div>
@@ -724,8 +330,8 @@ export function OptionsPanel({
         </div>
 
         <p className="mt-2 text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
-          Quality and resolution control how the finished file looks — the variation layers above
-          are unchanged. Upscaling and higher quality still count against your plan the same way.
+          Quality and resolution control how the finished file looks — the variation profile above is
+          unchanged. Upscaling and higher quality still count against your plan the same way.
         </p>
       </section>
     </div>

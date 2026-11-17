@@ -56,11 +56,9 @@ function Rules({ partner, currency }: { partner: PartnerProgram; currency: strin
   );
 }
 
-function ApplyForm({ partner, currency, onChanged }: PartnerCardProps) {
+function ApplyForm({ partner, onChanged }: Omit<PartnerCardProps, "currency">) {
   const [code, setCode] = useState(partner.requested_code ?? "");
   const [audience, setAudience] = useState("");
-  const [method, setMethod] = useState(partner.payout_method ?? "");
-  const [address, setAddress] = useState(partner.payout_address ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,60 +67,51 @@ function ApplyForm({ partner, currency, onChanged }: PartnerCardProps) {
     setBusy(true);
     setError(null);
     try {
-      onChanged(await applyAsPartner({ code: code.trim(), audience: audience.trim(), payout_method: method.trim(), payout_address: address.trim() }));
+      onChanged(await applyAsPartner({ code: code.trim(), audience: audience.trim(), payout_method: "", payout_address: "" }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send your application.");
+      setError(err instanceof Error ? err.message : "Could not send your request.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="mt-4 grid gap-5 lg:grid-cols-2">
-      <form onSubmit={submit} className="space-y-3">
-        {partner.status === "rejected" ? (
-          <p className="rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-ink-muted">
-            Your last application was not accepted. You can send a new one.
-          </p>
-        ) : null}
-        <label className="block">
-          <span className="label mb-1 block">Code you want (your name works well)</span>
-          <input className="field uppercase" value={code} maxLength={24} minLength={3} required placeholder="YOURNAME" onChange={(e) => setCode(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="label mb-1 block">Where is your audience?</span>
-          <textarea
-            className="field min-h-[88px]"
-            value={audience}
-            required
-            minLength={10}
-            maxLength={2000}
-            placeholder="Links to your channels and roughly how many people follow them"
-            onChange={(e) => setAudience(e.target.value)}
-          />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="label mb-1 block">How to pay you (optional)</span>
-            <input className="field" value={method} maxLength={40} placeholder="e.g. USDT TRC-20" onChange={(e) => setMethod(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className="label mb-1 block">Wallet or account</span>
-            <input className="field" value={address} maxLength={300} onChange={(e) => setAddress(e.target.value)} />
-          </label>
-        </div>
-        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    <form onSubmit={submit} className="mt-5 max-w-xl space-y-4">
+      {partner.status === "rejected" ? (
+        <p className="rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-ink-muted">
+          Your previous request was not accepted. You can update your audience details and send a new one.
+        </p>
+      ) : null}
+      <label className="block">
+        <span className="label mb-1 block">Preferred code (your name or brand works well)</span>
+        <input className="field uppercase" value={code} maxLength={24} minLength={3} required placeholder="YOURNAME" onChange={(e) => setCode(e.target.value)} />
+        <span className="mt-1 block text-[11px] text-ink-faint">
+          Activates your shareable link (<code className="font-mono text-black">?ref=YOURNAME</code>) and Whop promo code once approved.
+        </span>
+      </label>
+      <label className="block">
+        <span className="label mb-1 block">Do you have an audience? Why should we accept your request?</span>
+        <textarea
+          className="field min-h-[112px]"
+          value={audience}
+          required
+          minLength={10}
+          maxLength={2000}
+          placeholder="Tell us about your channels, community, agency clients, or follower reach, and how you plan to introduce ProteusFlow."
+          onChange={(e) => setAudience(e.target.value)}
+        />
+      </label>
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      <div className="space-y-2">
         <button type="submit" className="btn-primary !py-2.5 !text-sm" disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-          Apply to become a partner
+          Request to join affiliate program
         </button>
-        <p className="text-[11px] text-ink-faint">We review every application by hand and approve the final code.</p>
-      </form>
-      <div>
-        <p className="label mb-2">How it works</p>
-        <Rules partner={partner} currency={currency} />
+        <p className="text-[11px] text-ink-faint">
+          Once approved, your link, Whop checkout promo code, and monthly commission tracking activate automatically.
+        </p>
       </div>
-    </div>
+    </form>
   );
 }
 
@@ -174,27 +163,27 @@ export function PartnerCard({ partner, currency, onChanged }: PartnerCardProps) 
     <NeonCard padding="lg" radius="xl">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <Megaphone className="h-4 w-4 text-meta-500" aria-hidden />
-        <h2 className="text-sm font-semibold tracking-tight text-black">Creator partner program</h2>
+        <h2 className="text-sm font-semibold tracking-tight text-black">
+          {approved ? "Affiliate Partner Dashboard" : "Affiliate program request"}
+        </h2>
         {partner.status === "pending" ? <span className="chip !border-amber-400/50 !bg-amber-50 !text-[10px] !text-amber-700">In review</span> : null}
         {partner.status === "approved" ? <span className="chip !border-emerald-300 !bg-emerald-50 !text-[10px] !text-emerald-700">Active partner</span> : null}
         {partner.status === "suspended" ? <span className="chip !border-red-300 !bg-red-50 !text-[10px] !text-red-700">Suspended</span> : null}
       </div>
       <p className="max-w-2xl text-sm text-ink-muted">
-        For creators with an audience. Your audience gets {partner.discount_pct}% off their first payment with your code,
-        and you earn {partner.tiers[0]?.pct}% to {partner.tiers[partner.tiers.length - 1]?.pct}% of what they pay.
+        {approved
+          ? `Connected to Whop checkout (${partner.discount_pct}% buyer discount) and automatic ${partner.tiers[0]?.pct}%–${partner.tiers[partner.tiers.length - 1]?.pct}% monthly commission calculation.`
+          : `Give your audience ${partner.discount_pct}% off their first plan and earn ${partner.tiers[0]?.pct}%–${partner.tiers[partner.tiers.length - 1]?.pct}% recurring commission automatically once approved.`}
       </p>
 
       {partner.status === "pending" ? (
-        <div className="mt-4 grid gap-5 lg:grid-cols-2">
-          <p className="rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 text-sm text-ink-muted">
-            We got your application for the code <span className="font-semibold text-black">{partner.requested_code}</span>.
-            We review each one by hand. The answer will show on this page.
-          </p>
-          <Rules partner={partner} currency={currency} />
-        </div>
+        <p className="mt-4 max-w-xl rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 text-sm text-ink-muted">
+          We received your request for the code <span className="font-semibold text-black">{partner.requested_code}</span>.
+          Once approved, your partner link and promo code activate automatically with Whop checkout discounts and commission calculation.
+        </p>
       ) : !approved ? (
         partner.applications_open ? (
-          <ApplyForm partner={partner} currency={currency} onChanged={onChanged} />
+          <ApplyForm partner={partner} onChanged={onChanged} />
         ) : (
           <p className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 text-sm text-ink-muted">
             Partner applications are closed right now.

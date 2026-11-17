@@ -41,6 +41,36 @@ async function sessionAccess(session: string): Promise<Access> {
   }
 }
 
+type SessionInfo =
+  | { state: "ok"; role: "customer" | "affiliate" }
+  | { state: "expired" | "unknown" };
+
+async function sessionProfile(session: string): Promise<SessionInfo> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  try {
+    const response = await fetch(`${API_ORIGIN}/api/v1/auth/me`, {
+      headers: { cookie: `${SESSION_COOKIE}=${session}` },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (response.status === 401) {
+      void response.body?.cancel().catch(() => undefined);
+      return { state: "expired" };
+    }
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => undefined);
+      return { state: "unknown" };
+    }
+    const data = (await response.json()) as { account_role?: string };
+    return { state: "ok", role: data.account_role === "affiliate" ? "affiliate" : "customer" };
+  } catch {
+    return { state: "unknown" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Drop a session cookie the API has rejected, so the site treats the visitor as signed out. */
 function forgetSession(response: NextResponse): NextResponse {
   response.cookies.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
@@ -48,18 +78,9 @@ function forgetSession(response: NextResponse): NextResponse {
 }
 
 /**
- * Keeps signed-out visitors out of the workspace and the admin panel. The
- * landing page at / is public for everyone, and the login page is only ever
- * reached from its buttons: a signed-out visitor who opens /app is sent to the
- * landing page, not to /login. The login and sign-up pages always show their
- * form, even to someone already signed in (they offer to continue instead),
- * and signing in there sends an admin to the admin panel.
- *
- * For /app this only checks that a session cookie is present - the API is the
- * authority on it and every endpoint re-checks it, and the workspace clears a
- * cookie the API rejects. For /admin it asks the API, and the panel opens only
- * for an admin; everyone else gets the ordinary 404 page, so customers cannot
- * tell it exists. A session the API has ended is cleared there too.
+ * Keeps signed-out visitors out of the workspace, affiliate dashboard and
+ * admin panel, and enforces role separation between studio customers and
+ * affiliate-only partner accounts.
  */
 export async function middleware(request: NextRequest) {
   const session = request.cookies.get(SESSION_COOKIE)?.value;
@@ -78,11 +99,49 @@ export async function middleware(request: NextRequest) {
     return session && access === "expired" ? forgetSession(notFound) : notFound;
   }
 
-  if (pathname.startsWith("/app") && !session) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    url.search = "";
-    return NextResponse.redirect(url);
+  if (pathname.startsWith("/affiliates/dashboard")) {
+    if (!session) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "?next=%2Faffiliates%2Fdashboard";
+      return NextResponse.redirect(url);
+    }
+    const info = await sessionProfile(session);
+    if (info.state === "expired") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "?next=%2Faffiliates%2Fdashboard";
+      return forgetSession(NextResponse.redirect(url));
+    }
+    if (info.state === "ok" && info.role !== "affiliate") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app/referrals";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/app")) {
+    if (!session) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    const info = await sessionProfile(session);
+    if (info.state === "expired") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return forgetSession(NextResponse.redirect(url));
+    }
+    if (info.state === "ok" && info.role === "affiliate") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/affiliates/dashboard";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   return NextResponse.next();

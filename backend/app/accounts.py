@@ -179,6 +179,12 @@ def is_admin(user: User) -> bool:
     return bool(user.is_admin) or user.email in settings.admin_emails
 
 
+def is_affiliate_only(user: User) -> bool:
+    """True for partners who signed up via the affiliate portal (dashboard-only)."""
+
+    return getattr(user, "account_role", "customer") == "affiliate" and not is_admin(user)
+
+
 def current_user(
     session_cookie: str | None = Cookie(default=None, alias=settings.cookie_name),
     db: Session = Depends(get_db),
@@ -188,6 +194,17 @@ def current_user(
     user = _load_user(session_cookie, db)
     if user is None:
         raise AuthError("Sign in to continue.")
+    return user
+
+
+def require_studio_user(user: User = Depends(current_user)) -> User:
+    """Block affiliate-only accounts from workspace, render, batch, team, or billing APIs."""
+
+    if is_affiliate_only(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Affiliate accounts only have access to the Affiliate Dashboard.",
+        )
     return user
 
 

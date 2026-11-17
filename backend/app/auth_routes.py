@@ -8,6 +8,7 @@ import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
@@ -22,7 +23,9 @@ from .accounts import (
     current_user,
     get_user_by_email,
     is_admin,
+    is_affiliate_only,
     hash_password,
+    require_studio_user,
     set_session_cookie,
     validate_email,
     validate_password,
@@ -101,6 +104,7 @@ class Credentials(BaseModel):
 
 class RegisterRequest(Credentials):
     display_name: str | None = Field(default=None, max_length=120)
+    account_role: Literal["customer", "affiliate"] = "customer"
 
 
 class UserProfile(BaseModel):
@@ -109,6 +113,7 @@ class UserProfile(BaseModel):
     display_name: str | None
     created_at: datetime
     last_login_at: datetime | None
+    account_role: str = "customer"
     plan: str = "unlimited"
     plan_label: str = "Unlimited"
     monthly_quota: int | None = None
@@ -135,6 +140,7 @@ class UserProfile(BaseModel):
             display_name=user.display_name,
             created_at=user.created_at,
             last_login_at=user.last_login_at,
+            account_role="affiliate" if is_affiliate_only(user) else "customer",
             plan=user.plan,
             plan_label=plan_label(get_plans(db), user.plan),
             monthly_quota=user.monthly_quota,
@@ -265,6 +271,7 @@ def register(
     email = validate_email(payload.email)
     password = validate_password(payload.password)
     name = (payload.display_name or "").strip() or None
+    role = "affiliate" if payload.account_role == "affiliate" and email not in settings.admin_emails else "customer"
     needs_code = verification_on()
 
     existing = get_user_by_email(db, email)
@@ -275,6 +282,7 @@ def register(
         # new password. Safe, because nothing opens without the code.
         existing.password_hash = hash_password(password)
         existing.display_name = name or existing.display_name
+        existing.account_role = role
         existing.token_version += 1
         db.commit()
         if not security.recently_sent(db, existing, security.VERIFY):
@@ -289,6 +297,7 @@ def register(
         last_login_at=None if needs_code else datetime.now(timezone.utc),
         # New accounts buy a token plan; the legacy quota plan is only a label.
         billing_mode=TOKENS,
+        account_role=role,
         email_verified=not needs_code,
     )
     apply_plan(db, user, default_plan(db).id)
@@ -302,8 +311,9 @@ def register(
         raise AuthError("An account with that email already exists.", status.HTTP_409_CONFLICT)
 
     db.refresh(user)
-    logger.info("registered user %s", user.id)
-    log_activity(db, user.id, "signup", f"Signed up on the {user.plan} plan")
+    logger.info("registered user %s (%s)", user.id, role)
+    signup_detail = "Signed up as an affiliate partner" if role == "affiliate" else f"Signed up on the {user.plan} plan"
+    log_activity(db, user.id, "signup", signup_detail)
     # Referral credit is decided at sign-up, while the referral cookie is here.
     device, ip = _fingerprint(request)
     affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
@@ -549,7 +559,7 @@ def change_email(
 @router.get("/batches", response_model=list[BatchSummary])
 def my_batches(
     limit: int = 25,
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
     db: Session = Depends(get_db),
 ) -> list[BatchSummary]:
     rows = (
