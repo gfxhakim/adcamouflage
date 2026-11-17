@@ -3,19 +3,20 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, X } from "lucide-react";
 
 import { useIsMobile } from "@/components/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+// A year: folding the sidebar is a lasting choice, not one to forget after a week.
+const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
@@ -68,7 +69,7 @@ const SidebarProvider = React.forwardRef<
       }
 
       // This sets the cookie to keep the sidebar state.
-      document.cookie = `${cookieName}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
+      document.cookie = `${cookieName}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; samesite=lax`;
     },
     [setOpenProp, open, cookieName],
   );
@@ -167,7 +168,16 @@ const Sidebar = React.forwardRef<
           side={side}
         >
           <SheetTitle className="sr-only">Menu</SheetTitle>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          <div className="flex h-full w-full flex-col">
+            {children}
+            {/* On a narrow phone the strip beside the drawer is too thin to tap, so it gets its own close button. */}
+            <SheetClose
+              className="absolute right-3 top-4 grid size-9 place-items-center rounded-lg opacity-70 transition hover:bg-primary/10 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              aria-label="Close the menu"
+            >
+              <X className="size-4" aria-hidden />
+            </SheetClose>
+          </div>
         </SheetContent>
       </Sheet>
     );

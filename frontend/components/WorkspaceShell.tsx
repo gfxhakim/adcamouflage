@@ -24,7 +24,7 @@ interface WorkspaceShellProps {
   children: ReactNode;
 }
 
-// Folded, it is as wide as the icon rail it replaces.
+// Folded, it is a slim icon column, about as wide as the rail it replaces.
 const SIZES = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3.75rem" } as CSSProperties;
 
 /**
