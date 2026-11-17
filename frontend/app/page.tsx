@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
 import { CmsOrder, CmsSection } from "@/components/cms/Cms";
 import { ContentProvider } from "@/components/cms/ContentProvider";
@@ -15,7 +16,7 @@ import SiteFooter from "@/components/landing/SiteFooter";
 import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
-import { loadPublicAffiliateProgram } from "@/lib/referrals";
+import { loadPublicAffiliateProgram, type ReferralOffer } from "@/lib/referrals";
 import { loadPublishedContent } from "@/lib/siteContent";
 import { publishedFaqs } from "@/components/landing/faqData";
 import { jsonLd, siteUrl } from "@/lib/seo";
@@ -132,6 +133,34 @@ async function loadPricing(): Promise<PublicPricing> {
   return FALLBACK_PRICING;
 }
 
+async function loadVisitorOffer(): Promise<ReferralOffer | null> {
+  const origin = (process.env.API_ORIGIN || "http://127.0.0.1:8000").replace(/\/+$/, "");
+  try {
+    const store = cookies();
+    const pair = [
+      store.get("pf_ref") ? `pf_ref=${store.get("pf_ref")!.value}` : "",
+      store.get(process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session")
+        ? `${process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session"}=${store.get(process.env.NEXT_PUBLIC_SESSION_COOKIE ?? "adcam_session")!.value}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    if (!pair) return null;
+    const response = await fetch(`${origin}/api/v1/referrals/visitor-offer`, {
+      cache: "no-store",
+      headers: { cookie: pair },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as { offer?: ReferralOffer | null };
+      return data.offer ?? null;
+    }
+  } catch {
+    /* ignore SSR referral lookup failure */
+  }
+  return null;
+}
+
 function structuredData(pricing: PublicPricing, content: SiteContent, description: string): string {
   const base = siteUrl();
   const faqs = publishedFaqs(content);
@@ -200,10 +229,11 @@ export default async function LandingPage() {
   // Everyone sees the visitor version of this page, and every start button
   // opens the login page, which also offers to create an account.
   const startHref = "/login";
-  const [pricing, content, affiliateProgram] = await Promise.all([
+  const [pricing, content, affiliateProgram, visitorOffer] = await Promise.all([
     loadPricing(),
     loadPublishedContent("landing"),
     loadPublicAffiliateProgram(true),
+    loadVisitorOffer(),
   ]);
 
   return (
@@ -239,6 +269,7 @@ export default async function LandingPage() {
                       currency={pricing.currency}
                       ctaHref={startHref}
                       promo={pricing.promo}
+                      visitorOffer={visitorOffer}
                     />
                   </div>
                 </CmsSection>

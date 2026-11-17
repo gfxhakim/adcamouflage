@@ -66,14 +66,25 @@ class ClickIn(BaseModel):
 
 
 @router.post("/click")
-def click(payload: ClickIn, request: Request, response: Response, db: Session = Depends(get_db)) -> dict[str, Any]:
-    """A visitor arrived through a link: remember it for ``link_days`` and count the click."""
+def click(
+    payload: ClickIn,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(optional_user),
+) -> dict[str, Any]:
+    """A visitor arrived through a link or typed a promo code: remember it for ``link_days`` and count the click."""
 
     program = affiliates.get_program(db)
     code = affiliates.find_code(db, payload.code)
     if code is None or affiliates.code_usable(db, code, program):
         return {"valid": False}
     device, ip = _fingerprint(request)
+    if user is not None and not is_affiliate_only(user) and not affiliates.has_paid(db, user):
+        try:
+            affiliates.attribute(db, user, code, source="link", device=device, ip=ip)
+        except affiliates.AttributionError:
+            pass
     affiliates.record_click(db, code, device, ip)
     response.set_cookie(
         key=affiliates.COOKIE,
@@ -247,8 +258,33 @@ def public_program(db: Session = Depends(get_db)) -> dict[str, Any]:
     }
 
 
+@router.get("/visitor-offer")
+def visitor_offer(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(optional_user),
+) -> dict[str, Any]:
+    """Return the active first-payment discount for this visitor or unpaid signed-in user."""
+
+    program = affiliates.get_program(db)
+    if user is not None:
+        if is_affiliate_only(user) or affiliates.has_paid(db, user):
+            return {"offer": None}
+        offer = _my_offer(db, user, program)
+        if offer is not None:
+            return {"offer": offer}
+    code = affiliates.code_from_cookie(db, request.cookies.get(affiliates.COOKIE), program)
+    if code is None or affiliates.code_usable(db, code, program):
+        return {"offer": None}
+    return {"offer": _offer(db, code, program)}
+
+
 @router.get("/me")
-def my_program(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def my_program(
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     program = affiliates.get_program(db)
     if is_affiliate_only(user):
         friend = _friend_block(db, user, program)
@@ -260,6 +296,10 @@ def my_program(user: User = Depends(current_user), db: Session = Depends(get_db)
             "friend": friend,
             "partner": _partner_block(db, user, program),
         }
+    # If a pre-existing unpaid user arrived via an affiliate link cookie, tie attribution safely.
+    if affiliates.referral_of(db, user.id) is None and not affiliates.has_paid(db, user):
+        device, ip = _fingerprint(request)
+        affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
     return {
         "link_days": program["link_days"],
         "my_offer": _my_offer(db, user, program),

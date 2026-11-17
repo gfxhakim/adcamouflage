@@ -75,6 +75,11 @@ interface ActiveCheckout {
   whopPlan: string;
   label: string;
   amount: number;
+  originalAmount?: number | null;
+  discount?: number;
+  promoCode?: string | null;
+  whopPromoToPrefill?: string | null;
+  whopMetadata?: Record<string, string>;
   tokens: number;
   returnUrl: string;
 }
@@ -314,6 +319,11 @@ export default function PlanPage() {
             whopPlan: checkout.whop_plan,
             label,
             amount: checkout.amount,
+            originalAmount: checkout.original_amount,
+            discount: checkout.discount,
+            promoCode: checkout.promo_code,
+            whopPromoToPrefill: checkout.whop_promo_to_prefill,
+            whopMetadata: checkout.whop_metadata,
             tokens: checkout.tokens,
             returnUrl,
           });
@@ -682,6 +692,15 @@ export default function PlanPage() {
                 <h2 id="whop-checkout-title" className="mt-1 truncate text-base font-semibold text-black">
                   {activeCheckout.label} · {formatMoney(activeCheckout.amount, currencyRef.current)}
                 </h2>
+                {activeCheckout.promoCode && activeCheckout.discount && activeCheckout.discount > 0 ? (
+                  <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                    Code {activeCheckout.promoCode} applied · saved{" "}
+                    {formatMoney(activeCheckout.discount, currencyRef.current)}
+                    {activeCheckout.originalAmount
+                      ? ` off ${formatMoney(activeCheckout.originalAmount, currencyRef.current)}`
+                      : ""}
+                  </p>
+                ) : null}
                 <p className="text-xs text-ink-muted">
                   Includes {formatTokens(activeCheckout.tokens)} tokens · instant activation after payment
                 </p>
@@ -708,6 +727,8 @@ export default function PlanPage() {
               planId={activeCheckout.whopPlan}
               orderId={activeCheckout.orderId}
               returnUrl={activeCheckout.returnUrl}
+              promoCode={activeCheckout.whopPromoToPrefill ?? undefined}
+              metadata={activeCheckout.whopMetadata}
               onComplete={handleCheckoutComplete}
             />
           </div>

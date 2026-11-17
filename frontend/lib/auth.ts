@@ -387,6 +387,11 @@ export interface Checkout {
   provider: PaymentProviderId;
   checkout_url: string;
   amount: number;
+  original_amount?: number | null;
+  discount?: number;
+  promo_code?: string | null;
+  whop_promo_to_prefill?: string | null;
+  whop_metadata?: Record<string, string>;
   tokens: number;
 }
 

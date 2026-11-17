@@ -288,6 +288,8 @@ class Order(Base):
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Whop membership id (`mem_...`) when the payment is for a subscription.
     whop_membership_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Whop plan/variant id (`plan_...`) actually presented at checkout (base or discounted).
+    whop_plan_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # JSON: the buyer's Meta attribution data from checkout, so the Purchase
     # sent when the payment is confirmed can be matched to the ad click.
     tracking: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -721,6 +723,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "payer_hash", "VARCHAR(64)"),
     ("users", "whop_membership_id", "VARCHAR(128)"),
     ("orders", "whop_membership_id", "VARCHAR(128)"),
+    ("orders", "whop_plan_id", "VARCHAR(128)"),
     ("users", "account_role", "VARCHAR(24) NOT NULL DEFAULT 'customer'"),
 ]
 

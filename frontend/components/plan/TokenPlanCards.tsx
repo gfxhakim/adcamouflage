@@ -98,20 +98,34 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                 ) : null}
               </div>
 
-              {plan.regular_price && plan.regular_price > plan.price ? (
+              {discounted && offer ? (
+                <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-medium text-ink-faint line-through">
+                    {formatMoney(plan.price, currency)}
+                  </span>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
+                    −{offer.discount_pct}% · {offer.code}
+                  </span>
+                </p>
+              ) : plan.regular_price && plan.regular_price > plan.price ? (
                 <p className="mt-3 text-xs font-medium text-ink-subtle">
                   <span className="line-through">{formatMoney(plan.regular_price, currency)}</span>{" "}
                   <span className="font-semibold text-amber-700">Launch price</span>
                 </p>
               ) : null}
-              <p className={clsx(plan.regular_price && plan.regular_price > plan.price ? "mt-0.5" : "mt-3", "text-2xl font-bold tracking-tight text-black")}>
+              <p
+                className={clsx(
+                  discounted || (plan.regular_price && plan.regular_price > plan.price) ? "mt-0.5" : "mt-3",
+                  "text-2xl font-bold tracking-tight text-black",
+                )}
+              >
                 {formatMoney(discounted ? couponPrice : plan.price, currency)}
                 <span className="text-xs font-medium text-ink-subtle"> / 30 days</span>
               </p>
               {discounted && offer ? (
                 <p className="mt-1 text-xs font-medium text-emerald-700">
-                  {offer.discount_pct}% off with {offer.code} on your first payment, then{" "}
-                  {formatMoney(plan.price, currency)}
+                  First payment with <span className="font-semibold">{offer.code}</span>, then{" "}
+                  {formatMoney(plan.price, currency)} / 30 days
                 </p>
               ) : null}
 

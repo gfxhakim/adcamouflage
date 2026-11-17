@@ -29,8 +29,10 @@ type WhopCheckoutProps = {
   orderId: string;
   /** Where Whop sends the browser after payment. Display only — not proof. */
   returnUrl: string;
-  /** Optional: a Whop promo code to prefill. */
+  /** Optional: a Whop promo code to prefill when using base-plan promo fallback. */
   promoCode?: string;
+  /** Extra metadata copied onto the Whop payment & webhook (coupon, affiliate channel, etc.). */
+  metadata?: Record<string, string>;
   /** Called when the embed reports completion. Use for UI state only. */
   onComplete?: () => void;
 };
@@ -107,11 +109,13 @@ export default function WhopCheckout({
   orderId,
   returnUrl,
   promoCode,
+  metadata,
   onComplete,
 }: WhopCheckoutProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
+  const metadataJson = JSON.stringify(metadata ?? {});
 
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -129,10 +133,17 @@ export default function WhopCheckout({
         const container = containerRef.current;
         if (cancelled || !window.WhopElements || !container) return;
 
+        let extraMeta: Record<string, string> = {};
+        try {
+          extraMeta = JSON.parse(metadataJson) as Record<string, string>;
+        } catch {
+          extraMeta = {};
+        }
+
         container.innerHTML = "";
         controller = window.WhopElements().checkout.create({
           plan: planId,
-          metadata: { order_id: orderId },
+          metadata: { ...extraMeta, order_id: orderId },
           returnUrl,
           ...(promoCode ? { promoCode } : {}),
           onComplete: () => onCompleteRef.current?.(),
@@ -175,7 +186,7 @@ export default function WhopCheckout({
       }
       if (containerRef.current) containerRef.current.innerHTML = "";
     };
-  }, [planId, orderId, returnUrl, promoCode]);
+  }, [planId, orderId, returnUrl, promoCode, metadataJson]);
 
   return (
     <div className="min-h-[280px]">

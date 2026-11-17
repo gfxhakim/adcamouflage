@@ -37,7 +37,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import account_security as security
-from . import mailer
+from . import affiliates, mailer, meta_capi
 from .accounts import create_session_token, is_admin, is_affiliate_only, normalise_email, set_session_cookie
 from .activity import log_activity
 from .app_settings import registration_open
@@ -317,6 +317,7 @@ def start(provider: str, request: Request, next: str | None = None, role: str | 
                 "n": nonce,
                 "next": _safe_next(next),
                 "r": "affiliate" if role == "affiliate" else "customer",
+                "ref": (request.cookies.get(affiliates.COOKIE) or "")[:80],
             }
         ),
         max_age=STATE_TTL,
@@ -380,9 +381,14 @@ def _callback(provider: str, request: Request, db: Session, fields: dict[str, st
     db.commit()
     db.refresh(user)
     log_activity(db, user.id, "login", f"Signed in with {LABELS[provider]}")
+    ip = affiliates.ip_hash(meta_capi._client_ip(request))
     if opened:
+        ref_cookie = request.cookies.get(affiliates.COOKIE) or str(state.get("ref") or "")
+        affiliates.attribute_signup(db, user, ref_cookie or None, "", ip)
+        affiliates.remember_device(db, user, "", ip)
         security.remember_device(db, user, request)
     else:
+        affiliates.remember_device(db, user, "", ip)
         security.note_sign_in(db, user, request)
 
     if is_admin(user):

@@ -28,6 +28,7 @@ from .app_settings import currency
 from .db import Order, User, get_db
 from .tokens import (
     cancel_period,
+    get_billing_rules,
     get_token_plans,
     get_topups,
     new_order,
@@ -65,6 +66,11 @@ class CheckoutOut(BaseModel):
     whop_plan: str
     checkout_url: str = ""
     amount: float
+    original_amount: float | None = None
+    discount: float = 0.0
+    promo_code: str | None = None
+    whop_promo_to_prefill: str | None = None
+    whop_metadata: dict[str, str] = Field(default_factory=dict)
     tokens: int
     provider: str
 
@@ -129,10 +135,19 @@ def _order_out(order: Order) -> OrderOut:
     )
 
 
-def _open_order(db: Session, user: User, kind: str, plan_id: str, amount: float, provider: str) -> Order | None:
-    """The user's recent pending order for the same purchase, if any."""
+def _open_order(
+    db: Session,
+    user: User,
+    kind: str,
+    plan_id: str,
+    amount: float,
+    provider: str,
+    coupon_code: str | None = None,
+) -> Order | None:
+    """The user's recent pending order for the same purchase & coupon, if any."""
 
     since = datetime.now(timezone.utc) - REUSE_WINDOW
+    coupon_match = Order.coupon_code == coupon_code if coupon_code else Order.coupon_code.is_(None)
     return db.execute(
         select(Order)
         .where(
@@ -142,11 +157,46 @@ def _open_order(db: Session, user: User, kind: str, plan_id: str, amount: float,
             Order.plan_id == plan_id,
             Order.amount_usd == float(amount),
             Order.provider == provider,
+            coupon_match,
             Order.created_at >= since,
         )
         .order_by(Order.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
+
+
+def _checkout_return_url(order_id: str) -> str:
+    base = settings.public_url.strip().rstrip("/")
+    return f"{base}/app/plan?order={order_id}" if base else ""
+
+
+def _build_whop_metadata(
+    *,
+    order_id: str,
+    base_whop_plan: str,
+    original_amount: float,
+    coupon_code: str | None = None,
+    affiliate_channel: str | None = None,
+    discount_pct: float = 0.0,
+    discount_usd: float = 0.0,
+) -> dict[str, str]:
+    meta: dict[str, str] = {
+        "order_id": order_id,
+        "base_whop_plan": base_whop_plan,
+        "original_amount_usd": f"{original_amount:.2f}",
+    }
+    if coupon_code:
+        meta.update(
+            {
+                "coupon_code": coupon_code,
+                "promo_code": coupon_code,
+                "affiliate_channel": affiliate_channel or "",
+                "referral_code": coupon_code,
+                "discount_pct": f"{discount_pct:g}",
+                "discount_usd": f"{discount_usd:.2f}",
+            }
+        )
+    return meta
 
 
 @router.post("/checkout", response_model=CheckoutOut, status_code=status.HTTP_201_CREATED)
@@ -169,11 +219,14 @@ def checkout(
     provider = _resolve_provider(payload.provider)
 
     plans = get_token_plans(db)
+    device = affiliates.device_hash(request.headers.get("x-device-id"))
+    ip = affiliates.ip_hash(meta_capi._client_ip(request))
     if payload.kind == "subscription":
         plan = plans.get(payload.plan_id or "")
         if plan is None:
             raise HTTPException(status_code=422, detail="Choose one of the plans: Starter, Pro or Max.")
-        amount = plan.price
+        original_amount = float(plan.price)
+        amount = original_amount
         tokens = plan.tokens
         bonus = 0
         if payload.coupon and payload.coupon.strip():
@@ -181,16 +234,11 @@ def checkout(
             if code is None:
                 raise HTTPException(status_code=422, detail="That code does not exist.")
             try:
-                affiliates.attribute(
-                    db,
-                    user,
-                    code,
-                    source="coupon",
-                    device=affiliates.device_hash(request.headers.get("x-device-id")),
-                    ip=affiliates.ip_hash(meta_capi._client_ip(request)),
-                )
+                affiliates.attribute(db, user, code, source="coupon", device=device, ip=ip)
             except affiliates.AttributionError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+        elif affiliates.referral_of(db, user.id) is None and not affiliates.has_paid(db, user):
+            affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
         # Coupons never stack: at most one, on the first subscription payment.
         coupon = affiliates.checkout_discount(db, user, plan.id, plan.price)
         if coupon is not None:
@@ -207,18 +255,36 @@ def checkout(
         if payload.amount is None or amount_int != payload.amount or amount_int not in topups["amounts"]:
             allowed = ", ".join(f"${a}" for a in topups["amounts"])
             raise HTTPException(status_code=422, detail=f"Top-up amounts are {allowed}.")
-        amount = float(amount_int)
+        original_amount = float(amount_int)
+        amount = original_amount
         tokens = topup_tokens(plan, amount_int, topups)
         bonus = topup_bonus(plan, amount_int, topups)
         coupon = None
 
     try:
-        whop_plan = whop.plan_id_for(payload.kind, plan.id, amount)
+        base_whop_plan = whop.plan_id_for(payload.kind, plan.id, original_amount)
     except whop.WhopError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
-    existing = _open_order(db, user, payload.kind, plan.id, amount, provider)
+    coupon_code = coupon["code"] if coupon else None
+    discount_usd = float(coupon["discount"]) if coupon else 0.0
+    discount_pct = float(coupon["pct"]) if coupon else 0.0
+    ref_row = affiliates.referral_of(db, user.id)
+    ref_code_for_meta = coupon_code or (ref_row.code if ref_row and ref_row.status in ("signed_up", "active", "waiting", "rewarded") else None)
+    ref_channel_for_meta = (coupon["channel"] if coupon else None) or (ref_row.channel if ref_row and ref_code_for_meta else None)
+
+    existing = _open_order(db, user, payload.kind, plan.id, amount, provider, coupon_code=coupon_code)
     if existing is not None:
+        resolved_plan = existing.whop_plan_id or base_whop_plan
+        existing_meta = _build_whop_metadata(
+            order_id=existing.id,
+            base_whop_plan=base_whop_plan,
+            original_amount=original_amount,
+            coupon_code=ref_code_for_meta,
+            affiliate_channel=ref_channel_for_meta,
+            discount_pct=discount_pct,
+            discount_usd=existing.discount_usd or discount_usd,
+        )
         notify.checkout_started(
             existing,
             user.email,
@@ -237,9 +303,14 @@ def checkout(
             logger.exception("Meta tracking refresh for order %s failed", existing.id)
         return CheckoutOut(
             order_id=existing.id,
-            whop_plan=whop_plan,
+            whop_plan=resolved_plan,
             checkout_url=existing.checkout_url or "",
             amount=amount,
+            original_amount=original_amount,
+            discount=existing.discount_usd or discount_usd,
+            promo_code=coupon_code,
+            whop_promo_to_prefill=coupon_code if (coupon_code and resolved_plan == base_whop_plan and discount_usd > 0) else None,
+            whop_metadata=existing_meta,
             tokens=existing.tokens,
             provider=existing.provider,
         )
@@ -253,9 +324,34 @@ def checkout(
         tokens,
         bonus=bonus if payload.kind == "topup" else 0,
         provider=provider,
-        coupon_code=coupon["code"] if coupon else None,
-        discount=coupon["discount"] if coupon else 0.0,
+        coupon_code=coupon_code,
+        discount=discount_usd,
     )
+    period_days = get_billing_rules(db)["period_days"]
+    session = whop.create_discounted_checkout(
+        base_whop_plan=base_whop_plan,
+        order_id=order.id,
+        amount=amount,
+        original_amount=original_amount,
+        plan_label=plan.label,
+        period_days=period_days,
+        return_url=_checkout_return_url(order.id),
+        coupon_code=coupon_code,
+        affiliate_channel=ref_channel_for_meta,
+        discount_pct=discount_pct,
+        discount_usd=discount_usd,
+    )
+    whop_plan = session["whop_plan"]
+    checkout_url = session["checkout_url"]
+    whop_meta = dict(session["metadata"])
+    if ref_code_for_meta and not coupon_code:
+        whop_meta["referral_code"] = ref_code_for_meta
+        whop_meta["affiliate_channel"] = ref_channel_for_meta or ""
+    order.whop_plan_id = whop_plan
+    if checkout_url:
+        order.checkout_url = checkout_url
+    db.commit()
+
     what = f"{plan.label} period" if order.kind == "subscription" else f"${amount:g} top-up on {plan.label}"
     try:
         tracking = meta_capi.initiate_checkout(request, order, user.email, currency(db))
@@ -271,8 +367,13 @@ def checkout(
     return CheckoutOut(
         order_id=order.id,
         whop_plan=whop_plan,
-        checkout_url="",
+        checkout_url=checkout_url,
         amount=amount,
+        original_amount=original_amount,
+        discount=discount_usd,
+        promo_code=coupon_code,
+        whop_promo_to_prefill=session.get("promo_to_prefill"),
+        whop_metadata=whop_meta,
         tokens=tokens,
         provider=provider,
     )
@@ -411,6 +512,8 @@ def _settle_whop_renewal(
     if amount is None or amount <= 0:
         amount = plan.price
     renewal = new_order(db, user, "subscription", plan, amount, plan.tokens, provider=whop.PROVIDER)
+    if paid_plan:
+        renewal.whop_plan_id = paid_plan[:128]
     _record_whop_payment_refs(db, renewal, payment_id=payment_id, membership_id=membership_id, payer_id=payer_id)
     applied = settle_order(db, renewal, source="Whop")
     return JSONResponse({"ok": True, "applied": applied, "renewal": True})
@@ -450,21 +553,56 @@ def _handle_payment_succeeded(db: Session, event: dict) -> JSONResponse:
         return JSONResponse({"ok": True, "ignored": "wrong provider"})
 
     if paid_plan:
+        expected_plans: set[str] = set()
+        if order.whop_plan_id:
+            expected_plans.add(order.whop_plan_id.strip())
         try:
-            expected_plan = whop.plan_id_for(order.kind, order.plan_id, order.amount_usd)
+            base_expected = whop.plan_id_for(order.kind, order.plan_id, order.amount_usd)
+            if base_expected:
+                expected_plans.add(base_expected)
         except whop.WhopError:
-            expected_plan = ""
-        if expected_plan and paid_plan != expected_plan:
-            logger.warning("Whop webhook for order %s ignored: plan mismatch (%s != %s)", order.id, paid_plan, expected_plan)
+            pass
+        if expected_plans and paid_plan not in expected_plans:
+            logger.warning(
+                "Whop webhook for order %s ignored: plan mismatch (%s not in %s)",
+                order.id,
+                paid_plan,
+                sorted(expected_plans),
+            )
             log_activity(db, order.user_id, "payment", f"Whop webhook for order {order.id} ignored: plan mismatch")
             owner = db.get(User, order.user_id)
             notify.needs_review(
                 order,
                 owner.email if owner else None,
-                f"Whop plan mismatch: paid {paid_plan}, expected {expected_plan}",
+                f"Whop plan mismatch: paid {paid_plan}, expected {' or '.join(sorted(expected_plans))}",
                 name=owner.display_name if owner else None,
             )
             return JSONResponse({"ok": True, "ignored": "plan mismatch"})
+
+    # If the user entered an affiliate/promo code inside Whop Checkout itself (or
+    # Whop charged a discounted amount), sync attribution & real paid total before
+    # commission bookkeeping runs inside settle_order.
+    whop_promo = whop.promo_code_from_event(event)
+    paid_usd = whop.usd_amount_from_event(event)
+    if order.status in ("pending", "expired", "invalid"):
+        changed = False
+        if whop_promo and not order.coupon_code and order.kind == "subscription":
+            owner = db.get(User, order.user_id)
+            code_row = affiliates.find_code(db, whop_promo)
+            if owner is not None and code_row is not None and affiliates.referral_of(db, owner.id) is None and not affiliates.has_paid(db, owner):
+                try:
+                    affiliates.attribute(db, owner, code_row, source="coupon")
+                except affiliates.AttributionError:
+                    pass
+            order.coupon_code = whop_promo[:40]
+            changed = True
+        if paid_usd is not None and paid_usd > 0 and round(paid_usd, 2) < round(order.amount_usd, 2):
+            if order.discount_usd == 0:
+                order.discount_usd = round(order.amount_usd - paid_usd, 2)
+            order.amount_usd = round(paid_usd, 2)
+            changed = True
+        if changed:
+            db.commit()
 
     _record_whop_payment_refs(db, order, payment_id=payment_id, membership_id=membership_id, payer_id=payer_id)
     applied = settle_order(db, order, source="Whop")

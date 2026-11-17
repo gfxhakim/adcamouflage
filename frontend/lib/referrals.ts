@@ -179,9 +179,17 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 const send = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const fetchMyReferrals = () => call<MyReferrals>("/me");
+export const fetchVisitorOffer = () => call<{ offer: ReferralOffer | null }>("/visitor-offer");
 export const recordClick = (code: string) =>
   call<{ valid: boolean; offer?: ReferralOffer }>("/click", send("POST", { code }));
 export const applyCode = (code: string) => call<{ offer: ReferralOffer }>("/apply", send("POST", { code }));
+
+export const VISITOR_OFFER_EVENT = "pf:ref-offer";
+
+export function dispatchVisitorOffer(offer: ReferralOffer | null): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<ReferralOffer | null>(VISITOR_OFFER_EVENT, { detail: offer }));
+}
 export const applyAsPartner = (body: { code: string; audience: string; payout_method: string; payout_address: string }) =>
   call<PartnerProgram>("/partner/apply", send("POST", body));
 export const savePayoutDetails = (body: { payout_method: string; payout_address: string }) =>

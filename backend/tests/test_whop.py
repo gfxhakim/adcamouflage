@@ -593,3 +593,195 @@ def test_whop_dispute_webhooks_stop_account_and_refund_on_loss(whop_env):
     }
     assert _post_whop(dispute_lost).json() == {"ok": True, "dispute_handled": True}
     assert _order(order_id).status == "refunded"
+
+
+def test_whop_discounted_checkout_variant_and_promo_fallback(whop_env, monkeypatch):
+    from types import SimpleNamespace
+
+    from pydantic import SecretStr
+
+    from app import affiliates, whop
+    from app.config import settings
+    from app.db import AffiliateCommission, AffiliatePartner, ReferralCode, get_session_factory
+
+    code = f"PARTNER{RUN_ID[:4].upper()}"
+    aff_email = address("whopaff")
+    aff_client = _signed_in(aff_email)
+    applied = aff_client.post(
+        "/api/v1/referrals/partner/apply",
+        json={"code": code, "audience": "Media buyers newsletter"},
+    )
+    assert applied.status_code in (200, 201), applied.text
+    with get_session_factory()() as db:
+        partner = db.query(AffiliatePartner).filter(AffiliatePartner.requested_code == code).one()
+        partner.status = "approved"
+        db.add(ReferralCode(user_id=partner.user_id, code=code, channel="partner", status="active"))
+        db.commit()
+        partner_id = partner.user_id
+
+    buyer_email = address("whopdisc")
+    buyer_client = _signed_in(buyer_email)
+    click = buyer_client.post(
+        "/api/v1/referrals/click",
+        json={"code": code, "landing_path": "/"},
+        headers={"x-device-id": f"dev-buyer-{RUN_ID}"},
+    )
+    assert click.status_code == 200
+    assert click.json()["offer"]["prices"]["pro"] == 75.65
+
+    captured_cfg: dict = {}
+    promo_calls: list[dict] = []
+
+    class _FakeVariants:
+        def retrieve(self, *, id: str):
+            return SimpleNamespace(
+                account=SimpleNamespace(id="biz_test_1"),
+                product={"id": "prod_test_1"},
+                currency="usd",
+            )
+
+    class _FakeCheckoutCfgs:
+        def create(self, **kwargs):
+            captured_cfg.clear()
+            captured_cfg.update(kwargs)
+            return SimpleNamespace(
+                id="ch_disc_1",
+                purchase_url="https://whop.com/checkout/ch_disc_1",
+                variant=SimpleNamespace(id="plan_disc_pro_1"),
+            )
+
+    class _FakePromoCodes:
+        def create(self, **kwargs):
+            promo_calls.append(kwargs)
+            return SimpleNamespace(id="promo_1", code=kwargs["code"])
+
+    monkeypatch.setattr(settings, "whop_api_key", SecretStr("whop_live_test_secret"))
+    whop._VARIANT_CACHE.clear()
+    monkeypatch.setattr(
+        whop,
+        "_sdk_client",
+        lambda: SimpleNamespace(
+            variants=_FakeVariants(),
+            checkout_configurations=_FakeCheckoutCfgs(),
+            promo_codes=_FakePromoCodes(),
+        ),
+    )
+
+    co_res = buyer_client.post(
+        "/api/v1/billing/checkout",
+        json={"kind": "subscription", "plan_id": "pro", "provider": "whop"},
+    )
+    assert co_res.status_code == 201, co_res.text
+    co = co_res.json()
+    assert co["original_amount"] == 89.0
+    assert co["discount"] == 13.35
+    assert co["amount"] == 75.65
+    assert co["promo_code"] == code
+    assert co["whop_plan"] == "plan_disc_pro_1"
+    assert co["whop_promo_to_prefill"] is None
+    assert co["whop_metadata"]["promo_code"] == code
+    assert co["whop_metadata"]["affiliate_channel"] == "partner"
+    assert captured_cfg["variant"]["initial_price"] == 75.65
+    assert captured_cfg["variant"]["renewal_price"] == 89.0
+    assert captured_cfg["metadata"]["referral_code"] == code
+
+    # Settle via payment.succeeded against the dynamically created discounted variant id.
+    order_id = co["order_id"]
+    paid_evt = _whop_event(
+        order_id,
+        payment_id="pay_disc_1",
+        variant_id="plan_disc_pro_1",
+        extra_data={
+            "usd_total": 75.65,
+            "metadata": {"order_id": order_id, "coupon_code": code, "promo_code": code},
+        },
+    )
+    assert _post_whop(paid_evt).json() == {"ok": True, "applied": True}
+    order = _order(order_id)
+    assert order.status == "paid"
+    assert order.whop_plan_id == "plan_disc_pro_1"
+    assert _balances(buyer_email) == (4500, 0)
+    with get_session_factory()() as db:
+        comm = db.query(AffiliateCommission).filter(AffiliateCommission.order_id == order_id).one()
+        assert round(float(comm.amount_usd), 2) == 75.65
+        rows = [r for r in affiliates.commission_rows(db, partner_id) if r["order_id"] == order_id]
+        assert len(rows) == 1
+        assert rows[0]["rate_pct"] == 25.0
+        assert rows[0]["commission"] == round(75.65 * 0.25, 2)
+
+    # Also verify fallback to promo_codes.create + prefill when checkout_configurations.create fails.
+    class _BrokenCheckoutCfgs:
+        def create(self, **kwargs):
+            raise RuntimeError("variant inline creation disabled")
+
+    monkeypatch.setattr(
+        whop,
+        "_sdk_client",
+        lambda: SimpleNamespace(
+            variants=_FakeVariants(),
+            checkout_configurations=_BrokenCheckoutCfgs(),
+            promo_codes=_FakePromoCodes(),
+        ),
+    )
+    fb = whop.create_discounted_checkout(
+        base_whop_plan="plan_pro",
+        order_id="ord_fallback_1",
+        amount=75.65,
+        original_amount=89.0,
+        plan_label="Pro Monthly",
+        period_days=30,
+        coupon_code=code,
+        affiliate_channel="partner",
+        discount_pct=15.0,
+        discount_usd=13.35,
+    )
+    assert fb["whop_plan"] == "plan_pro"
+    assert fb["promo_to_prefill"] == code
+    assert len(promo_calls) == 1
+    assert promo_calls[0]["code"] == code and promo_calls[0]["amount_off"] == 15.0
+
+
+def test_whop_webhook_syncs_whop_native_promo_code_and_discounted_total(whop_env):
+    from app import affiliates
+    from app.db import AffiliateCommission, AffiliatePartner, Referral, ReferralCode, get_session_factory
+
+    code = f"WHOPCD{RUN_ID[:4].upper()}"
+    aff_email = address("whopnativeaff")
+    aff_client = _signed_in(aff_email)
+    applied = aff_client.post(
+        "/api/v1/referrals/partner/apply",
+        json={"code": code, "audience": "Ad buyers"},
+    )
+    assert applied.status_code in (200, 201), applied.text
+    with get_session_factory()() as db:
+        partner = db.query(AffiliatePartner).filter(AffiliatePartner.requested_code == code).one()
+        partner.status = "approved"
+        db.add(ReferralCode(user_id=partner.user_id, code=code, channel="partner", status="active"))
+        db.commit()
+        partner_id = partner.user_id
+
+    # Buyer creates checkout WITHOUT activating promo in our UI first, then enters it inside Whop Checkout.
+    buyer_email = address("whopnativebuyer")
+    buyer_client = _signed_in(buyer_email)
+    order_id = _checkout(buyer_client, "pro")["order_id"]
+    evt = _whop_event(
+        order_id,
+        payment_id="pay_native_promo_1",
+        variant_id="plan_pro",
+        extra_data={"usd_total": 75.65, "promo_code": code},
+    )
+    assert _post_whop(evt).json() == {"ok": True, "applied": True}
+    order = _order(order_id)
+    assert order.status == "paid"
+    assert order.coupon_code == code
+    assert float(order.amount_usd) == 75.65
+    with get_session_factory()() as db:
+        buyer = _load(buyer_email)
+        ref = db.query(Referral).filter(Referral.referred_user_id == buyer.id).one()
+        assert ref.code == code and ref.channel == "partner"
+        comm = db.query(AffiliateCommission).filter(AffiliateCommission.order_id == order_id).one()
+        assert round(float(comm.amount_usd), 2) == 75.65
+        rows = [r for r in affiliates.commission_rows(db, partner_id) if r["order_id"] == order_id]
+        assert len(rows) == 1
+        assert rows[0]["commission"] == round(75.65 * 0.25, 2)
+
