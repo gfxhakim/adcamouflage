@@ -14,11 +14,12 @@ import {
   Timer,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
-import { absoluteUrl } from "@/lib/api";
+import { getAsset } from "@/lib/api";
 import { elapsed, formatBytes, formatDelta, shortHash } from "@/lib/format";
 import type { AssetJob } from "@/lib/types";
+import DownloadLink from "./DownloadLink";
 import NeonCard, { type NeonTone } from "./NeonCard";
 import ProgressBar from "./ProgressBar";
 
@@ -60,6 +61,10 @@ interface JobCardProps {
 
 export function JobCard({ asset, onCancel }: JobCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [downloadProblem, setDownloadProblem] = useState<string | null>(null);
+  // Links are signed again on every read, so ask for them right before a download.
+  const freshDownload = useCallback(() => getAsset(asset.id).then((latest) => latest.download_url), [asset.id]);
+  const freshPoster = useCallback(() => getAsset(asset.id).then((latest) => latest.poster_url), [asset.id]);
   const active = asset.status === "processing" || asset.status === "queued";
   const metrics = asset.metrics ?? {};
   const sizeDelta = formatDelta(metrics.source_bytes, metrics.output_bytes);
@@ -167,26 +172,30 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
             {asset.status === "completed" ? (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {asset.download_url ? (
-                  <a
-                    href={absoluteUrl(asset.download_url)}
+                  <DownloadLink
+                    href={asset.download_url}
+                    fresh={freshDownload}
+                    onProblem={setDownloadProblem}
                     className="btn-primary !px-3 !py-1.5 !text-xs"
-                    download
                   >
                     <Download className="h-3.5 w-3.5" aria-hidden />
                     Download
                     <span className="opacity-70">{formatBytes(asset.output_size_bytes)}</span>
-                  </a>
-                ) : null}
+                  </DownloadLink>
+                ) : (
+                  <span className="chip !text-[10px]">File expired</span>
+                )}
 
                 {asset.poster_url ? (
-                  <a
-                    href={absoluteUrl(asset.poster_url)}
+                  <DownloadLink
+                    href={asset.poster_url}
+                    fresh={freshPoster}
+                    onProblem={setDownloadProblem}
                     className="btn-ghost !px-3 !py-1.5 !text-xs"
-                    download
                   >
                     <ImageIcon className="h-3.5 w-3.5" aria-hidden />
                     Thumbnail
-                  </a>
+                  </DownloadLink>
                 ) : null}
 
                 {sizeDelta ? <span className="chip !text-[10px]">size {sizeDelta}</span> : null}
@@ -211,6 +220,15 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
                   />
                 </button>
               </div>
+            ) : null}
+
+            {downloadProblem && asset.status === "completed" ? (
+              <p
+                role="alert"
+                className="mt-3 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+              >
+                {downloadProblem}
+              </p>
             ) : null}
 
             {expanded && asset.status === "completed" ? (

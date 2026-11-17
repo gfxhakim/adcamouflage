@@ -308,9 +308,10 @@ Open **http://localhost:3000**.
    settings always produce the same output.
 3. **Run** — the batch is queued and each asset reports live progress parsed
    from ffmpeg itself, not estimated. Renders continue if you close the tab.
-4. **Collect** — download each variant, or the whole batch as a zip that
-   includes `camouflage-manifest.json` listing every mutation applied and the
-   before/after hashes.
+4. **Collect** — download each variant, or the whole batch as a zip of the
+   media files. A download is named after the upload with `flow` added
+   (`clip.mp4` saves as `clipflow.mp4`). Each file's report in the queue lists
+   every mutation applied and the before/after hashes.
 
 ---
 
@@ -462,7 +463,7 @@ Full OpenAPI docs at `/api/docs`.
 | `GET` | `/api/v1/presets` | Preset definitions, limits and supported formats. |
 | `POST` | `/api/v1/batches` | Multipart upload. `files[]` plus a JSON `options` field. Returns `202`. |
 | `GET` | `/api/v1/batches/{id}` | Batch status with per-asset progress, applied mutations and metrics. |
-| `GET` | `/api/v1/batches/{id}/archive?token=` | Zip of every finished output plus the manifest. |
+| `GET` | `/api/v1/batches/{id}/archive?token=` | Zip of every finished output (media files only). |
 | `GET` | `/api/v1/assets/{id}` | One asset's record. |
 | `GET` | `/api/v1/assets/{id}/download?token=` | The mutated file. |
 | `POST` | `/api/v1/assets/{id}/cancel` | Revoke a queued or running render. |

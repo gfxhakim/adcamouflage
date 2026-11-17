@@ -5,10 +5,11 @@ import { Archive, Clock, Download, FileVideo, Inbox, Package } from "lucide-reac
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import DownloadLink from "@/components/DownloadLink";
 import ThemeDock from "@/components/ThemeDock";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import NeonCard from "@/components/NeonCard";
-import { absoluteUrl, getBatch } from "@/lib/api";
+import { getAsset, getBatch } from "@/lib/api";
 import { fetchMyBatches, type BatchSummary } from "@/lib/auth";
 import { formatDate, timeAgo } from "@/lib/format";
 import { useRequireUser } from "@/lib/useRequireUser";
@@ -25,6 +26,8 @@ export default function HistoryPage() {
   const user = useRequireUser();
   const [summaries, setSummaries] = useState<BatchSummary[] | null>(null);
   const [live, setLive] = useState<Record<string, LiveBatch>>({});
+  // A download that could not start, per batch (the file expired, signed out...).
+  const [problems, setProblems] = useState<Record<string, string | null>>({});
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -104,6 +107,9 @@ export default function HistoryPage() {
                 const batch: BatchStatus | null = pending || expired ? null : (status as BatchStatus);
                 const archive = batch?.archive_url ?? null;
                 const completedAssets = batch?.assets.filter((a) => a.download_url) ?? [];
+                const problem = problems[row.id] ?? null;
+                const reportProblem = (message: string | null) =>
+                  setProblems((prev) => ({ ...prev, [row.id]: message }));
 
                 return (
                   <NeonCard key={row.id} padding="lg" radius="xl">
@@ -145,10 +151,15 @@ export default function HistoryPage() {
                         ) : null}
 
                         {archive ? (
-                          <a href={absoluteUrl(archive)} className="btn-primary !py-2 !px-3 !text-xs">
+                          <DownloadLink
+                            href={archive}
+                            fresh={() => getBatch(row.id).then((latest) => latest.archive_url)}
+                            onProblem={reportProblem}
+                            className="btn-primary !py-2 !px-3 !text-xs"
+                          >
                             <Archive className="h-3.5 w-3.5" aria-hidden />
                             Download all
-                          </a>
+                          </DownloadLink>
                         ) : null}
                       </div>
                     </div>
@@ -164,20 +175,31 @@ export default function HistoryPage() {
                                 {asset.variants_total > 1 ? ` · v${asset.variant_index + 1}` : ""}
                               </span>
                             </span>
-                            <a
-                              href={absoluteUrl(asset.download_url!)}
+                            <DownloadLink
+                              href={asset.download_url!}
+                              fresh={() => getAsset(asset.id).then((latest) => latest.download_url)}
+                              onProblem={reportProblem}
                               className="btn-ghost shrink-0 !py-1.5 !px-2.5 !text-xs"
                             >
                               <Download className="h-3.5 w-3.5" aria-hidden />
                               Download
-                            </a>
+                            </DownloadLink>
                           </li>
                         ))}
                       </ul>
-                    ) : expired ? (
+                    ) : expired || (batch && batch.completed > 0) ? (
                       <p className="mt-3 text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
                         The output files for this batch have been purged. Re-run it in the Workspace to
                         get fresh downloads.
+                      </p>
+                    ) : null}
+
+                    {problem ? (
+                      <p
+                        role="alert"
+                        className="mt-3 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                      >
+                        {problem}
                       </p>
                     ) : null}
                   </NeonCard>

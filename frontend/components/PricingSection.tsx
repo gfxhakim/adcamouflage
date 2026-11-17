@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Loader2, Sparkles, TicketPercent, Users, X } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { ArrowRight, Check, Sparkles, Users, X } from "lucide-react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
@@ -11,13 +10,6 @@ import { CmsHeadline } from "@/components/landing/primitives";
 import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { reportPlanClick } from "@/lib/notify";
 import { featureForLine, planIncludes } from "@/lib/plan-features";
-import {
-  dispatchVisitorOffer,
-  fetchVisitorOffer,
-  recordClick,
-  VISITOR_OFFER_EVENT,
-  type ReferralOffer as ActiveReferralOffer,
-} from "@/lib/referrals";
 import { cn } from "@/lib/utils";
 
 interface PricingSectionProps {
@@ -29,8 +21,6 @@ interface PricingSectionProps {
   ctaHref: string;
   /** The limited-time launch offer, when one runs. */
   promo?: PricePromo;
-  /** Discount offer resolved from the visitor's affiliate link / promo cookie. */
-  visitorOffer?: ActiveReferralOffer | null;
 }
 
 /** The plan the section highlights. */
@@ -89,59 +79,8 @@ export function PricingSection({
   currency,
   ctaHref,
   promo,
-  visitorOffer = null,
 }: PricingSectionProps) {
   const cms = useCms();
-  const [activeOffer, setActiveOffer] = useState<ActiveReferralOffer | null>(visitorOffer);
-  const [promoOpen, setPromoOpen] = useState(false);
-  const [promoInput, setPromoInput] = useState("");
-  const [promoBusy, setPromoBusy] = useState(false);
-  const [promoError, setPromoError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setActiveOffer(visitorOffer);
-  }, [visitorOffer]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchVisitorOffer()
-      .then((res) => {
-        if (!cancelled && res.offer) setActiveOffer(res.offer);
-      })
-      .catch(() => undefined);
-    const onUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<ActiveReferralOffer | null>).detail;
-      if (detail) setActiveOffer(detail);
-    };
-    window.addEventListener(VISITOR_OFFER_EVENT, onUpdate);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(VISITOR_OFFER_EVENT, onUpdate);
-    };
-  }, []);
-
-  const submitPromo = async (event: FormEvent) => {
-    event.preventDefault();
-    const cleaned = promoInput.trim().toUpperCase();
-    if (!cleaned || promoBusy) return;
-    setPromoBusy(true);
-    setPromoError(null);
-    try {
-      const res = await recordClick(cleaned);
-      if (!res.valid || !res.offer) {
-        setPromoError("That promo code is not valid or has expired.");
-      } else {
-        setActiveOffer(res.offer);
-        dispatchVisitorOffer(res.offer);
-        setPromoInput("");
-        setPromoOpen(false);
-      }
-    } catch {
-      setPromoError("Could not validate promo code. Please try again.");
-    } finally {
-      setPromoBusy(false);
-    }
-  };
 
   // The offer ends at the same instant for every plan; the server sends it per plan.
   const endsAt = promo?.active ? promo.ends_at : listed.find((plan) => plan.offer_ends_at)?.offer_ends_at;
@@ -157,7 +96,7 @@ export function PricingSection({
   const included = cms
     .list("pricing.studioIncluded", INCLUDED, "Included in every plan", INCLUDED)
     .filter(({ item }) => !SEAT_LINE.test(item));
-  const chooseHref = activeOffer ? "/signup" : ctaHref;
+  const chooseHref = ctaHref;
 
   return (
     <div>
@@ -178,79 +117,10 @@ export function PricingSection({
 
       {onOffer ? <OfferCountdown left={left} savePercent={bestSaving} /> : null}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-3 text-xs text-white/85">
-        {activeOffer ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
-              <TicketPercent className="h-3.5 w-3.5" aria-hidden />
-              Promo active: {activeOffer.code}
-            </span>
-            <span>
-              Your <strong className="text-white">{activeOffer.discount_pct}% first-payment reduction</strong> is
-              shown below and applies automatically on Whop checkout.
-            </span>
-            {!promoOpen ? (
-              <button
-                type="button"
-                onClick={() => setPromoOpen(true)}
-                className="font-semibold text-meta-300 hover:underline"
-              >
-                Change code
-              </button>
-            ) : null}
-          </div>
-        ) : !promoOpen ? (
-          <button
-            type="button"
-            onClick={() => setPromoOpen(true)}
-            className="inline-flex items-center gap-2 font-medium text-meta-300 transition hover:text-white"
-          >
-            <TicketPercent className="h-4 w-4" aria-hidden />
-            Have a partner or promo code? Activate your first-payment discount here
-          </button>
-        ) : null}
-
-        {promoOpen ? (
-          <form onSubmit={submitPromo} className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <input
-              type="text"
-              value={promoInput}
-              maxLength={24}
-              onChange={(e) => setPromoInput(e.target.value)}
-              placeholder="Enter promo code"
-              aria-label="Affiliate or promo code"
-              className="rounded-xl border border-white/20 bg-black/60 px-3 py-1.5 text-xs uppercase text-white placeholder:text-white/40 focus:border-meta-400 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={promoBusy || !promoInput.trim()}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-meta-500 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-meta-600 disabled:opacity-50"
-            >
-              {promoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
-              Activate
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPromoOpen(false);
-                setPromoError(null);
-              }}
-              className="rounded-xl px-2.5 py-1.5 text-xs text-white/60 hover:text-white"
-            >
-              Cancel
-            </button>
-            {promoError ? <span className="w-full text-xs text-red-400">{promoError}</span> : null}
-          </form>
-        ) : null}
-      </div>
-
-      <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", onOffer ? "mt-8" : "mt-8")}>
+      <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", onOffer ? "mt-8" : "mt-10")}>
         {plans.map((plan, index) => {
           const popular = plan.id === popularId;
           const regular = !ended && plan.regular_price && plan.regular_price > plan.price ? plan.regular_price : null;
-          const couponAmount = activeOffer?.prices?.[plan.id];
-          const hasPromoDiscount = activeOffer !== null && couponAmount !== undefined && couponAmount < plan.price;
-          const displayPrice = hasPromoDiscount ? couponAmount : plan.price;
 
           return (
             <motion.div
@@ -280,17 +150,7 @@ export function PricingSection({
                 {BLURBS[plan.id] ?? ""}
               </T>
 
-              {hasPromoDiscount && activeOffer ? (
-                <p className="mt-6 flex flex-wrap items-center gap-2">
-                  <span className="text-lg font-medium text-white/45 line-through decoration-red-400/80 decoration-2">
-                    <span className="sr-only">Standard price </span>
-                    {price(plan.price, currency)}
-                  </span>
-                  <span className="rounded-full bg-emerald-400 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-black">
-                    −{activeOffer.discount_pct}% · {activeOffer.code}
-                  </span>
-                </p>
-              ) : regular ? (
+              {regular ? (
                 <p className="mt-6 flex flex-wrap items-center gap-2">
                   <span className="text-lg font-medium text-white/45 line-through decoration-red-400/80 decoration-2">
                     <span className="sr-only">Regular price </span>
@@ -301,22 +161,13 @@ export function PricingSection({
                   </span>
                 </p>
               ) : null}
-              <p className={cn("flex items-baseline gap-1.5", hasPromoDiscount || regular ? "mt-1" : "mt-6")}>
-                {hasPromoDiscount ? (
-                  <span className="sr-only">Discounted first-payment price </span>
-                ) : regular ? (
-                  <span className="sr-only">Launch price </span>
-                ) : null}
+              <p className={cn("flex items-baseline gap-1.5", regular ? "mt-1" : "mt-6")}>
+                {regular ? <span className="sr-only">Launch price </span> : null}
                 <span className="text-5xl font-semibold tracking-[-0.05em] text-white">
-                  {price(displayPrice, currency)}
+                  {price(plan.price, currency)}
                 </span>
                 <T k="pricing.perMonth" className="text-sm text-white/45">/mo</T>
               </p>
-              {hasPromoDiscount && activeOffer ? (
-                <p className="mt-1 text-xs font-medium text-emerald-300">
-                  First payment with {activeOffer.code} · then {price(plan.price, currency)}/mo
-                </p>
-              ) : null}
               <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-meta-400" aria-hidden />
                 {number(plan.tokens)} <T k="pricing.tokensWord">tokens</T> · {number(plan.generations)} <T k="pricing.generationsWord">generations</T>

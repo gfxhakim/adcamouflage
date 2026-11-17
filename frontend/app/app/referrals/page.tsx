@@ -4,21 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 
 import WorkspaceShell from "@/components/WorkspaceShell";
 import PartnerCard from "@/components/referrals/PartnerCard";
-import { fetchSubscription, type Subscription } from "@/lib/auth";
 import { fetchMyReferrals, type MyReferrals } from "@/lib/referrals";
 import { useRequireUser } from "@/lib/useRequireUser";
 
 export default function ReferralsPage() {
   const user = useRequireUser();
   const [data, setData] = useState<MyReferrals | null>(null);
-  const [sub, setSub] = useState<Subscription | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [program, subscription] = await Promise.all([fetchMyReferrals(), fetchSubscription().catch(() => null)]);
+      const program = await fetchMyReferrals();
       setData(program);
-      setSub(subscription);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the affiliate program.");
@@ -29,7 +26,6 @@ export default function ReferralsPage() {
     if (user) void load();
   }, [user, load]);
 
-  const currency = sub?.currency || "USD";
   const partner = data?.partner;
   const approved = partner?.status === "approved" || partner?.status === "suspended";
   const nothingOn = data && !data.partner.enabled && !data.partner.status;
@@ -41,12 +37,12 @@ export default function ReferralsPage() {
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
             <p className="label">Affiliate program</p>
             <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">
-              {approved ? "Affiliate Partner Dashboard" : "Join our Affiliate Program"}
+              {approved ? "Your Affiliate Portal" : "Join our Affiliate Program"}
             </h1>
             <p className="max-w-2xl text-sm text-ink-muted">
               {approved && partner
-                ? `Your link and promo code are active across Whop checkout (${partner.discount_pct}% buyer discount) and automatic monthly commission calculation.`
-                : "Tell us about your audience and request your promo code. Once we approve you, your link and code activate automatically with checkout discounts and commission tracking."}
+                ? "Share your affiliate link and promo code with your audience so they can enter it at Whop checkout when subscribing."
+                : "Share your full name, email, social media profiles, and audience background. After review, we assign your promo code and affiliate link."}
             </p>
           </section>
 
@@ -61,7 +57,12 @@ export default function ReferralsPage() {
               The affiliate program is not open right now.
             </p>
           ) : (
-            <PartnerCard partner={data.partner} currency={currency} onChanged={(next) => setData({ ...data, partner: next })} />
+            <PartnerCard
+              partner={data.partner}
+              defaultName={user?.display_name ?? ""}
+              defaultEmail={user?.email ?? ""}
+              onChanged={(next) => setData({ ...data, partner: next })}
+            />
           )}
         </main>
       </div>

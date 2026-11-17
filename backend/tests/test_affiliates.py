@@ -132,13 +132,25 @@ def make_partner(admin: TestClient, code: str) -> tuple[TestClient, str]:
     creator = client_for(email, device=f"creator-device-{code}")
     applied = creator.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": code, "audience": "youtube.com/@creator, 40k subscribers", "payout_method": "USDT TRC-20", "payout_address": "Txyz"},
+        json={
+            "full_name": "Creator Test",
+            "email": email,
+            "social_links": ["https://youtube.com/@creator"],
+            "code": code,
+            "audience": "youtube.com/@creator, 40k subscribers sharing ad creative workflows",
+            "payout_method": "USDT TRC-20",
+            "payout_address": "Txyz",
+        },
     )
     assert applied.status_code == 200 and applied.json()["status"] == "pending"
     with session() as db:
         uid = user_of(db, email).id
-    approved = admin.post(f"/api/v1/admin/affiliates/partners/{uid}", json={"action": "approve"})
+    approved = admin.post(
+        f"/api/v1/admin/affiliates/partners/{uid}",
+        json={"action": "approve", "code": code, "affiliate_link": f"https://whop.com/proteusflow?a={code.lower()}"},
+    )
     assert approved.status_code == 200 and approved.json()["code"] == code
+    assert approved.json()["affiliate_link"] == f"https://whop.com/proteusflow?a={code.lower()}"
     return creator, email
 
 
@@ -171,9 +183,12 @@ def test_friend_link_gives_10_percent_on_pro_and_max_but_not_starter():
     offer = friend.get("/api/v1/referrals/me").json()["my_offer"]
     assert offer["discount_pct"] == 10 and offer["prices"] == {"pro": 80.10, "max": 134.10}
 
-    starter = checkout(friend, "starter")
+    starter = checkout(friend, "starter", coupon=code)
     assert starter.status_code == 201 and starter.json()["amount"] == 37.0
-    pro = checkout(friend, "pro")
+    # Without an explicit coupon parameter, normal Subscribe checkout uses the base Whop plan amount.
+    default_pro = checkout(friend, "pro")
+    assert default_pro.status_code == 201 and default_pro.json()["amount"] == 89.0
+    pro = checkout(friend, "pro", coupon=code)
     assert pro.json()["amount"] == 80.10
     with session() as db:
         order = db.get(Order, pro.json()["order_id"])
@@ -350,8 +365,9 @@ def test_starter_takes_the_partner_coupon(admin):
     code = f"STAR{RUN_ID[:4].upper()}"
     make_partner(admin, code)
     buyer = client_for(address("fan"), device="device-g2", ref=code)
-    assert checkout(buyer, "starter").json()["amount"] == 31.45
-    assert checkout(buyer, "max").json()["amount"] == 126.65
+    assert checkout(buyer, "starter").json()["amount"] == 37.0
+    assert checkout(buyer, "starter", coupon=code).json()["amount"] == 31.45
+    assert checkout(buyer, "max", coupon=code).json()["amount"] == 126.65
 
 
 def test_tier_follows_paying_customers_in_the_month():
@@ -389,7 +405,7 @@ def test_payout_needs_the_minimum_then_marks_commissions_paid(admin):
     creator, creator_email = make_partner(admin, code)
     buyer_email = address("fan")
     buyer = client_for(buyer_email, device="device-h1", ref=code)
-    order_id = checkout(buyer, "max").json()["order_id"]
+    order_id = checkout(buyer, "max", coupon=code).json()["order_id"]
     pay(buyer_email, order_id)
     with session() as db:
         partner_id = user_of(db, creator_email).id
@@ -435,8 +451,15 @@ def test_suspending_a_partner_cancels_pending_commissions_and_the_code(admin):
 def test_partner_code_must_be_free_and_applications_can_be_closed(admin):
     code = f"DUP{RUN_ID[:4].upper()}"
     make_partner(admin, code)
-    other = client_for(address("creator"))
-    body = {"code": code, "audience": "instagram.com/other with 10k"}
+    other_email = address("creator")
+    other = client_for(other_email)
+    body = {
+        "full_name": "Other Creator",
+        "email": other_email,
+        "social_links": ["https://instagram.com/other"],
+        "code": code,
+        "audience": "instagram.com/other with 10k active media buyers",
+    }
     assert other.post("/api/v1/referrals/partner/apply", json=body).status_code == 409
     settings_ = admin.get("/api/v1/admin/affiliates").json()["program"]
     settings_["partner"]["applications_open"] = False
@@ -465,8 +488,9 @@ def test_admin_can_change_every_number_and_customers_cannot_see_the_panel(admin)
     referrer_email = address("ref")
     referrer = client_for(referrer_email, device="device-j1")
     subscribe(referrer_email)
-    friend = client_for(address("friend"), device="device-j2", ref=friend_code(referrer))
-    assert checkout(friend, "starter").json()["amount"] == 29.6
+    fcode = friend_code(referrer)
+    friend = client_for(address("friend"), device="device-j2", ref=fcode)
+    assert checkout(friend, "starter", coupon=fcode).json()["amount"] == 29.6
 
     program["friend"]["enabled"] = False
     admin.put("/api/v1/admin/affiliates/settings", json=program)
@@ -624,10 +648,17 @@ def test_public_program_and_affiliate_only_account_isolation():
     assert prog.status_code == 200 and prog.json()["friend"]["enabled"] is False
     applied = client.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": f"SAM{RUN_ID[:4].upper()}", "audience": "YouTube ad creative channel (45k subscribers)"},
+        json={
+            "full_name": "Sam Partner",
+            "email": aff_email,
+            "social_links": ["https://youtube.com/@samads", "https://instagram.com/samads"],
+            "audience": "YouTube ad creative channel (45k subscribers) looking to introduce ProteusFlow.",
+        },
     )
     assert applied.status_code == 201 or applied.status_code == 200
     assert applied.json()["status"] == "pending"
+    assert applied.json()["full_name"] == "Sam Partner"
+    assert applied.json()["social_links"] == ["https://youtube.com/@samads", "https://instagram.com/samads"]
 
     # Strictly blocked from workspace/render/billing/team (403) and admin panel (404).
     assert client.get("/api/v1/auth/batches").status_code == 403
@@ -653,7 +684,13 @@ def test_visitor_offer_and_landing_discount_preview():
     code = f"VISIT{RUN_ID[:4].upper()}"
     applied = aff_client.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": code, "audience": "Performance marketing agency"},
+        json={
+            "full_name": "Maya Partner",
+            "email": aff_email,
+            "social_links": ["https://instagram.com/mayaagency"],
+            "code": code,
+            "audience": "Performance marketing agency running paid social campaigns",
+        },
     )
     assert applied.status_code in (200, 201), applied.text
     with get_session_factory()() as db:

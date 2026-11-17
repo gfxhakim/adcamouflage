@@ -239,12 +239,14 @@ def checkout(
                 affiliates.attribute(db, user, code, source="coupon", device=device, ip=ip)
             except affiliates.AttributionError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
-        elif affiliates.referral_of(db, user.id) is None and not affiliates.has_paid(db, user):
-            affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
-        # Coupons never stack: at most one, on the first subscription payment.
-        coupon = affiliates.checkout_discount(db, user, plan.id, plan.price)
-        if coupon is not None:
-            amount = coupon["amount"]
+            # Coupons never stack: at most one, on the first subscription payment.
+            coupon = affiliates.checkout_discount(db, user, plan.id, plan.price)
+            if coupon is not None:
+                amount = coupon["amount"]
+        else:
+            if affiliates.referral_of(db, user.id) is None and not affiliates.has_paid(db, user):
+                affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
+            coupon = None
     else:
         if not subscription_active(user) or user.sub_plan not in plans:
             raise HTTPException(

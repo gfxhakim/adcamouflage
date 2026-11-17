@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import zipfile
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -74,7 +72,7 @@ from .schemas import (
     new_id,
 )
 from .security import require_api_key, sign_download, verify_download
-from .storage import StorageError, classify, get_store, resolve_within, sanitize_filename
+from .storage import StorageError, classify, display_filename, get_store, resolve_within, sanitize_filename
 from .subscription_routes import router as subscription_router
 from .support_routes import admin_router as support_admin_router
 from .support_routes import user_router as support_user_router
@@ -380,8 +378,12 @@ async def create_batch(
     store = get_store()
 
     for upload in files:
-        original = sanitize_filename(upload.filename or "asset")
-        kind = classify(original, upload.content_type)
+        # Two names. A flattened one decides the file type and the extension on
+        # disk; the person's own is what the app shows and what the download is
+        # named after ("<name>flow").
+        safe_name = sanitize_filename(upload.filename or "asset")
+        original = display_filename(upload.filename or "asset")
+        kind = classify(safe_name, upload.content_type)
         if kind is None:
             rejected.append(
                 UploadRejection(filename=original, reason="Unsupported file type - upload a video or an image.")
@@ -390,7 +392,7 @@ async def create_batch(
             continue
 
         asset_id = new_id("asset")
-        suffix = Path(original).suffix.lower()
+        suffix = Path(safe_name).suffix.lower()
         stored_name = f"{asset_id}{suffix}"
         destination = resolve_within(settings.uploads_dir, stored_name)
 
@@ -467,7 +469,46 @@ def _owned_batch(batch_id: str, user: User) -> Batch:
     return batch
 
 
+def _output_exists(name: str | None) -> bool:
+    """True while a rendered file is still on disk (not yet purged)."""
+
+    if not name:
+        return False
+    try:
+        return resolve_within(settings.outputs_dir, name).is_file()
+    except (StorageError, OSError):
+        return False
+
+
+def _with_fresh_links(asset: AssetJob) -> AssetJob:
+    """Sign an asset's download links when they are read, not when it rendered.
+
+    The worker stores links as a render finishes, but those are signed once and
+    stop working after ``download_token_ttl`` while the file itself lives for
+    the whole retention window. In a long batch, or from History, the browser
+    then saved the error reply as ``download.json`` instead of the video.
+    Signing here means every link the API hands out is fresh, and a file that
+    has already been purged gets no link at all.
+    """
+
+    if asset.status is not JobStatus.COMPLETED or not asset.output_filename:
+        if asset.download_url or asset.poster_url:
+            # A link left by an earlier run (cancel racing the finish, a task
+            # that ran twice) points at a file the API will not serve.
+            return asset.model_copy(update={"download_url": None, "poster_url": None})
+        return asset
+
+    token = sign_download(asset.id)
+    links: dict[str, str | None] = {"download_url": None, "poster_url": None}
+    if _output_exists(asset.output_filename):
+        links["download_url"] = f"/api/v1/assets/{asset.id}/download?token={token}"
+    if _output_exists(asset.poster_filename):
+        links["poster_url"] = f"/api/v1/assets/{asset.id}/poster?token={token}"
+    return asset.model_copy(update=links)
+
+
 def _summarise(batch: Batch, assets: list[AssetJob]) -> BatchStatus:
+    assets = [_with_fresh_links(asset) for asset in assets]
     total = len(assets)
     completed = sum(1 for a in assets if a.status is JobStatus.COMPLETED)
     failed = sum(1 for a in assets if a.status is JobStatus.FAILED)
@@ -486,8 +527,9 @@ def _summarise(batch: Batch, assets: list[AssetJob]) -> BatchStatus:
     else:
         overall = JobStatus.QUEUED
 
+    # Offer the zip only while at least one finished file is still there to put in it.
     archive_url = None
-    if completed:
+    if any(a.download_url for a in assets):
         archive_url = f"/api/v1/batches/{batch.id}/archive?token={sign_download(batch.id)}"
 
     return BatchStatus(
@@ -517,7 +559,7 @@ async def get_asset(asset_id: str, user: User = Depends(require_studio_user)) ->
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found or expired.")
     _owned_batch(asset.batch_id, user)
-    return asset
+    return _with_fresh_links(asset)
 
 
 @app.post("/api/v1/assets/{asset_id}/cancel", tags=["assets"], dependencies=[Depends(require_api_key)])
@@ -531,13 +573,23 @@ async def cancel(asset_id: str, user: User = Depends(require_studio_user)) -> di
     return {"asset_id": asset_id, "status": JobStatus.CANCELLED.value}
 
 
-def _output_filename(asset: AssetJob) -> str:
-    """Human-friendly download name that keeps the mutated extension."""
+def _output_stem(asset: AssetJob) -> str:
+    """The uploaded file's name with "flow" added: ``clip.mp4`` gives ``clipflow``.
+
+    A file rendered as several copies also carries its copy number
+    (``clipflow_v2``), otherwise every copy would be saved under the same name.
+    """
 
     stem = Path(asset.original_filename).stem or "asset"
-    suffix = Path(asset.output_filename or asset.original_filename).suffix or ".bin"
     marker = f"_v{asset.variant_index + 1}" if asset.variants_total > 1 else ""
-    return f"{stem}{marker}_camouflaged{suffix}"
+    return f"{stem}flow{marker}"
+
+
+def _output_filename(asset: AssetJob) -> str:
+    """Download name for a rendered file; keeps the rendered file's extension."""
+
+    suffix = Path(asset.output_filename or asset.original_filename).suffix or ".bin"
+    return f"{_output_stem(asset)}{suffix}"
 
 
 @app.get("/api/v1/assets/{asset_id}/download", tags=["assets"])
@@ -587,11 +639,12 @@ async def download_poster(
     if not path.exists():
         raise HTTPException(status_code=410, detail="The poster image has been purged by the retention policy.")
 
-    stem = Path(asset.original_filename).stem or "asset"
-    return FileResponse(path, filename=f"{stem}_poster.jpg", media_type="image/jpeg")
+    return FileResponse(path, filename=f"{_output_stem(asset)}_poster.jpg", media_type="image/jpeg")
 
 
-def _build_archive(batch_id: str, assets: list[AssetJob], destination: Path) -> Path:
+def _build_archive(assets: list[AssetJob], destination: Path) -> Path:
+    """Zip every finished file of a batch. The zip holds the media files only."""
+
     with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_STORED) as archive:
         used: set[str] = set()
         for asset in assets:
@@ -608,29 +661,6 @@ def _build_archive(batch_id: str, assets: list[AssetJob], destination: Path) -> 
                 counter += 1
             used.add(name)
             archive.write(source, arcname=name)
-
-        manifest = [
-            {
-                "original": asset.original_filename,
-                "output": _output_filename(asset),
-                "status": asset.status.value,
-                "applied": asset.applied,
-                "metrics": asset.metrics,
-                "error": asset.error,
-            }
-            for asset in assets
-        ]
-        archive.writestr(
-            "camouflage-manifest.json",
-            json.dumps(
-                {
-                    "batch_id": batch_id,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
-                    "assets": manifest,
-                },
-                indent=2,
-            ),
-        )
     return destination
 
 
@@ -650,9 +680,11 @@ async def download_archive(
     assets = await asyncio.to_thread(store.get_assets, batch.asset_ids or store.list_asset_ids(batch_id))
     if not any(a.status is JobStatus.COMPLETED for a in assets):
         raise HTTPException(status_code=409, detail="No assets in this batch have finished processing yet.")
+    if not any(a.status is JobStatus.COMPLETED and _output_exists(a.output_filename) for a in assets):
+        raise HTTPException(status_code=410, detail="The files in this batch have been purged by the retention policy.")
 
     destination = settings.work_dir / f"{batch_id}.zip"
-    await asyncio.to_thread(_build_archive, batch_id, assets, destination)
+    await asyncio.to_thread(_build_archive, assets, destination)
 
     if background is not None:
         background.add_task(destination.unlink, missing_ok=True)

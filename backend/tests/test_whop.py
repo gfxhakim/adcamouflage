@@ -610,7 +610,13 @@ def test_whop_discounted_checkout_variant_and_promo_fallback(whop_env, monkeypat
     aff_client = _signed_in(aff_email)
     applied = aff_client.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": code, "audience": "Media buyers newsletter"},
+        json={
+            "full_name": "Whop Aff",
+            "email": aff_email,
+            "social_links": ["https://x.com/whopaff"],
+            "code": code,
+            "audience": "Media buyers newsletter covering paid social workflows",
+        },
     )
     assert applied.status_code in (200, 201), applied.text
     with get_session_factory()() as db:
@@ -670,7 +676,7 @@ def test_whop_discounted_checkout_variant_and_promo_fallback(whop_env, monkeypat
 
     co_res = buyer_client.post(
         "/api/v1/billing/checkout",
-        json={"kind": "subscription", "plan_id": "pro", "provider": "whop"},
+        json={"kind": "subscription", "plan_id": "pro", "provider": "whop", "coupon": code},
     )
     assert co_res.status_code == 201, co_res.text
     co = co_res.json()
@@ -751,7 +757,13 @@ def test_whop_webhook_syncs_whop_native_promo_code_and_discounted_total(whop_env
     aff_client = _signed_in(aff_email)
     applied = aff_client.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": code, "audience": "Media buyers and performance ad teams"},
+        json={
+            "full_name": "Whop Native Aff",
+            "email": aff_email,
+            "social_links": ["https://youtube.com/@whopnative"],
+            "code": code,
+            "audience": "Media buyers and performance ad teams creating ad campaigns",
+        },
     )
     assert applied.status_code in (200, 201), applied.text
     with get_session_factory()() as db:
@@ -787,7 +799,7 @@ def test_whop_webhook_syncs_whop_native_promo_code_and_discounted_total(whop_env
         assert rows[0]["commission"] == round(75.65 * 0.25, 2)
 
 
-def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, monkeypatch):
+def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkout(whop_env, monkeypatch):
     from types import SimpleNamespace
 
     from pydantic import SecretStr
@@ -797,17 +809,27 @@ def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, 
     from app.db import AffiliatePartner, User, get_session_factory
 
     code = f"AUTO{RUN_ID[:4].upper()}"
+    aff_link = f"https://whop.com/proteusflow?a={code.lower()}"
     partner_email = address("autoaff")
     partner_client = _signed_in(partner_email)
-    # Lightweight application: code + audience/why accept only (no payout fields up front).
+    # Applicant supplies full name, email, multiple social media links, and why/audience description (no code required).
     req = partner_client.post(
         "/api/v1/referrals/partner/apply",
-        json={"code": code, "audience": "YouTube channel with 35k media buyers running paid social ads."},
+        json={
+            "full_name": "Alex Media",
+            "email": "alex@media.test",
+            "social_links": ["https://youtube.com/@alexmedia", "https://tiktok.com/@alexmedia"],
+            "audience": "YouTube channel with 35k media buyers running paid social ads looking for ad creative tools.",
+        },
     )
     assert req.status_code in (200, 201), req.text
-    assert req.json()["status"] == "pending"
+    body = req.json()
+    assert body["status"] == "pending"
+    assert body["full_name"] == "Alex Media"
+    assert body["email"] == "alex@media.test"
+    assert body["social_links"] == ["https://youtube.com/@alexmedia", "https://tiktok.com/@alexmedia"]
 
-    # While pending, the code/link is not active yet.
+    # While pending, the code is not active yet.
     visitor = _signed_in(address("autovis"))
     pending_click = visitor.post("/api/v1/referrals/click", json={"code": code, "landing_path": "/"})
     assert pending_click.status_code == 200 and pending_click.json()["valid"] is False
@@ -822,7 +844,7 @@ def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, 
         db.commit()
 
     promo_created: list[dict] = []
-    promo_deactivated: list[str] = []
+    cfg_calls: list[dict] = []
 
     class _FakeVariants:
         def retrieve(self, *, id: str):
@@ -837,22 +859,13 @@ def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, 
             promo_created.append(kwargs)
             return SimpleNamespace(id="promo_auto_1", code=kwargs["code"])
 
-        def list(self, **kwargs):
-            return SimpleNamespace(data=[SimpleNamespace(id="promo_auto_1", code=code, status="active")])
-
-        def activate(self, *, id: str):
-            return SimpleNamespace(id=id, status="active")
-
-        def deactivate(self, *, id: str):
-            promo_deactivated.append(id)
-            return SimpleNamespace(id=id, status="archived")
-
     class _FakeCheckoutCfgs:
         def create(self, **kwargs):
+            cfg_calls.append(kwargs)
             return SimpleNamespace(
                 id="ch_auto_1",
                 purchase_url="https://whop.com/checkout/ch_auto_1",
-                variant=SimpleNamespace(id="plan_disc_auto_1"),
+                variant=None,
             )
 
     monkeypatch.setattr(settings, "whop_api_key", SecretStr("whop_live_test_secret"))
@@ -867,60 +880,45 @@ def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, 
         ),
     )
 
-    # Admin approves the affiliate request -> Whop promo + link + calculation activate automatically.
-    approved = admin_client.post(f"/api/v1/admin/affiliates/partners/{partner_user_id}", json={"action": "approve"})
+    # Admin sees applicant's full details and approves with the manual Whop promo code + affiliate link.
+    admin_list = admin_client.get("/api/v1/admin/affiliates").json()["partners"]
+    listed = next(item for item in admin_list if item["user_id"] == partner_user_id)
+    assert listed["full_name"] == "Alex Media"
+    assert listed["contact_email"] == "alex@media.test"
+    assert listed["social_links"] == ["https://youtube.com/@alexmedia", "https://tiktok.com/@alexmedia"]
+
+    approved = admin_client.post(
+        f"/api/v1/admin/affiliates/partners/{partner_user_id}",
+        json={"action": "approve", "code": code, "affiliate_link": aff_link},
+    )
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved"
-    assert len(promo_created) == 1
-    assert promo_created[0]["code"] == code
-    assert promo_created[0]["amount_off"] == 15.0
-    assert set(promo_created[0]["variant_ids"]) >= {"plan_starter", "plan_pro", "plan_max"}
+    assert approved.json()["code"] == code
+    assert approved.json()["affiliate_link"] == aff_link
+    # Manual workflow: approving on ProteusFlow does NOT call Whop promo_codes.create.
+    assert promo_created == []
 
-    # Partner dashboard immediately reflects active link, code, and live calculation program.
+    # Partner portal immediately shows their assigned promo code and Whop affiliate link.
     me_partner = partner_client.get("/api/v1/referrals/me").json()["partner"]
     assert me_partner["status"] == "approved"
     assert me_partner["code"] == code
-    assert me_partner["month"]["rate_pct"] == 25.0
+    assert me_partner["affiliate_link"] == aff_link
 
-    # Buyer uses the newly activated code -> sees discounted price, pays reduced total, partner commission calculates.
-    active_click = visitor.post(
-        "/api/v1/referrals/click",
-        json={"code": code, "landing_path": "/"},
-        headers={"x-device-id": f"dev-auto-{RUN_ID}"},
-    )
-    assert active_click.status_code == 200 and active_click.json()["valid"] is True
+    # Buyer subscribes cleanly using the base plan (leaving Whop's promo code box open) with server redirect_url back to /app/plan.
     co = visitor.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro", "provider": "whop"}).json()
-    assert co["amount"] == 75.65 and co["whop_plan"] == "plan_disc_auto_1" and co["whop_checkout_config"] == "ch_auto_1"
+    assert co["amount"] == 89.0
+    assert co["whop_plan"] == "plan_pro"
+    assert co["whop_checkout_config"] == "ch_auto_1"
+    assert len(cfg_calls) == 1
+    assert cfg_calls[0]["variant_id"] == "plan_pro"
+    assert f"/app/plan?order={co['order_id']}" in cfg_calls[0]["redirect_url"]
 
-    # Standard (non-discounted) live checkouts also create a CheckoutConfiguration with redirect_url back to /app/plan.
-    reg_calls: list[dict] = []
-
-    class _FakeRegCheckoutCfgs:
-        def create(self, **kwargs):
-            reg_calls.append(kwargs)
-            return SimpleNamespace(id="ch_reg_1", purchase_url="https://whop.com/checkout/ch_reg_1", variant=None)
-
-    monkeypatch.setattr(
-        whop,
-        "_sdk_client",
-        lambda: SimpleNamespace(
-            variants=_FakeVariants(),
-            promo_codes=_FakePromoCodes(),
-            checkout_configurations=_FakeRegCheckoutCfgs(),
-        ),
-    )
-    reg_buyer = _signed_in(address("regcfgbuyer"))
-    reg_co = reg_buyer.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter", "provider": "whop"}).json()
-    assert reg_co["whop_plan"] == "plan_starter"
-    assert reg_co["whop_checkout_config"] == "ch_reg_1"
-    assert len(reg_calls) == 1
-    assert reg_calls[0]["variant_id"] == "plan_starter"
-    assert f"/app/plan?order={reg_co['order_id']}" in reg_calls[0]["redirect_url"]
+    # Buyer entered promo code on Whop checkout -> webhook settles discounted total and attributes partner.
     paid_evt = _whop_event(
         co["order_id"],
         payment_id="pay_auto_1",
-        variant_id="plan_disc_auto_1",
-        extra_data={"usd_total": 75.65, "metadata": {"order_id": co["order_id"], "promo_code": code}},
+        variant_id="plan_pro",
+        extra_data={"usd_total": 75.65, "promo_code": code, "metadata": {"order_id": co["order_id"]}},
     )
     assert _post_whop(paid_evt).json() == {"ok": True, "applied": True}
 
@@ -928,10 +926,9 @@ def test_admin_approve_auto_activates_link_whop_promo_and_calculation(whop_env, 
     assert me_after["stats"]["paying"] == 1
     assert me_after["totals"]["pending"] == round(75.65 * 0.25, 2)
 
-    # Suspending the partner also deactivates their promo code on Whop automatically.
+    # Suspending the partner disables their code locally.
     susp = admin_client.post(f"/api/v1/admin/affiliates/partners/{partner_user_id}", json={"action": "suspend"})
     assert susp.status_code == 200 and susp.json()["status"] == "suspended"
-    assert promo_deactivated == ["promo_auto_1"]
     with get_session_factory()() as db:
         row = db.get(AffiliatePartner, partner_user_id)
         assert row is not None and row.status == "suspended"

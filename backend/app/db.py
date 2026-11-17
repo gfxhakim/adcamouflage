@@ -373,7 +373,11 @@ class AffiliatePartner(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     # pending | approved | rejected | suspended
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    full_name: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    contact_email: Mapped[str] = mapped_column(String(254), default="", nullable=False)
+    social_links_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     requested_code: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    affiliate_link: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     audience: Mapped[str] = mapped_column(Text, default="", nullable=False)
     payout_method: Mapped[str] = mapped_column(String(40), default="", nullable=False)
     payout_address: Mapped[str] = mapped_column(String(300), default="", nullable=False)
@@ -725,6 +729,10 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "whop_membership_id", "VARCHAR(128)"),
     ("orders", "whop_plan_id", "VARCHAR(128)"),
     ("users", "account_role", "VARCHAR(24) NOT NULL DEFAULT 'customer'"),
+    ("affiliate_partners", "full_name", "VARCHAR(120) NOT NULL DEFAULT ''"),
+    ("affiliate_partners", "contact_email", "VARCHAR(254) NOT NULL DEFAULT ''"),
+    ("affiliate_partners", "social_links_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ("affiliate_partners", "affiliate_link", "VARCHAR(500) NOT NULL DEFAULT ''"),
 ]
 
 
