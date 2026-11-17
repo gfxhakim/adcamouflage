@@ -22,8 +22,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import Header from "@/components/Header";
-import DeckRail from "@/components/DeckRail";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
 import CancelRefundCard from "@/components/plan/CancelRefundCard";
@@ -350,12 +349,8 @@ export default function PlanPage() {
   currencyRef.current = sub?.currency || "USD";
 
   return (
-    <>
-      <Header user={user} />
-
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        <DeckRail onDark={false} user={user} />
-
+    <WorkspaceShell user={user}>
+      <div className="mx-auto flex w-full max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         <main className="relative min-w-0 flex-1">
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
             <p className="label">My plan</p>
@@ -709,6 +704,6 @@ export default function PlanPage() {
           </div>
         </div>
       ) : null}
-    </>
+    </WorkspaceShell>
   );
 }

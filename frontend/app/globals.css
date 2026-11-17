@@ -17,6 +17,35 @@
   --meta-700: #003d99;
   --meta-800: #002966;
 
+  /* shadcn tokens for the sidebar kit (components/ui/sidebar, sheet,
+     tooltip...). Dark "Command Deck" values: the admin sidebar uses them as
+     they are, the workspace sidebar puts its own colours on top. They sit on
+     :root because the phone drawer and tooltips render in a portal on <body>,
+     outside the page wrapper. */
+  --background: 222 48% 5%;
+  --foreground: 223 69% 95%;
+  --primary: 216 100% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 221 36% 14%;
+  --secondary-foreground: 223 69% 95%;
+  --muted: 221 36% 12%;
+  --muted-foreground: 219 20% 68%;
+  --accent: 217 60% 16%;
+  --accent-foreground: 223 69% 95%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --popover: 221 36% 10%;
+  --popover-foreground: 223 69% 95%;
+  --border: 220 26% 17%;
+  --input: 220 26% 20%;
+  --ring: 216 100% 52%;
+  --sidebar: 222 41% 7%;
+  --sidebar-foreground: 223 69% 95%;
+  --sidebar-accent: 217 60% 16%;
+  --sidebar-accent-foreground: 223 69% 95%;
+  --sidebar-border: 220 26% 17%;
+  --sidebar-ring: 216 100% 52%;
+
   --page: #ffffff;
   --surface: 255 255 255;
   --ink: #000000;
@@ -506,7 +535,7 @@ html[data-intro="off"] .intro-screen {
    pages are untouched. Tailwind `dark:` variants (darkMode: ["selector",
    ".deck"]) switch on under the same wrapper; this block restyles the shared
    component classes (.plain-card, .field, .chip, .label, .btn-ghost, .glass)
-   and supplies the deck-only pieces: the left rail and the mono readouts.
+   and supplies the deck-only pieces: the mono readouts.
    The workspace's white-background switch sets <html data-deck-theme="light">,
    which turns every rule here off; `.deck-fixed` (admin) keeps it on.
    ========================================================================= */
@@ -621,53 +650,6 @@ html[data-intro="off"] .intro-screen {
     linear-gradient(90deg, rgb(8 102 255 / 0.1) 1px, transparent 1px);
 }
 
-/* The left rail: slim, sticky, icon-first section navigator (desktop only).
-   On phones the deck falls back to the normal stacked flow + top header. */
-.deck-rail {
-  position: sticky;
-  top: 5.25rem;
-  align-self: start;
-  display: none;
-  flex-direction: column;
-  gap: 0.5rem;
-  width: 3.5rem;
-  padding: 0.5rem;
-  border-radius: 1rem;
-  border: 1px solid rgb(var(--deck-line) / 0.08);
-  background: rgb(17 23 36 / 0.7);
-  backdrop-filter: blur(12px);
-}
-@media (min-width: 1024px) {
-  .deck-rail { display: flex; }
-}
-.deck-rail-btn {
-  position: relative;
-  display: grid;
-  height: 2.5rem;
-  width: 2.5rem;
-  place-items: center;
-  border-radius: 0.7rem;
-  border: 1px solid transparent;
-  color: var(--deck-ink-faint);
-  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
-}
-.deck-rail-btn:hover {
-  color: #cfe0ff;
-  background: rgb(8 102 255 / 0.12);
-}
-.deck-rail-btn[aria-current="true"],
-.deck-rail-btn[data-active="true"] {
-  color: #fff;
-  border-color: rgb(8 102 255 / 0.5);
-  background: rgb(8 102 255 / 0.2);
-  box-shadow: 0 0 18px -4px rgb(8 102 255 / 0.7);
-}
-.deck-rail-sep {
-  height: 1px;
-  margin: 0.25rem 0.4rem;
-  background: rgb(var(--deck-line) / 0.08);
-}
-
 /* Mono readouts — the control-panel stat strip. */
 .readout {
   position: relative;
@@ -727,7 +709,7 @@ html[data-intro="off"] .intro-screen {
   color: var(--meta-400);
 }
 
-/* Anchor jumps (the deck rail links) clear the sticky header. */
+/* Anchor jumps clear the sticky header. */
 html {
   scroll-padding-top: 5.5rem;
 }
@@ -815,4 +797,34 @@ html[data-deck-theme="light"] .deck:not(.deck-fixed) {
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+/* Admin sidebar search: the title a search result jumped to glows briefly. */
+[data-search-hit] {
+  animation: admin-search-hit 2.6s ease-out;
+}
+[data-search-hit]:not(button) {
+  border-radius: 0.375rem;
+}
+/* A button it pressed (an inner tab) keeps its own fill: only a ring glows. */
+button[data-search-hit] {
+  animation-name: admin-search-ring;
+}
+@keyframes admin-search-hit {
+  0%, 60% {
+    background-color: rgb(8 102 255 / 0.28);
+    box-shadow: 0 0 0 6px rgb(8 102 255 / 0.28);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@keyframes admin-search-ring {
+  0%, 60% {
+    box-shadow: 0 0 0 4px rgb(8 102 255 / 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 4px transparent;
+  }
 }

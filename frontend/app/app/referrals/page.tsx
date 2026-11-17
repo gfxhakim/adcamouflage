@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import DeckRail from "@/components/DeckRail";
-import Header from "@/components/Header";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import FriendCard from "@/components/referrals/FriendCard";
 import PartnerCard from "@/components/referrals/PartnerCard";
 import { fetchSubscription, type Subscription } from "@/lib/auth";
@@ -36,10 +35,8 @@ export default function ReferralsPage() {
   const nothingOn = data && !data.friend.enabled && !data.partner.enabled;
 
   return (
-    <>
-      <Header user={user} />
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
-        <DeckRail onDark={false} user={user} />
+    <WorkspaceShell user={user}>
+      <div className="mx-auto flex w-full max-w-7xl gap-5 px-4 pb-24 pt-6 sm:px-6 sm:pt-8 lg:px-8">
         <main className="relative min-w-0 flex-1">
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
             <p className="label">Invite &amp; earn</p>
@@ -72,6 +69,6 @@ export default function ReferralsPage() {
           )}
         </main>
       </div>
-    </>
+    </WorkspaceShell>
   );
 }

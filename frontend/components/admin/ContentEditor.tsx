@@ -79,6 +79,7 @@ const WORDS: Record<string, string> = {
   why: "How it works",
   proof: "Creative studio & media showcase",
   nav: "Menu",
+  rail: "Sidebar menu",
   ui: "Labels",
 };
 

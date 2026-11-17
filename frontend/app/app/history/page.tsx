@@ -5,16 +5,14 @@ import { Archive, Clock, Download, FileVideo, Inbox, Package } from "lucide-reac
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import Header from "@/components/Header";
-import DeckRail from "@/components/DeckRail";
 import ThemeDock from "@/components/ThemeDock";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import NeonCard from "@/components/NeonCard";
 import { absoluteUrl, getBatch } from "@/lib/api";
 import { fetchMyBatches, type BatchSummary } from "@/lib/auth";
 import { formatDate, timeAgo } from "@/lib/format";
 import { useRequireUser } from "@/lib/useRequireUser";
 import type { BatchStatus } from "@/lib/types";
-import { useDeckTheme } from "@/lib/deckTheme";
 
 /** undefined = not yet loaded; false = outputs expired / purged; BatchStatus = live. */
 type LiveBatch = BatchStatus | false | undefined;
@@ -24,7 +22,6 @@ function presetName(raw: string): string {
 }
 
 export default function HistoryPage() {
-  const onDark = useDeckTheme() === "dark";
   const user = useRequireUser();
   const [summaries, setSummaries] = useState<BatchSummary[] | null>(null);
   const [live, setLive] = useState<Record<string, LiveBatch>>({});
@@ -63,12 +60,8 @@ export default function HistoryPage() {
   const empty = summaries !== null && summaries.length === 0;
 
   return (
-    <div className="deck min-h-screen">
-      <Header user={user} onDark={onDark} />
-
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 md:pb-24 sm:px-6 sm:pt-8 lg:px-8">
-        <DeckRail onDark={onDark} user={user} />
-
+    <WorkspaceShell deck user={user}>
+      <div className="mx-auto flex w-full max-w-7xl gap-5 px-4 pb-40 pt-6 md:pb-24 sm:px-6 sm:pt-8 lg:px-8">
         <main className="min-w-0 flex-1">
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
             <p className="label flex items-center gap-1.5">
@@ -195,6 +188,6 @@ export default function HistoryPage() {
         </main>
       </div>
       <ThemeDock />
-    </div>
+    </WorkspaceShell>
   );
 }

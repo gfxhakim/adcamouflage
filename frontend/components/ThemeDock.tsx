@@ -13,7 +13,7 @@ const OPTIONS: { theme: DeckTheme; label: string; icon: LucideIcon }[] = [
 
 /**
  * Icons-only black / white background switch, docked at the bottom centre of
- * the workspace pages. On phones it sits just above the floating nav pill.
+ * the workspace pages. On phones it sits just above the support chat button.
  */
 export function ThemeDock() {
   const theme = useDeckTheme();

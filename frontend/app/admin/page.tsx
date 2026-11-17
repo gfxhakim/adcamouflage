@@ -1,26 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import {
-  AppWindow,
-  ArrowLeft,
-  BarChart3,
-  BookOpen,
-  Bell,
-  Gift,
-  CircleDollarSign,
-  Headset,
-  LayoutDashboard,
-  Loader2,
-  LogOut,
-  PanelsTopLeft,
-  RefreshCw,
-  Settings2,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, Bell, Headset, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
+import AdminSidebar, { ADMIN_TABS } from "@/components/admin/AdminSidebar";
 import AffiliatesTab from "@/components/admin/AffiliatesTab";
 import AnalyticsTab from "@/components/admin/AnalyticsTab";
 import GuidesTab from "@/components/admin/GuidesTab";
@@ -29,29 +14,22 @@ import OverviewTab from "@/components/admin/OverviewTab";
 import SalesTab from "@/components/admin/SalesTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 import SupportTab from "@/components/admin/SupportTab";
+import UserSearch from "@/components/admin/UserSearch";
 import UserPanel from "@/components/admin/UserPanel";
 import UsersTab from "@/components/admin/UsersTab";
 import BrandLogo from "@/components/BrandLogo";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import NotFound from "@/app/not-found";
 import { getOverview, getPlans, type Overview, type PlanInfo } from "@/lib/admin";
 import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
+import { jumpToTitle, type AdminSearchEntry, type AdminTabId } from "@/lib/admin-search";
+import { ADMIN_SIDEBAR_COOKIE, readSidebarOpen } from "@/lib/sidebarCookie";
 import { getAdminSupportNotifications, type AdminSupportNotifications } from "@/lib/support";
 
 const REFRESH_MS = 30000;
 const SUPPORT_POLL_MS = 8000;
 
-const TABS = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "support", label: "Support · Live Chat", icon: Headset },
-  { id: "users", label: "Users", icon: Users },
-  { id: "sales", label: "Sales", icon: CircleDollarSign },
-  { id: "affiliates", label: "Affiliates", icon: Gift },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "settings", label: "Settings", icon: Settings2 },
-  { id: "landing", label: "Landing page", icon: PanelsTopLeft },
-  { id: "workspace", label: "Workspace", icon: AppWindow },
-  { id: "guides", label: "Guides (SEO)", icon: BookOpen },
-] as const;
+const TABS = ADMIN_TABS;
 
 const WORKSPACE_PAGES = [
   { path: "/app", label: "Workspace · step flow" },
@@ -59,7 +37,7 @@ const WORKSPACE_PAGES = [
   { path: "/app/plan", label: "My plan" },
 ];
 
-type TabId = (typeof TABS)[number]["id"];
+type TabId = AdminTabId;
 
 function tabFromHash(): TabId {
   if (typeof window === "undefined") return "overview";
@@ -78,6 +56,7 @@ export default function AdminPage() {
   const [activeSupportThreadId, setActiveSupportThreadId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [usersQuery, setUsersQuery] = useState("");
   // Bumped whenever data changes, so each tab re-reads what it shows.
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -161,13 +140,32 @@ export default function AdminPage() {
 
   const openTab = useCallback((id: TabId) => {
     setTab(id);
+    setUsersQuery("");
     window.history.replaceState(null, "", `#${id}`);
   }, []);
+
+  // "See all" under the dashboard search: the Users page opens on the same search.
+  const openUsersWith = useCallback(
+    (query: string) => {
+      openTab("users");
+      setUsersQuery(query);
+    },
+    [openTab],
+  );
 
   const openSupportThread = useCallback(
     (threadId: number) => {
       setActiveSupportThreadId(threadId);
       openTab("support");
+    },
+    [openTab],
+  );
+
+  // A sidebar search result: open its page, then scroll to the title.
+  const jumpTo = useCallback(
+    (entry: AdminSearchEntry) => {
+      openTab(entry.tab);
+      window.setTimeout(() => jumpToTitle(entry, document.getElementById("admin-main") ?? document), 80);
     },
     [openTab],
   );
@@ -202,102 +200,70 @@ export default function AdminPage() {
   const escalatedCount = supportNotifs?.escalated_count ?? 0;
 
   return (
-    <div className="deck deck-fixed min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
-        <div className={clsx("mx-auto flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8", editing ? "max-w-[1800px]" : "max-w-7xl")}>
-          <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="ProteusFlow home">
-            <BrandLogo caption="Admin · Command deck" captionClassName="hidden sm:block" onDark />
-          </Link>
-          <nav className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => openTab("support")}
-              className={clsx(
-                "btn-ghost relative !px-2.5 !py-2",
-                (unreadSupport > 0 || escalatedCount > 0) &&
-                  "!border-amber-400/50 !bg-amber-500/15 !text-amber-200",
-              )}
-              aria-label="Live support notifications"
-            >
-              <Headset className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Live Support</span>
-              {unreadSupport > 0 || escalatedCount > 0 ? (
-                <span className="ml-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-amber-400 px-1.5 font-mono text-[10px] font-bold text-slate-950">
-                  {unreadSupport || escalatedCount}
-                </span>
-              ) : null}
-            </button>
-            <button type="button" className="btn-ghost !px-2.5 !py-2" onClick={refreshAll} aria-label="Refresh">
-              <RefreshCw className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <Link href="/app" className="btn-ghost !px-2.5 !py-2 sm:!px-4">
-              <ArrowLeft className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Workspace</span>
-            </Link>
-            <button type="button" onClick={handleSignOut} className="btn-ghost !px-2.5 !py-2" aria-label="Sign out">
-              <LogOut className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
-          </nav>
-        </div>
+    <SidebarProvider
+      defaultOpen={readSidebarOpen(ADMIN_SIDEBAR_COOKIE)}
+      cookieName={ADMIN_SIDEBAR_COOKIE}
+      className="deck deck-fixed"
+      style={{ "--sidebar-width": "17rem", "--sidebar-width-icon": "3.5rem" } as CSSProperties}
+    >
+      <AdminSidebar
+        active={tab}
+        onOpen={openTab}
+        onJump={jumpTo}
+        supportBadge={unreadSupport || escalatedCount}
+        name={me?.display_name ?? null}
+        email={me?.email ?? ""}
+        onSignOut={handleSignOut}
+      />
 
-        {/* Phones keep the section controls as a scrollable tab row. */}
-        <div className={clsx("mx-auto px-4 sm:px-6 lg:hidden", editing ? "max-w-[1800px]" : "max-w-7xl")}>
-          <div className="-mb-px flex gap-1 overflow-x-auto" role="tablist" aria-label="Admin sections">
-            {TABS.map((item) => (
+      <SidebarInset className="min-w-0 bg-transparent">
+        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <SidebarTrigger
+                className="h-9 w-9 shrink-0 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white [&>svg]:h-4 [&>svg]:w-4"
+                aria-label="Open or close the menu"
+              />
+              <Link href="/" className="flex min-w-0 items-center lg:hidden" aria-label="ProteusFlow home">
+                <BrandLogo onDark />
+              </Link>
+              <span className="hidden truncate text-sm font-semibold text-slate-300 lg:block">{activeTab?.label}</span>
+            </div>
+            <nav className="flex items-center gap-2">
               <button
-                key={item.id}
                 type="button"
-                role="tab"
-                aria-selected={tab === item.id}
-                onClick={() => openTab(item.id)}
+                onClick={() => openTab("support")}
                 className={clsx(
-                  "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-semibold transition-colors",
-                  tab === item.id
-                    ? "border-meta-500 text-meta-300"
-                    : "border-transparent text-slate-400 hover:text-slate-100",
+                  "btn-ghost relative !px-2.5 !py-2",
+                  (unreadSupport > 0 || escalatedCount > 0) &&
+                    "!border-amber-400/50 !bg-amber-500/15 !text-amber-200",
                 )}
+                aria-label="Live support notifications"
               >
-                <item.icon className="h-4 w-4" aria-hidden />
-                {item.label}
-                {item.id === "support" && (unreadSupport > 0 || escalatedCount > 0) ? (
-                  <span className="ml-1 rounded-full bg-amber-400 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-950">
+                <Headset className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Live Support</span>
+                {unreadSupport > 0 || escalatedCount > 0 ? (
+                  <span className="ml-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-amber-400 px-1.5 font-mono text-[10px] font-bold text-slate-950">
                     {unreadSupport || escalatedCount}
                   </span>
                 ) : null}
               </button>
-            ))}
+              <button type="button" className="btn-ghost !px-2.5 !py-2" onClick={refreshAll} aria-label="Refresh">
+                <RefreshCw className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+              <Link href="/app" className="btn-ghost !px-2.5 !py-2 sm:!px-4" aria-label="Workspace">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Workspace</span>
+              </Link>
+            </nav>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className={clsx("mx-auto flex gap-5 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8", editing ? "max-w-[1800px]" : "max-w-7xl")}>
-        {/* Left rail — section switcher (desktop) ---------------------- */}
-        <nav className="deck-rail" role="tablist" aria-label="Admin sections">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === item.id}
-              data-active={tab === item.id}
-              onClick={() => openTab(item.id)}
-              className="deck-rail-btn relative"
-              title={item.label}
-              aria-label={item.label}
-            >
-              <item.icon className="h-4 w-4" aria-hidden />
-              {item.id === "support" && (unreadSupport > 0 || escalatedCount > 0) ? (
-                <span className="absolute -right-1 -top-1 grid h-4 min-w-[16px] place-items-center rounded-full bg-amber-400 px-1 font-mono text-[9px] font-bold text-slate-950">
-                  {unreadSupport || escalatedCount}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
-
-        <main className="min-w-0 flex-1">
+        <div
+          id="admin-main"
+          className={clsx("mx-auto w-full min-w-0 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8", editing ? "max-w-[1800px]" : "max-w-7xl")}
+        >
           {/* Live Support Escalation Notification Banner when admin opens panel */}
           {tab !== "support" &&
           supportNotifs &&
@@ -384,6 +350,10 @@ export default function AdminPage() {
           ) : null}
 
           {tab === "overview" ? (
+            <UserSearch onSelectUser={setSelected} onOpenUsers={openUsersWith} />
+          ) : null}
+
+          {tab === "overview" ? (
             <OverviewTab
               overview={overview}
               refreshKey={refreshKey}
@@ -404,6 +374,7 @@ export default function AdminPage() {
               refreshKey={refreshKey}
               onSelectUser={setSelected}
               onChanged={() => void loadShared()}
+              initialQuery={usersQuery}
             />
           ) : tab === "sales" ? (
             <SalesTab refreshKey={refreshKey} onSelectUser={setSelected} />
@@ -420,8 +391,8 @@ export default function AdminPage() {
           ) : (
             <SettingsTab plans={plans} onPlansChanged={refreshAll} />
           )}
-        </main>
-      </div>
+        </div>
+      </SidebarInset>
 
       {selected !== null ? (
         <UserPanel
@@ -434,6 +405,6 @@ export default function AdminPage() {
           onDeleted={refreshAll}
         />
       ) : null}
-    </div>
+    </SidebarProvider>
   );
 }
