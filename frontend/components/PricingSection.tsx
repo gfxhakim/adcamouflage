@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Loader2, TicketPercent, Users, X } from "lucide-react";
+import { ArrowRight, Check, Loader2, Sparkles, TicketPercent, Users, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
