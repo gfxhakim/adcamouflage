@@ -6,7 +6,8 @@ import { Instrument_Serif } from "next/font/google";
 import MetaPixel from "@/components/MetaPixel";
 import RefCapture from "@/components/RefCapture";
 import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
-import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, sharePreview, siteUrl } from "@/lib/site";
+import { siteUrl } from "@/lib/seo";
+import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, sharePreview } from "@/lib/site";
 import "./globals.css";
 
 // Headlines: Instrument Serif (the blue part set in italic). Text: Geist.
@@ -27,16 +28,32 @@ export async function generateMetadata(): Promise<Metadata> {
     description: SITE_DESCRIPTION,
     applicationName: SITE_NAME,
     keywords: SITE_KEYWORDS,
-    alternates: { canonical: "/" },
+    // No site-wide canonical: each public page sets its own, so a page that
+    // forgets one never tells Google it is a copy of the home page.
+    creator: SITE_NAME,
+    publisher: SITE_NAME,
+    formatDetection: { telephone: false, email: false, address: false },
     ...sharePreview(SITE_TITLE, SITE_DESCRIPTION),
-    robots: { index: true, follow: true },
-    // Paste the code from Google Search Console / Meta Business domain verification into these env vars.
-    verification: {
-      ...(process.env.GOOGLE_SITE_VERIFICATION ? { google: process.env.GOOGLE_SITE_VERIFICATION } : {}),
-      ...(process.env.FACEBOOK_DOMAIN_VERIFICATION
-        ? { other: { "facebook-domain-verification": process.env.FACEBOOK_DOMAIN_VERIFICATION } }
-        : {}),
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
     },
+    // Search engine ownership checks, as an alternative to a DNS TXT record:
+    // paste the code each tool gives you into these variables on Railway `web`.
+    verification: verification(),
+  };
+}
+
+function verification(): Metadata["verification"] {
+  const env = (name: string) => (process.env[name] || "").trim();
+  const other: Record<string, string> = {};
+  if (env("BING_SITE_VERIFICATION")) other["msvalidate.01"] = env("BING_SITE_VERIFICATION");
+  if (env("YANDEX_VERIFICATION")) other["yandex-verification"] = env("YANDEX_VERIFICATION");
+  if (env("FACEBOOK_DOMAIN_VERIFICATION")) other["facebook-domain-verification"] = env("FACEBOOK_DOMAIN_VERIFICATION");
+  return {
+    ...(env("GOOGLE_SITE_VERIFICATION") ? { google: env("GOOGLE_SITE_VERIFICATION") } : {}),
+    ...(Object.keys(other).length ? { other } : {}),
   };
 }
 

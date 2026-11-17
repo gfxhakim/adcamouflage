@@ -1,46 +1,15 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import { CmsIcon, CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { CmsHeadline, EASE, PillArrow } from "@/components/landing/primitives";
+import { FAQS } from "@/components/landing/faqData";
 import { cn } from "@/lib/utils";
 
-const FAQS = [
-  {
-    q: "What does ProteusFlow do and how does it fit into my editing workflow?",
-    a: "ProteusFlow is a browser-based batch production studio that sits right after your main edit. Once you finish cutting a video or designing an image in Premiere, CapCut, or Figma, upload it to ProteusFlow to format it for Reels, TikTok, and YouTube Shorts, apply consistent Rec.709 color grading and broadcast audio leveling (−14 LUFS), burn in your brand watermark and cover frame, and export your full batch in minutes.",
-    tag: "Workflow",
-  },
-  {
-    q: "Does exporting through ProteusFlow preserve my original video and audio quality?",
-    a: "Yes. Every export is rendered using broadcast-grade H.264/H.265 encoding that preserves crisp on-screen captions, accurate product colors, natural skin tones, and clean −14 LUFS stereo audio across every file in your batch.",
-    tag: "Quality",
-  },
-  {
-    q: "How do the Brand Logo Overlay and Cover Frame tools work?",
-    a: "In Step 03 of the studio, you can upload a transparent PNG or WebP watermark, drag it anywhere on the live video preview, and set its size, opacity, and fade-in/out timing. You can also scrub to any frame in your video—or upload a custom cover image—to embed as the thumbnail.",
-    tag: "Branding",
-  },
-  {
-    q: "Which file formats and social platforms are supported?",
-    a: "ProteusFlow accepts MP4, MOV, WEBM, and MKV videos as well as PNG, JPG, and WEBP images (up to 500 MB per file). Built-in presets format your exports for Instagram Reels & Feed, TikTok, YouTube Shorts, Snapchat, and Google video/display placements.",
-    tag: "Formats",
-  },
-  {
-    q: "How many files can I batch-process at once?",
-    a: "You can drop up to 20 videos or images into a single batch and generate up to 10 formatted exports per upload, then download individual files or grab the entire batch in one organized ZIP archive.",
-    tag: "Batching",
-  },
-  {
-    q: "How do plans, render tokens, and team seats work?",
-    a: "Each plan gives you a 30-day allowance of studio render tokens with no long-term contracts. Unused tokens roll over on Pro and Max plans when you renew on time, any failed or canceled render is automatically refunded to your balance, and the Max plan includes up to 5 team seats.",
-    tag: "Billing",
-  },
-];
 
 export function Faq() {
   const cms = useCms();
@@ -100,6 +69,7 @@ export function Faq() {
                   )}
                   onClick={() => setOpen(on ? -1 : i)}
                   aria-expanded={on}
+                  aria-controls={`faq-answer-${id}`}
                 >
                   <span className="font-mono text-[11px] text-ink-faint">0{i + 1}</span>
                   <T k={`${key}.q`} className="min-w-0 flex-1 text-base font-semibold tracking-tight text-black sm:text-lg">{item.q}</T>
@@ -115,19 +85,18 @@ export function Faq() {
                     <CmsIcon k="faq.toggle.icon" fallback={Plus} className="h-4 w-4" aria-hidden />
                   </span>
                 </button>
-                <AnimatePresence initial={false}>
-                  {on ? (
-                    <motion.div
-                      className="overflow-hidden"
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.45, ease: EASE }}
-                    >
-                      <T k={`${key}.a`} long as="p" className="max-w-2xl pb-6 pl-12 pr-4 text-sm leading-relaxed text-ink-muted sm:pl-14 sm:pr-6">{item.a}</T>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
+                {/* Always in the page (collapsed when closed) so search engines and
+                    screen-reader "find" see every answer, not only the open one. */}
+                <motion.div
+                  id={`faq-answer-${id}`}
+                  className="overflow-hidden"
+                  initial={false}
+                  animate={on ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+                  transition={{ duration: 0.45, ease: EASE }}
+                  aria-hidden={!on}
+                >
+                  <T k={`${key}.a`} long as="p" className="max-w-2xl pb-6 pl-12 pr-4 text-sm leading-relaxed text-ink-muted sm:pl-14 sm:pr-6">{item.a}</T>
+                </motion.div>
               </li>
             );
           })}

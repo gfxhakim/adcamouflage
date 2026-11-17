@@ -795,3 +795,27 @@ export interface BatchCosts {
 
 export const getBatchCosts = (days = 30) => call<BatchCosts>(`/affiliates/batch-costs?days=${days}`);
 export const saveCostRates = (rates: CostRates) => call<CostRates>("/affiliates/batch-costs/rates", json("PUT", rates));
+
+// --- guides (Admin > Guides) --------------------------------------------------
+
+export interface GuideEdit {
+  title: string;
+  description: string;
+  body: string;
+  category: string;
+  cover: string;
+  cover_alt: string;
+  published: boolean;
+}
+
+export interface SavedGuide extends GuideEdit {
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const listSavedGuides = () => call<{ guides: SavedGuide[] }>("/guides");
+export const saveGuide = (slug: string, guide: GuideEdit) =>
+  call<SavedGuide>(`/guides/${encodeURIComponent(slug)}`, { method: "PUT", body: JSON.stringify(guide) });
+export const deleteSavedGuide = (slug: string) =>
+  call<void>(`/guides/${encodeURIComponent(slug)}`, { method: "DELETE" });

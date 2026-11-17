@@ -63,7 +63,9 @@ export function Hero({ startHref }: { startHref: string }) {
           long
           as={motion.p}
           className="mt-6 max-w-3xl text-sm leading-relaxed text-white/75 sm:text-base"
-          initial={{ opacity: 0, y: 14 }}
+          // Visible from the first paint (it is the page's largest text, so a
+          // fade-in from 0 would delay Largest Contentful Paint); it only slides.
+          initial={{ opacity: 1, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.5, ease: EASE }}
         >
