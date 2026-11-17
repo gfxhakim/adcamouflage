@@ -76,6 +76,47 @@ Open Admin > Settings > Customer emails. The badge should say **On: SMTP**.
 Press **Send test to me** on each email. If it fails, the api service logs
 say why (wrong password, port blocked, domain not verified).
 
+## Business email on proteusflow.com
+
+Two parts: **receive** mail at `hello@proteusflow.com` (free, Cloudflare), and **send** customer emails from it (Brevo).
+
+### Receive: Cloudflare Email Routing (free)
+1. Cloudflare > `proteusflow.com` > **Email > Email Routing** > Get started.
+2. Create addresses, e.g. `hello@` and `support@`, each sent to your Gmail. Confirm the email Cloudflare sends to your Gmail.
+3. Let Cloudflare add the MX + TXT records it shows (one click). Mail to those addresses now lands in your Gmail.
+4. Optional, to reply as hello@proteusflow.com from Gmail: Gmail > Settings > Accounts > **Send mail as** > add `hello@proteusflow.com`, SMTP server `smtp-relay.brevo.com`, port 587, your Brevo SMTP login and key.
+
+### Send: verify the domain in Brevo
+1. Brevo > **Senders, domains & dedicated IPs > Domains > Add a domain** > `proteusflow.com`.
+2. Choose "Authenticate with Cloudflare" (automatic) or copy the records Brevo shows (Brevo code TXT, DKIM, DMARC) into Cloudflare DNS, all **DNS only** (grey cloud).
+3. Wait until Brevo shows the domain as Authenticated, then **Senders > Add a sender**: name `ProteusFlow`, email `hello@proteusflow.com`.
+4. Railway > `api` > Variables:
+   - `ADCAM_EMAIL_FROM` = `ProteusFlow <hello@proteusflow.com>`
+   - `ADCAM_EMAIL_REPLY_TO` = `support@proteusflow.com`
+   - `ADCAM_PUBLIC_URL` = `https://proteusflow.com`
+   Deploy, then press **Send test** in Admin > Settings > Customer emails.
+
+Change `ADCAM_EMAIL_FROM` only after step 3: Brevo refuses mail from a domain it has not authenticated.
+
+## Every automatic email
+
+| Email | When | Can be switched off |
+|---|---|---|
+| Sign-up code | Email + password sign-up | No |
+| Welcome | Account opened (after the code, or Google/Apple) | Yes |
+| Password reset code | Forgot password | No |
+| Password change code | Changing the password on the plan page | No |
+| Password changed | After a change or reset | No |
+| Email change code | To the NEW address | No |
+| Email changed | To the OLD address | No |
+| New sign-in alert | Sign-in from a new browser/device | Yes |
+| Google / Apple linked | Google/Apple connected to an existing account | Yes |
+| Plan activated + receipt | Plan payment confirmed or approved | Yes |
+| Top-up receipt | Top-up confirmed or approved | Yes |
+| Payment not completed | Cancelled at Volet, invalid at BTCPay, or rejected by you | Yes |
+| Renewal reminder | A few days before the period ends | Yes |
+| Plan ended | Within a day after it ends | Yes |
+
 ## How duplicates are avoided
 
 - Welcome: the send is recorded on the account (Activity), and a second

@@ -27,6 +27,7 @@ import BillingAlerts from "@/components/plan/BillingAlerts";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
+import EmailChangeCard from "@/components/plan/EmailChangeCard";
 import PasswordCard from "@/components/plan/PasswordCard";
 import PlanOptions from "@/components/plan/PlanOptions";
 import TokenHero from "@/components/plan/TokenHero";
@@ -474,10 +475,13 @@ export default function PlanPage() {
                       <UserRound className="h-4 w-4 text-meta-500" aria-hidden />
                       <h2 className="text-sm font-semibold tracking-tight text-black">Account</h2>
                     </div>
-                    <p className="mb-4 truncate text-sm text-ink-muted">
+                    <p className="mb-2 truncate text-sm text-ink-muted">
                       Signed in as <span className="font-medium text-black">{user?.email}</span>
                     </p>
-                    <PasswordCard />
+                    <div className="mb-4">
+                      <EmailChangeCard socialOnly={user?.social_only} onChanged={setUser} />
+                    </div>
+                    <PasswordCard socialOnly={user?.social_only} />
                   </NeonCard>
 
                   <NeonCard tone="slow" padding="lg" radius="xl">

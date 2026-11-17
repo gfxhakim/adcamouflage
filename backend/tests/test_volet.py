@@ -100,8 +100,22 @@ def _signed_in(email: str) -> TestClient:
     response = client.post("/api/v1/auth/register", json=credentials)
     if response.status_code == 409:
         response = client.post("/api/v1/auth/login", json=credentials)
+    if response.status_code in (202, 403):
+        # Email is switched on, so the account opens with the emailed code.
+        response = client.post("/api/v1/auth/verify-email", json={"email": email, "code": _fresh_code(email)})
     assert response.status_code in (200, 201), response.text
     return client
+
+
+def _fresh_code(email: str) -> str:
+    """A new sign-up code for ``email``, as if read from the email."""
+
+    from app import account_security
+    from app.db import User
+
+    with _session() as db:
+        user = db.query(User).filter(User.email == email.strip().lower()).one()
+        return account_security.issue(db, user, account_security.VERIFY)
 
 
 def _volet() -> TestClient:

@@ -755,7 +755,7 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
     plans = get_token_plans(db)
     plan = plans.get(order.plan_id)
     if user is None or plan is None:
-        void_order(db, order, "invalid")
+        void_order(db, order, "invalid", tell_customer=False)
         logger.warning("order %s cannot be applied: user or plan missing", order.id)
         return False
 
@@ -822,21 +822,33 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
         from . import notify
 
         notify.paid(order, user.email, plan.label, currency(db), source, name=user.display_name)
-    if order.kind == "subscription":
-        from . import mailer
+    from . import mailer
 
+    if order.kind == "subscription":
         granted = order.tokens or plan.tokens * max(1, periods)
-        mailer.plan_activated(db, user, plan.label, granted)
+        mailer.plan_activated(db, user, plan.label, granted, order)
+    elif order.amount_usd and order.amount_usd > 0:
+        mailer.topup_receipt(db, user, order, plan.label)
     return True
 
 
-def void_order(db: Session, order: Order, status: str) -> bool:
-    """Mark a pending order expired or invalid. Paid orders are left alone."""
+def void_order(db: Session, order: Order, status: str, *, tell_customer: bool | None = None) -> bool:
+    """Mark a pending order expired or invalid. Paid orders are left alone.
+
+    The buyer gets the "payment did not go through" email when the order is
+    marked invalid (provider says invalid, or the admin rejected it), or when
+    ``tell_customer`` is True (a cancellation at the provider). A checkout
+    that simply timed out unpaid sends nothing.
+    """
 
     if order.status != "pending":
         return False
     order.status = status
     db.commit()
+    if tell_customer if tell_customer is not None else status == "invalid":
+        from . import mailer
+
+        mailer.payment_failed(db, order)
     return True
 
 

@@ -24,6 +24,42 @@ export interface UserProfile {
   /** Tokens that can be spent right now (0 while the subscription has lapsed). */
   tokens_usable: number;
   subscription_active: boolean;
+  /** True for accounts made with Google or Apple until a password is set (older APIs leave it out). */
+  social_only?: boolean;
+}
+
+/** Sign-up accepted; the account opens once the emailed code is entered. */
+export interface PendingSignup {
+  verify: true;
+  email: string;
+}
+
+export function isPending(result: UserProfile | PendingSignup): result is PendingSignup {
+  return (result as PendingSignup).verify === true;
+}
+
+export interface AuthProviders {
+  google: boolean;
+  apple: boolean;
+  /** New sign-ups must enter an emailed code. */
+  email_codes: boolean;
+}
+
+/** Which sign-in buttons the server has keys for. */
+export async function fetchProviders(): Promise<AuthProviders> {
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/auth/providers`, { cache: "no-store" });
+    if (response.ok) return (await response.json()) as AuthProviders;
+  } catch {
+    /* fall through */
+  }
+  return { google: false, apple: false, email_codes: false };
+}
+
+/** Where a "Continue with" button goes; the API redirects to Google or Apple. */
+export function oauthStartUrl(provider: "google" | "apple", next?: string | null): string {
+  const query = next ? `?next=${encodeURIComponent(next)}` : "";
+  return `${API_BASE}/api/v1/auth/oauth/${provider}/start${query}`;
 }
 
 export interface BatchSummary {
@@ -65,7 +101,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export function signUp(email: string, password: string, displayName?: string) {
-  return post<UserProfile>("/api/v1/auth/register", {
+  return post<UserProfile | PendingSignup>("/api/v1/auth/register", {
     email,
     password,
     display_name: displayName || null,
@@ -80,11 +116,41 @@ export function signOut() {
   return post<void>("/api/v1/auth/logout");
 }
 
-export function changePassword(currentPassword: string, newPassword: string) {
+export function verifyEmail(email: string, code: string) {
+  return post<UserProfile>("/api/v1/auth/verify-email", { email, code });
+}
+
+export function resendVerification(email: string) {
+  return post<{ ok: boolean }>("/api/v1/auth/verify-email/resend", { email });
+}
+
+export function forgotPassword(email: string) {
+  return post<{ ok: boolean; email_ready?: boolean }>("/api/v1/auth/password/forgot", { email });
+}
+
+export function resetPassword(email: string, code: string, newPassword: string) {
+  return post<UserProfile>("/api/v1/auth/password/reset", { email, code, new_password: newPassword });
+}
+
+/** Email the code that confirms a password change. `required` is false when the server cannot send email. */
+export function requestPasswordCode() {
+  return post<{ sent: boolean; required: boolean }>("/api/v1/auth/password/code");
+}
+
+export function changePassword(currentPassword: string, newPassword: string, code = "") {
   return post<UserProfile>("/api/v1/auth/password", {
     current_password: currentPassword,
     new_password: newPassword,
+    code,
   });
+}
+
+export function requestEmailChange(newEmail: string, currentPassword: string) {
+  return post<{ sent_to: string }>("/api/v1/auth/email/code", { new_email: newEmail, current_password: currentPassword });
+}
+
+export function confirmEmailChange(code: string) {
+  return post<UserProfile>("/api/v1/auth/email", { code });
 }
 
 /** The signed-in user, or null when there is no valid session. */

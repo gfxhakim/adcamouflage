@@ -1,15 +1,29 @@
 "use client";
 
-import { ArrowRight, Loader2, Lock, Mail, OctagonAlert, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Lock, Mail, MailCheck, OctagonAlert, User } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useState } from "react";
 
-import { fetchMe, signIn, signUp, type UserProfile } from "@/lib/auth";
+import { ApiError } from "@/lib/api";
+import { fetchMe, isPending, resendVerification, signIn, signUp, verifyEmail, type UserProfile } from "@/lib/auth";
 import { trackRegistration } from "@/lib/meta";
+import { CodeField, ResendButton } from "./CodeInput";
 import NeonCard from "./NeonCard";
+import SocialButtons from "./SocialButtons";
 
 type Mode = "signin" | "signup";
+
+/** Messages for ?oauth_error= after Google or Apple sends someone back. */
+const OAUTH_ERRORS: Record<string, string> = {
+  cancelled: "Sign-in was cancelled. Try again, or use your email below.",
+  expired: "That sign-in took too long or was opened in another browser. Please try again.",
+  no_email: "We could not get a confirmed email from that account. Use another account or sign up with email.",
+  disabled: "This account is turned off. Contact support if you think this is a mistake.",
+  closed: "New accounts are closed right now.",
+  unavailable: "That sign-in option is not available right now.",
+  failed: "Sign-in did not work this time. Please try again, or use your email below.",
+};
 
 /** Must match ADCAM_MIN_PASSWORD_LENGTH on the API. */
 const MIN_PASSWORD_LENGTH = 10;
@@ -41,7 +55,13 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const code = params.get("oauth_error");
+    return code ? (OAUTH_ERRORS[code] ?? OAUTH_ERRORS.failed) : null;
+  });
+  /** Set once the server has emailed a sign-up code to this address. */
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   /** Someone already signed in on this browser, offered a way straight in. */
   const [current, setCurrent] = useState<UserProfile | null>(null);
 
@@ -89,20 +109,117 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       setBusy(true);
       try {
         if (mode === "signup") {
-          const profile = await signUp(email.trim(), password, displayName.trim());
+          const result = await signUp(email.trim(), password, displayName.trim());
+          if (isPending(result)) {
+            setPendingEmail(result.email);
+            setCode("");
+            setBusy(false);
+            return;
+          }
           // Same event id as the server's Conversions API copy, so Meta counts it once.
-          await Promise.race([trackRegistration(profile.id), new Promise((r) => setTimeout(r, 800))]);
+          await Promise.race([trackRegistration(result.id), new Promise((r) => setTimeout(r, 800))]);
         } else {
           await signIn(email.trim(), password);
         }
         await enter();
       } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 403 && mode === "signin") {
+          // Signed up but never entered the code: the server sent a new one.
+          setPendingEmail(email.trim().toLowerCase());
+          setCode("");
+          setBusy(false);
+          return;
+        }
         setError(caught instanceof Error ? caught.message : "Something went wrong. Try again.");
         setBusy(false);
       }
     },
     [busy, displayName, email, enter, mode, password],
   );
+
+  const confirm = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (busy || !pendingEmail) return;
+      setError(null);
+      if (code.length !== 6) {
+        setError("Enter the 6-digit code from the email.");
+        return;
+      }
+      setBusy(true);
+      try {
+        const profile = await verifyEmail(pendingEmail, code);
+        await Promise.race([trackRegistration(profile.id), new Promise((r) => setTimeout(r, 800))]);
+        await enter();
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Something went wrong. Try again.");
+        setBusy(false);
+      }
+    },
+    [busy, code, enter, pendingEmail],
+  );
+
+  if (pendingEmail) {
+    return (
+      <NeonCard glow padding="lg" radius="xl" className="w-full max-w-md">
+        <div className="mb-6">
+          <span className="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-meta-50 text-meta-600">
+            <MailCheck className="h-5 w-5" aria-hidden />
+          </span>
+          <h1 className="font-display text-4xl font-normal leading-tight text-black">Check your email</h1>
+          <p className="mt-1.5 text-sm text-ink-muted">
+            We sent a 6-digit code to <span className="break-all font-semibold text-black">{pendingEmail}</span>. Enter it
+            to open your account.
+          </p>
+        </div>
+        <form onSubmit={confirm} className="space-y-4" noValidate>
+          <div>
+            <label htmlFor={`${formId}-code`} className="label mb-1.5 block">
+              Code
+            </label>
+            <CodeField id={`${formId}-code`} value={code} onChange={setCode} disabled={busy} />
+          </div>
+          {error ? (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-relaxed text-red-700"
+            >
+              <OctagonAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              {error}
+            </p>
+          ) : null}
+          <button type="submit" className="btn-primary w-full !py-3" disabled={busy || code.length !== 6}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            Confirm and continue
+            {!busy ? <ArrowRight className="h-4 w-4" aria-hidden /> : null}
+          </button>
+        </form>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <ResendButton
+            onResend={async () => {
+              setError(null);
+              await resendVerification(pendingEmail).catch(() => undefined);
+            }}
+          />
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-xs text-ink-subtle hover:text-black"
+            onClick={() => {
+              setPendingEmail(null);
+              setError(null);
+              setBusy(false);
+            }}
+          >
+            <ArrowLeft className="h-3 w-3" aria-hidden />
+            Use another email
+          </button>
+        </div>
+        <p className="mt-4 text-[11px] leading-relaxed text-ink-faint">
+          No email after a minute? Check your spam or promotions folder.
+        </p>
+      </NeonCard>
+    );
+  }
 
   return (
     <NeonCard glow padding="lg" radius="xl" className="w-full max-w-md">
@@ -129,6 +246,8 @@ export function AuthPanel({ mode }: { mode: Mode }) {
           </button>
         </div>
       ) : null}
+
+      <SocialButtons next={next} mode={mode} />
 
       <form onSubmit={submit} className="space-y-4" noValidate>
         {mode === "signup" ? (
@@ -169,10 +288,20 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         </div>
 
         <div>
-          <label htmlFor={`${formId}-password`} className="label mb-1.5 flex items-center gap-1.5">
-            <Lock className="h-3 w-3" aria-hidden />
-            Password
-          </label>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label htmlFor={`${formId}-password`} className="label flex items-center gap-1.5">
+              <Lock className="h-3 w-3" aria-hidden />
+              Password
+            </label>
+            {mode === "signin" ? (
+              <Link
+                href={`/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`}
+                className="text-[11px] font-semibold text-meta-600 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            ) : null}
+          </div>
           <input
             id={`${formId}-password`}
             type="password"

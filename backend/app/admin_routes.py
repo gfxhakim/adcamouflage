@@ -1499,6 +1499,8 @@ def create_user(
         email=email,
         password_hash=hash_password(password),
         display_name=(payload.display_name or "").strip() or None,
+        # The admin typed the address; the customer does not need a code.
+        email_verified=True,
     )
     apply_plan(db, user, plan_id)
     db.add(user)

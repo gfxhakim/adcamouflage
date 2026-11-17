@@ -517,7 +517,7 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         db.commit()
         settle_order(db, order, source="Volet")
     elif state == volet.CANCELED:
-        void_order(db, order, "expired")
+        void_order(db, order, "expired", tell_customer=True)
     # PENDING and PROCESS mean the money is still on its way: nothing to do yet.
     return PlainTextResponse("OK")
 

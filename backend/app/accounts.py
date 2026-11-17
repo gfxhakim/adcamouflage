@@ -226,6 +226,7 @@ def ensure_admin_account(db: Session) -> None:
         change = ""
     user.is_admin = True
     user.is_active = True
+    user.email_verified = True
     try:
         db.commit()
     except IntegrityError:
