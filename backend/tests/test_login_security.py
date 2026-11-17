@@ -1,4 +1,4 @@
-"""Email codes, password reset, account changes, sign-in alerts, Google/Apple sign-in and billing emails."""
+"""Email codes, password reset, account changes, sign-in alerts, Google sign-in and billing emails."""
 
 from __future__ import annotations
 
@@ -8,8 +8,7 @@ from datetime import timedelta
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import select
@@ -287,7 +286,7 @@ def admin(monkeypatch):
 
 
 # --------------------------------------------------------------------------
-# Google / Apple
+# Google
 # --------------------------------------------------------------------------
 
 
@@ -297,7 +296,7 @@ def google(monkeypatch):
     monkeypatch.setattr(settings, "google_client_secret", SecretStr("google-secret"))
     monkeypatch.setattr(settings, "public_url", "https://shop.example.test")
     who: dict = {}
-    monkeypatch.setattr(oauth, "_identity", lambda provider, request, code, nonce, user: dict(who))
+    monkeypatch.setattr(oauth, "_identity", lambda provider, request, code, nonce: dict(who))
     return who
 
 
@@ -310,7 +309,7 @@ def _oauth_round(who, *, next_path: str | None = None, agent: str = CHROME_WIN) 
     assert location.startswith(oauth.GOOGLE_AUTH)
     assert "redirect_uri=https%3A%2F%2Fshop.example.test%2Fapi%2Fv1%2Fauth%2Foauth%2Fgoogle%2Fcallback" in location
     cookie = start.headers["set-cookie"]
-    assert "SameSite=none" in cookie and "Secure" in cookie and "HttpOnly" in cookie
+    assert "SameSite=lax" in cookie and "Secure" in cookie and "HttpOnly" in cookie
     state = re.search(r"state=([^&]+)", location).group(1)
     done = client.get(f"/api/v1/auth/oauth/google/callback?code=abc&state={state}")
     return client, done
@@ -372,26 +371,10 @@ def test_google_refusals(outbox, google):
 
 def test_providers_listed_only_when_configured(monkeypatch):
     monkeypatch.setattr(settings, "google_client_id", "")
-    monkeypatch.setattr(settings, "apple_client_id", "")
     data = TestClient(app).get("/api/v1/auth/providers").json()
-    assert data["google"] is False and data["apple"] is False
-    response = TestClient(app).get("/api/v1/auth/oauth/apple/start", follow_redirects=False)
+    assert data["google"] is False and "apple" not in data
+    response = TestClient(app).get("/api/v1/auth/oauth/google/start", follow_redirects=False)
     assert response.status_code == 303 and "oauth_error=unavailable" in response.headers["location"]
-
-
-def test_apple_client_secret_is_signed_with_the_p8_key(monkeypatch):
-    key = ec.generate_private_key(ec.SECP256R1())
-    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
-    monkeypatch.setattr(settings, "apple_client_id", "com.example.web")
-    monkeypatch.setattr(settings, "apple_team_id", "TEAM123456")
-    monkeypatch.setattr(settings, "apple_key_id", "KEY1234567")
-    # Railway may store the key with literal \n escapes.
-    monkeypatch.setattr(settings, "apple_private_key", SecretStr(pem.replace("\n", "\\n")))
-    assert settings.apple_ready
-    token = oauth.apple_client_secret()
-    assert jwt.get_unverified_header(token)["kid"] == "KEY1234567"
-    claims = jwt.decode(token, key.public_key(), algorithms=["ES256"], audience="https://appleid.apple.com")
-    assert claims["iss"] == "TEAM123456" and claims["sub"] == "com.example.web"
 
 
 def test_id_token_checks(monkeypatch):

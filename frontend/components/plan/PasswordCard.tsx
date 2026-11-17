@@ -9,7 +9,7 @@ import { changePassword, requestPasswordCode } from "@/lib/auth";
 /**
  * Change the account password. The server emails a 6-digit code that must be
  * entered with the new password; every other device is signed out after.
- * Accounts made with Google or Apple have no password yet, so they only
+ * Accounts made with Google have no password yet, so they only
  * need the code.
  */
 export function PasswordCard({ socialOnly = false }: { socialOnly?: boolean }) {
@@ -72,7 +72,7 @@ export function PasswordCard({ socialOnly = false }: { socialOnly?: boolean }) {
           />
         </label>
       ) : (
-        <p className="text-xs text-ink-muted">You log in with Google or Apple. Set a password to log in with your email too.</p>
+        <p className="text-xs text-ink-muted">You log in with Google. Set a password to log in with your email too.</p>
       )}
       <label className="block">
         <span className="label">New password</span>

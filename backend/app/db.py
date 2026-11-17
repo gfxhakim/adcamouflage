@@ -137,14 +137,14 @@ class AuthCode(Base):
 
 
 class OAuthIdentity(Base):
-    """A Google or Apple account that can sign in to a user."""
+    """A Google account that can sign in to a user."""
 
     __tablename__ = "oauth_identities"
     __table_args__ = (UniqueConstraint("provider", "subject", name="uq_oauth_identity"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
-    provider: Mapped[str] = mapped_column(String(16), nullable=False)  # google | apple
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)  # google
     # The provider's stable id for the person ("sub"); emails can change.
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)

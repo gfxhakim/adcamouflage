@@ -25,7 +25,7 @@ export interface UserProfile {
   /** Tokens that can be spent right now (0 while the subscription has lapsed). */
   tokens_usable: number;
   subscription_active: boolean;
-  /** True for accounts made with Google or Apple until a password is set (older APIs leave it out). */
+  /** True for accounts made with Google until a password is set (older APIs leave it out). */
   social_only?: boolean;
 }
 
@@ -41,7 +41,6 @@ export function isPending(result: UserProfile | PendingSignup): result is Pendin
 
 export interface AuthProviders {
   google: boolean;
-  apple: boolean;
   /** New sign-ups must enter an emailed code. */
   email_codes: boolean;
 }
@@ -54,11 +53,11 @@ export async function fetchProviders(): Promise<AuthProviders> {
   } catch {
     /* fall through */
   }
-  return { google: false, apple: false, email_codes: false };
+  return { google: false, email_codes: false };
 }
 
-/** Where a "Continue with" button goes; the API redirects to Google or Apple. */
-export function oauthStartUrl(provider: "google" | "apple", next?: string | null): string {
+/** Where the "Continue with Google" button goes; the API redirects to Google. */
+export function oauthStartUrl(provider: "google", next?: string | null): string {
   const query = next ? `?next=${encodeURIComponent(next)}` : "";
   return `${API_BASE}/api/v1/auth/oauth/${provider}/start${query}`;
 }

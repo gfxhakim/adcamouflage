@@ -1,12 +1,11 @@
-"""Continue with Google / Continue with Apple.
+"""Continue with Google.
 
-Both use the authorization code flow, run entirely on the API:
+The authorization code flow, run entirely on the API:
 
-1. ``GET /api/v1/auth/oauth/{provider}/start`` stores a short-lived signed
+1. ``GET /api/v1/auth/oauth/google/start`` stores a short-lived signed
    cookie (random ``state`` + ``nonce`` + where to go after) and redirects to
-   Google or Apple.
-2. The provider sends the browser back to ``.../{provider}/callback`` (Google
-   with a GET, Apple with a form POST). The API checks ``state`` against the
+   Google.
+2. Google sends the browser back to ``.../google/callback``. The API checks ``state`` against the
    cookie, swaps the code for an ID token over a direct HTTPS call, and
    verifies the token's signature, issuer, audience and nonce.
 3. The person is matched by provider id, then by verified email (the
@@ -14,8 +13,8 @@ Both use the authorization code flow, run entirely on the API:
    verified account is opened. The session cookie is set and a tiny page
    moves the browser on to the workspace (or /admin for an admin).
 
-The callback address registered at Google and Apple must be
-``<ADCAM_PUBLIC_URL>/api/v1/auth/oauth/google/callback`` (or ``/apple/``).
+The callback address registered at Google must be
+``<ADCAM_PUBLIC_URL>/api/v1/auth/oauth/google/callback``.
 """
 
 from __future__ import annotations
@@ -33,7 +32,6 @@ import httpx
 import jwt
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -61,12 +59,7 @@ GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_KEYS = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 
-APPLE_AUTH = "https://appleid.apple.com/auth/authorize"
-APPLE_TOKEN = "https://appleid.apple.com/auth/token"
-APPLE_KEYS = "https://appleid.apple.com/auth/keys"
-APPLE_ISSUER = "https://appleid.apple.com"
-
-LABELS = {"google": "Google", "apple": "Apple"}
+LABELS = {"google": "Google"}
 
 _jwk_clients: dict[str, jwt.PyJWKClient] = {}
 
@@ -85,7 +78,7 @@ class OAuthFailure(Exception):
 
 
 def _ready(provider: str) -> bool:
-    return settings.google_ready if provider == "google" else settings.apple_ready if provider == "apple" else False
+    return provider == "google" and settings.google_ready
 
 
 def _base(request: Request) -> str:
@@ -125,29 +118,6 @@ def _read_state(token: str | None) -> dict[str, Any]:
         raise OAuthFailure("expired", f"bad state cookie: {exc}") from exc
 
 
-def _apple_key() -> str:
-    raw = settings.apple_private_key.get_secret_value() if settings.apple_private_key else ""
-    return raw.replace("\\n", "\n").strip()
-
-
-def apple_client_secret() -> str:
-    """The short-lived ES256 JWT Apple wants instead of a fixed client secret."""
-
-    now = int(time.time())
-    return jwt.encode(
-        {
-            "iss": settings.apple_team_id.strip(),
-            "iat": now,
-            "exp": now + 3600,
-            "aud": APPLE_ISSUER,
-            "sub": settings.apple_client_id.strip(),
-        },
-        _apple_key(),
-        algorithm="ES256",
-        headers={"kid": settings.apple_key_id.strip()},
-    )
-
-
 def _jwk_client(url: str) -> jwt.PyJWKClient:
     client = _jwk_clients.get(url)
     if client is None:
@@ -163,7 +133,7 @@ def verify_id_token(token: str, *, keys_url: str, audience: str, issuers: tuple[
         claims = jwt.decode(
             token,
             key.key,
-            algorithms=["RS256", "ES256"],
+            algorithms=["RS256"],
             audience=audience,
             options={"require": ["exp", "iat", "sub", "iss", "aud"]},
             leeway=60,
@@ -209,7 +179,7 @@ def find_or_create_user(
     email_verified: bool,
     name: str | None,
 ) -> tuple[User, bool]:
-    """The account for this Google/Apple person, and whether it was just opened."""
+    """The account for this Google person, and whether it was just opened."""
 
     label = LABELS[provider]
     identity = db.execute(
@@ -287,16 +257,12 @@ def find_or_create_user(
 
 
 def _clear_state(response: Any, request: Request) -> None:
-    response.delete_cookie(STATE_COOKIE, path="/api/v1/auth/oauth", secure=_secure(request), samesite="none" if _secure(request) else "lax")
+    response.delete_cookie(STATE_COOKIE, path="/api/v1/auth/oauth", secure=_secure(request), samesite="lax")
 
 
 def _go(target: str) -> HTMLResponse:
-    """A 200 page that moves on by itself.
-
-    Apple returns with a cross-site POST; a page of our own that then
-    navigates makes the next request same-site, so the (Lax) session
-    cookie is sent with it in every browser.
-    """
+    """A 200 page that moves on by itself, so the next request is same-site
+    and the (Lax) session cookie goes with it in every browser."""
 
     safe = html.escape(target, quote=True)
     body = (
@@ -327,29 +293,16 @@ def start(provider: str, request: Request, next: str | None = None) -> RedirectR
         return RedirectResponse("/login?oauth_error=unavailable", status_code=303)
     state = secrets.token_urlsafe(24)
     nonce = secrets.token_urlsafe(24)
-    if provider == "google":
-        params = {
-            "client_id": settings.google_client_id.strip(),
-            "redirect_uri": redirect_uri(request, provider),
-            "response_type": "code",
-            "scope": "openid email profile",
-            "state": state,
-            "nonce": nonce,
-            "prompt": "select_account",
-        }
-        url = f"{GOOGLE_AUTH}?{urlencode(params)}"
-    else:
-        params = {
-            "client_id": settings.apple_client_id.strip(),
-            "redirect_uri": redirect_uri(request, provider),
-            "response_type": "code",
-            "scope": "name email",
-            # Asking for name/email makes Apple answer with a form POST.
-            "response_mode": "form_post",
-            "state": state,
-            "nonce": nonce,
-        }
-        url = f"{APPLE_AUTH}?{urlencode(params)}"
+    params = {
+        "client_id": settings.google_client_id.strip(),
+        "redirect_uri": redirect_uri(request, provider),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "nonce": nonce,
+        "prompt": "select_account",
+    }
+    url = f"{GOOGLE_AUTH}?{urlencode(params)}"
     response = RedirectResponse(url, status_code=303)
     secure = _secure(request)
     response.set_cookie(
@@ -358,72 +311,35 @@ def start(provider: str, request: Request, next: str | None = None) -> RedirectR
         max_age=STATE_TTL,
         httponly=True,
         secure=secure,
-        # Apple's return is a cross-site POST, which only carries a
-        # SameSite=None cookie (and that needs HTTPS).
-        samesite="none" if secure else "lax",
+        samesite="lax",
         path="/api/v1/auth/oauth",
     )
     return response
 
 
-def _identity(provider: str, request: Request, code: str, nonce: str, apple_user: str | None) -> dict[str, Any]:
-    if provider == "google":
-        tokens = _exchange(
-            GOOGLE_TOKEN,
-            {
-                "code": code,
-                "client_id": settings.google_client_id.strip(),
-                "client_secret": settings.google_client_secret.get_secret_value() if settings.google_client_secret else "",
-                "redirect_uri": redirect_uri(request, provider),
-                "grant_type": "authorization_code",
-            },
-        )
-        claims = verify_id_token(
-            str(tokens.get("id_token") or ""),
-            keys_url=GOOGLE_KEYS,
-            audience=settings.google_client_id.strip(),
-            issuers=GOOGLE_ISSUERS,
-            nonce=nonce,
-        )
-        return {
-            "subject": str(claims["sub"]),
-            "email": claims.get("email"),
-            "email_verified": _truthy(claims.get("email_verified")),
-            "name": claims.get("name") or claims.get("given_name"),
-        }
-
+def _identity(provider: str, request: Request, code: str, nonce: str) -> dict[str, Any]:
     tokens = _exchange(
-        APPLE_TOKEN,
+        GOOGLE_TOKEN,
         {
             "code": code,
-            "client_id": settings.apple_client_id.strip(),
-            "client_secret": apple_client_secret(),
+            "client_id": settings.google_client_id.strip(),
+            "client_secret": settings.google_client_secret.get_secret_value() if settings.google_client_secret else "",
             "redirect_uri": redirect_uri(request, provider),
             "grant_type": "authorization_code",
         },
     )
     claims = verify_id_token(
         str(tokens.get("id_token") or ""),
-        keys_url=APPLE_KEYS,
-        audience=settings.apple_client_id.strip(),
-        issuers=(APPLE_ISSUER,),
+        keys_url=GOOGLE_KEYS,
+        audience=settings.google_client_id.strip(),
+        issuers=GOOGLE_ISSUERS,
         nonce=nonce,
     )
-    name = None
-    if apple_user:
-        # Apple sends the name only on the very first sign-in, in this field.
-        try:
-            parts = (json.loads(apple_user) or {}).get("name") or {}
-            name = " ".join(p for p in (parts.get("firstName"), parts.get("lastName")) if p) or None
-        except (ValueError, AttributeError):
-            name = None
     return {
         "subject": str(claims["sub"]),
         "email": claims.get("email"),
-        # Apple only hands out addresses it has verified (including the
-        # private relay ones); older tokens omit the flag.
-        "email_verified": _truthy(claims.get("email_verified", True)),
-        "name": name,
+        "email_verified": _truthy(claims.get("email_verified")),
+        "name": claims.get("name") or claims.get("given_name"),
     }
 
 
@@ -441,7 +357,7 @@ def _callback(provider: str, request: Request, db: Session, fields: dict[str, st
             raise OAuthFailure("expired", "state mismatch")
         if not fields.get("code"):
             raise OAuthFailure("failed", "no code")
-        who = _identity(provider, request, fields["code"], str(state.get("n", "")), fields.get("user"))
+        who = _identity(provider, request, fields["code"], str(state.get("n", "")))
         user, opened = find_or_create_user(db, request, provider=provider, **who)
     except OAuthFailure as failure:
         logger.warning("%s sign-in failed: %s", provider, failure)
@@ -466,11 +382,3 @@ def _callback(provider: str, request: Request, db: Session, fields: dict[str, st
 @router.get("/{provider}/callback")
 def callback_get(provider: str, request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     return _callback(provider, request, db, dict(request.query_params))
-
-
-@router.post("/{provider}/callback")
-async def callback_post(provider: str, request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    form = await request.form()
-    fields = {k: str(v) for k, v in form.items()}
-    # The token exchange and database work block, so they run off the event loop.
-    return await run_in_threadpool(_callback, provider, request, db, fields)

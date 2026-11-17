@@ -103,14 +103,14 @@ Change `ADCAM_EMAIL_FROM` only after step 3: Brevo refuses mail from a domain it
 | Email | When | Can be switched off |
 |---|---|---|
 | Sign-up code | Email + password sign-up | No |
-| Welcome | Account opened (after the code, or Google/Apple) | Yes |
+| Welcome | Account opened (after the code, or Google) | Yes |
 | Password reset code | Forgot password | No |
 | Password change code | Changing the password on the plan page | No |
 | Password changed | After a change or reset | No |
 | Email change code | To the NEW address | No |
 | Email changed | To the OLD address | No |
 | New sign-in alert | Sign-in from a new browser/device | Yes |
-| Google / Apple linked | Google/Apple connected to an existing account | Yes |
+| Google linked | Google connected to an existing account | Yes |
 | Plan activated + receipt | Plan payment confirmed or approved | Yes |
 | Top-up receipt | Top-up confirmed or approved | Yes |
 | Payment not completed | A payment you reject (Admin or Telegram) | Yes |

@@ -14,7 +14,7 @@ import SocialButtons from "./SocialButtons";
 
 type Mode = "signin" | "signup";
 
-/** Messages for ?oauth_error= after Google or Apple sends someone back. */
+/** Messages for ?oauth_error= after Google sends someone back. */
 const OAUTH_ERRORS: Record<string, string> = {
   cancelled: "Sign-in was cancelled. Try again, or use your email below.",
   expired: "That sign-in took too long or was opened in another browser. Please try again.",

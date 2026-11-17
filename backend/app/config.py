@@ -159,18 +159,11 @@ class Settings(BaseSettings):
     # Where customer replies go; empty = back to the From address.
     email_reply_to: str = ""
 
-    # --- sign-in with Google / Apple ---------------------------------------
-    # Each button appears on the login and sign-up pages once its keys are
+    # --- sign-in with Google -------------------------------------------------
+    # The button appears on the login and sign-up pages once both are
     # set on the api service. See docs/LOGIN.md for where to get them.
     google_client_id: str = ""
     google_client_secret: SecretStr | None = None
-    # Apple: the Services ID (e.g. com.proteusflow.web), the 10-character
-    # Team ID, the Key ID of a "Sign in with Apple" key and that key's .p8
-    # file contents (paste the whole file; \n escapes are accepted too).
-    apple_client_id: str = ""
-    apple_team_id: str = ""
-    apple_key_id: str = ""
-    apple_private_key: SecretStr | None = None
     # Minutes a code emailed for sign-up, password reset or a change stays valid.
     email_code_minutes: int = 15
 
@@ -309,13 +302,6 @@ class Settings(BaseSettings):
     def google_ready(self) -> bool:
         secret = self.google_client_secret.get_secret_value() if self.google_client_secret else ""
         return bool(self.google_client_id.strip() and secret.strip())
-
-    @property
-    def apple_ready(self) -> bool:
-        key = self.apple_private_key.get_secret_value() if self.apple_private_key else ""
-        return bool(
-            self.apple_client_id.strip() and self.apple_team_id.strip() and self.apple_key_id.strip() and key.strip()
-        )
 
     @property
     def billing_configured(self) -> bool:

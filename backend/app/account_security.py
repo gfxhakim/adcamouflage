@@ -36,7 +36,7 @@ MAX_ATTEMPTS = 5
 RESEND_AFTER = timedelta(seconds=60)
 CODE_LENGTH = 6
 
-# An unusable password for accounts made with Google or Apple. bcrypt cannot
+# An unusable password for accounts made with Google. bcrypt cannot
 # parse it, so a password sign-in always fails until the owner sets one
 # through Forgot password.
 NO_PASSWORD = "!no-password"

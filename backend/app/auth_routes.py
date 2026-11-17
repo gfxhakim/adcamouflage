@@ -121,7 +121,7 @@ class UserProfile(BaseModel):
     billing_mode: str = "legacy"
     tokens_usable: int = 0
     subscription_active: bool = False
-    # True for accounts made with Google or Apple until a password is set.
+    # True for accounts made with Google until a password is set.
     social_only: bool = False
 
     @classmethod
@@ -207,7 +207,6 @@ class EmailChangeIn(BaseModel):
 
 class Providers(BaseModel):
     google: bool
-    apple: bool
     # True when new sign-ups must enter an emailed code.
     email_codes: bool
 
@@ -250,7 +249,7 @@ def _welcome_new_account(db: Session, user: User, request: Request) -> None:
 
 @router.get("/providers", response_model=Providers)
 def providers() -> Providers:
-    return Providers(google=settings.google_ready, apple=settings.apple_ready, email_codes=verification_on())
+    return Providers(google=settings.google_ready, email_codes=verification_on())
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -374,7 +373,7 @@ def login(
         login_limiter.record_failure(key)
         if user is not None and user.is_active and not security.has_password(user):
             raise AuthError(
-                "This account uses Google or Apple to log in. Use that button, or set a password with Forgot password."
+                "This account uses Google to log in. Use that button, or set a password with Forgot password."
             )
         raise AuthError("That email and password do not match.")
 
