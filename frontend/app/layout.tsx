@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
 
 import MetaPixel from "@/components/MetaPixel";
+import RefCapture from "@/components/RefCapture";
 import { DECK_THEME_SCRIPT } from "@/lib/deckThemeScript";
 import { SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME, SITE_TITLE, siteUrl } from "@/lib/site";
 import "./globals.css";
@@ -68,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen">
         {children}
         <MetaPixel />
+        <RefCapture />
       </body>
     </html>
   );

@@ -13,6 +13,7 @@ import {
   giveBonusTokens,
   resumePlan,
   getUserBilling,
+  markOrderRefunded,
   grantPeriod,
   setBillingMode,
   type AdminUser,
@@ -103,6 +104,23 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
     } finally {
       setBusy(null);
     }
+  };
+
+  const refund = (orderId: string, amount: number) => {
+    const text =
+      `Mark this ${formatMoney(amount, currency)} payment as refunded?\n\n` +
+      "Do this after you sent the money back yourself. It cancels the referral reward or partner commission this " +
+      "payment earned and takes it back if it was already given. The customer's own plan and tokens do not change: " +
+      "use Cancel now for that.";
+    if (!window.confirm(text)) return;
+    void run(
+      `refund-${orderId}`,
+      async () => {
+        await markOrderRefunded(orderId);
+        return getUserBilling(user.id);
+      },
+      "Order marked refunded.",
+    );
   };
 
   const grant = () => {
@@ -229,6 +247,12 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
                   {balance?.frozen_topup ? <span className="ml-1 text-amber-700 dark:text-amber-300">(on hold)</span> : null}
                 </dd>
               </div>
+              {(balance?.referral_tokens ?? 0) !== 0 ? (
+                <div>
+                  <dt className="text-ink-faint dark:text-slate-500">Referral reward tokens</dt>
+                  <dd className="text-black tabular-nums dark:text-slate-100">{formatTokens(balance?.referral_tokens)}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="text-ink-faint dark:text-slate-500">Usable now</dt>
                 <dd className="font-semibold text-black tabular-nums dark:text-slate-100">
@@ -500,6 +524,7 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
                       <span className="min-w-0 truncate text-black dark:text-slate-100">
                         {order.kind === "subscription" ? `${order.plan_id} period` : `top-up on ${order.plan_id}`} ·{" "}
                         {formatMoney(order.amount, currency)} · {formatTokens(order.tokens)} tokens
+                        {order.coupon_code ? ` · code ${order.coupon_code}` : ""}
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
                         {providerName ? <span className="chip !text-[10px]">{providerName}</span> : null}
@@ -529,6 +554,16 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
                         <time className="text-ink-faint dark:text-slate-500" dateTime={order.paid_at ?? order.created_at}>
                           {timeAgo(order.paid_at ?? order.created_at)}
                         </time>
+                        {order.status === "paid" && order.amount > 0 ? (
+                          <button
+                            type="button"
+                            className="font-semibold text-red-600 hover:underline disabled:opacity-50 dark:text-red-300"
+                            disabled={busy !== null}
+                            onClick={() => refund(order.id, order.amount)}
+                          >
+                            Mark refunded
+                          </button>
+                        ) : null}
                       </span>
                     </li>
                   );

@@ -109,7 +109,7 @@ def test_purchase_is_sent_once_and_only_when_the_payment_is_confirmed(sent, vole
 
     checkout = [e for e in sent if e["event_name"] == "InitiateCheckout"]
     assert len(checkout) == 1 and checkout[0]["event_id"] == f"checkout-{order_id}"
-    assert checkout[0]["custom_data"]["value"] == 37.5
+    assert checkout[0]["custom_data"]["value"] == 37.0
     assert not [e for e in sent if e["event_name"] == "Purchase"]
     assert json.loads(_order(order_id).tracking)["consent"] == meta_capi.GRANTED
 
@@ -124,7 +124,7 @@ def test_purchase_is_sent_once_and_only_when_the_payment_is_confirmed(sent, vole
     assert len(purchases) == 1
     purchase = purchases[0]
     assert purchase["event_id"] == f"purchase-{order_id}"
-    assert purchase["custom_data"]["value"] == 37.5
+    assert purchase["custom_data"]["value"] == 37.0
     assert purchase["custom_data"]["currency"]
     # Matched to the buyer's browser, not to Volet's server that sent the notification.
     assert purchase["user_data"]["client_ip_address"] == "198.51.100.7"

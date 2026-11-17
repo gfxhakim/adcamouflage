@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import btcpay, meta_capi, notify, volet
+from . import affiliates, btcpay, meta_capi, notify, volet
 from .accounts import current_user
 from .activity import log_activity
 from .app_settings import currency
@@ -80,6 +80,8 @@ class CheckoutIn(BaseModel):
     amount: float | None = Field(default=None, gt=0, le=100_000)
     # Left out means the first provider that is set up.
     provider: str | None = Field(default=None, pattern="^(btcpay|volet)$")
+    # A friend's or creator's code typed at checkout (a link sets it at sign-up).
+    coupon: str | None = Field(default=None, max_length=40)
 
 
 class CheckoutOut(BaseModel):
@@ -101,6 +103,8 @@ class OrderOut(BaseModel):
     checkout_url: str | None
     created_at: datetime
     paid_at: datetime | None
+    coupon_code: str | None = None
+    discount: float = 0.0
 
 
 class SubscriptionState(BaseModel):
@@ -146,6 +150,8 @@ def _order_out(order: Order) -> OrderOut:
         checkout_url=order.checkout_url,
         created_at=order.created_at,
         paid_at=order.paid_at,
+        coupon_code=order.coupon_code,
+        discount=order.discount_usd or 0.0,
     )
 
 
@@ -226,6 +232,25 @@ def checkout(
         amount = plan.price
         tokens = plan.tokens
         bonus = 0
+        if payload.coupon and payload.coupon.strip():
+            code = affiliates.find_code(db, payload.coupon)
+            if code is None:
+                raise HTTPException(status_code=422, detail="That code does not exist.")
+            try:
+                affiliates.attribute(
+                    db,
+                    user,
+                    code,
+                    source="coupon",
+                    device=affiliates.device_hash(request.headers.get("x-device-id")),
+                    ip=affiliates.ip_hash(meta_capi._client_ip(request)),
+                )
+            except affiliates.AttributionError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # Coupons never stack: at most one, on the first subscription payment.
+        coupon = affiliates.checkout_discount(db, user, plan.id, plan.price)
+        if coupon is not None:
+            amount = coupon["amount"]
     else:
         if not subscription_active(user) or user.sub_plan not in plans:
             raise HTTPException(
@@ -241,6 +266,7 @@ def checkout(
         amount = float(amount_int)
         tokens = topup_tokens(plan, amount_int, topups)
         bonus = topup_bonus(plan, amount_int, topups)
+        coupon = None
 
     existing = _open_order(db, user, payload.kind, plan.id, amount, provider)
     if existing is not None:
@@ -271,7 +297,16 @@ def checkout(
         )
 
     order = new_order(
-        db, user, payload.kind, plan, amount, tokens, bonus=bonus if payload.kind == "topup" else 0, provider=provider
+        db,
+        user,
+        payload.kind,
+        plan,
+        amount,
+        tokens,
+        bonus=bonus if payload.kind == "topup" else 0,
+        provider=provider,
+        coupon_code=coupon["code"] if coupon else None,
+        discount=coupon["discount"] if coupon else 0.0,
     )
     what = f"{plan.label} period" if order.kind == "subscription" else f"${amount:g} top-up on {plan.label}"
     try:
@@ -514,6 +549,7 @@ async def volet_status(request: Request, db: Session = Depends(get_db)) -> Plain
         # Kept before the claim so even a settlement that fails leaves a
         # trace of which Volet transaction it was.
         order.provider_ref = (fields.get("ac_transfer") or "")[:128] or None
+        order.payer_hash = affiliates.payer_hash(fields.get("ac_src_wallet")) or None
         db.commit()
         settle_order(db, order, source="Volet")
     elif state == volet.CANCELED:

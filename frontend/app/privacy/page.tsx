@@ -46,6 +46,12 @@ export default function PrivacyPage() {
         for the site to work.
       </p>
       <p>
+        If you arrive through a referral or partner link, a cookie remembers that code for up to 30 days so the
+        discount can be applied when you sign up. To stop people from referring themselves, we keep a scrambled
+        (hashed) form of a random browser id and of your network address with your account. It is used for that check
+        only and is never shared.
+      </p>
+      <p>
         Only if you click <b>Accept</b> on the cookie banner, we also use the <b>Meta Pixel</b> and Meta&apos;s{" "}
         <b>Conversions API</b> to measure our advertising on Facebook and Instagram. This tells Meta when someone who
         saw our ad visits a page, creates an account, starts a checkout or completes a purchase (with the amount and

@@ -24,6 +24,7 @@ import Header from "@/components/Header";
 import DeckRail from "@/components/DeckRail";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
+import CouponBox from "@/components/plan/CouponBox";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
@@ -53,6 +54,7 @@ import {
 } from "@/lib/auth";
 import { formatDate, formatTokens, timeAgo } from "@/lib/format";
 import { trackCheckout, trackPurchase } from "@/lib/meta";
+import { fetchMyReferrals, type MyReferrals } from "@/lib/referrals";
 import type { TokenPlanCard } from "@/lib/types";
 
 /** After the payment provider sends the browser back, ask about the order this often, for this long. */
@@ -73,6 +75,7 @@ export default function PlanPage() {
   const [sub, setSub] = useState<Subscription | null>(null);
   const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [referrals, setReferrals] = useState<MyReferrals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   /** The plan id or "topup" whose checkout is being created. */
@@ -95,12 +98,14 @@ export default function PlanPage() {
 
   const load = useCallback(async () => {
     try {
-      const [profile, subscription, history, orderList] = await Promise.all([
+      const [profile, subscription, history, orderList, program] = await Promise.all([
         fetchMe(),
         fetchSubscription(),
         fetchMyBatches(),
         fetchOrders().catch(() => [] as Order[]),
+        fetchMyReferrals().catch(() => null),
       ]);
+      setReferrals(program);
       // Same recovery as the workspace: a cookie the API rejects is cleared first.
       if (!profile || !subscription) {
         await signOut().catch(() => undefined);
@@ -328,7 +333,17 @@ export default function PlanPage() {
                     <span className="text-[11px] text-ink-faint">Applies to plans and top-ups.</span>
                   </div>
                 ) : null}
+                {/* A code can only be used before the first payment. */}
+                {referrals && !sub.subscription && sub.team?.role !== "member" &&
+                (referrals.my_offer || referrals.friend.enabled || referrals.partner.enabled) ? (
+                  <CouponBox
+                    offer={referrals.my_offer}
+                    planLabels={planLabels}
+                    onApplied={(offer) => setReferrals({ ...referrals, my_offer: offer })}
+                  />
+                ) : null}
                 <TokenPlanCards
+                  offer={referrals?.my_offer ?? null}
                   plans={sub.token_plans}
                   current={isTokens ? sub.subscription : null}
                   currency={sub.currency}

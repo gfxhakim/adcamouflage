@@ -233,6 +233,8 @@ class AdminOrder(BaseModel):
     # How the Meta Purchase for a paid order went: sent / failed / no consent
     # / sending; empty when Meta is not set up or the order is not a sale.
     meta_purchase: str = ""
+    coupon_code: str | None = None
+    discount: float = 0.0
 
 
 class AuditEntry(BaseModel):
@@ -887,6 +889,8 @@ def _user_billing(db: Session, user: User) -> UserBilling:
                 created_at=o.created_at,
                 paid_at=o.paid_at,
                 meta_purchase=meta_capi.purchase_status(o),
+                coupon_code=o.coupon_code,
+                discount=o.discount_usd or 0.0,
             )
             for o in orders
         ],

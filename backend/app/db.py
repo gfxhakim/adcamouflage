@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Iterator
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -235,6 +236,167 @@ class Order(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # When the order poll last asked BTCPay about this invoice (throttles the poll).
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Referral / partner coupon applied at checkout (first payment only):
+    # the code, and how much came off the list price. ``amount_usd`` is
+    # what the customer actually pays.
+    coupon_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Hash of the payer's account when the provider tells us (Volet's wallet),
+    # so a referrer paying for their own "friend" is caught.
+    payer_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    discount_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0", nullable=False)
+
+
+# --------------------------------------------------------------------------
+# referral and partner program (see app/affiliates.py)
+# --------------------------------------------------------------------------
+
+
+class ReferralCode(Base):
+    """A link/coupon code. ``channel`` is 'friend' (any subscriber) or 'partner' (approved creator)."""
+
+    __tablename__ = "referral_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True, nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    # active | disabled
+    status: Mapped[str] = mapped_column(String(16), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class AffiliatePartner(Base):
+    """A creator's partner application and, once approved, their partnership."""
+
+    __tablename__ = "affiliate_partners"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    # pending | approved | rejected | suspended
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    requested_code: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    audience: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    payout_method: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    payout_address: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    admin_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReferralClick(Base):
+    __tablename__ = "referral_clicks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code_id: Mapped[int] = mapped_column(ForeignKey("referral_codes.id", ondelete="CASCADE"), index=True, nullable=False)
+    device_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    ip_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+
+
+class Referral(Base):
+    """One referred customer. Each customer belongs to one referral (one channel) only.
+
+    ``status``: signed_up -> waiting (paid, reward on hold) -> rewarded, for
+    friends; signed_up -> active (paying) for partner customers. Or blocked
+    (self-referral check), capped (over the monthly reward cap), void.
+    """
+
+    __tablename__ = "referrals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    referred_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True, nullable=False
+    )
+    referrer_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    code_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="signed_up", nullable=False, index=True)
+    # 'link' or 'coupon' - how the attribution was made.
+    source: Mapped[str] = mapped_column(String(16), default="link", nullable=False)
+    flags: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    device_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    ip_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    first_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    first_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reward_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reward_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reward_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    void_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class AffiliateCommission(Base):
+    """A partner's share of one paid order. Negative rows claw back a refunded, already paid commission.
+
+    ``status``: pending (inside the hold) / payable (computed from
+    ``payable_at``) / paid / void. The rate comes from the partner's tier
+    for the order's month; ``commission_usd`` is fixed when it is paid out.
+    """
+
+    __tablename__ = "affiliate_commissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    partner_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    referral_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    customer_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    order_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), default="sale", nullable=False)  # sale | clawback
+    amount_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    month: Mapped[str] = mapped_column(String(7), index=True, nullable=False)  # YYYY-MM of the payment
+    rate_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    commission_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    payable_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payout_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    void_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class AffiliatePayout(Base):
+    """Money the owner sent a partner by hand, recorded from Admin > Affiliates."""
+
+    __tablename__ = "affiliate_payouts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    partner_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    amount_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    method: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    reference: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    admin_email: Mapped[str] = mapped_column(String(320), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class UserDevice(Base):
+    """A browser (random id kept in local storage) and network an account used, hashed. For the self-referral check."""
+
+    __tablename__ = "user_devices"
+    __table_args__ = (UniqueConstraint("user_id", "device_hash", "ip_hash", name="uq_user_device"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    device_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False, index=True)
+    ip_hash: Mapped[str] = mapped_column(String(64), default="", nullable=False, index=True)
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RenderStat(Base):
+    """What one rendered output cost us to make and deliver: worker time and bytes sent."""
+
+    __tablename__ = "render_stats"
+
+    asset_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    batch_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    kind: Mapped[str] = mapped_column(String(16), default="video", nullable=False)
+    resolution: Mapped[str] = mapped_column(String(24), default="", nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    render_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    output_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    downloads: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    downloaded_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
 
 
 class ActivityEvent(Base):
@@ -454,6 +616,9 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Unsubscribed from group emails.
     ("users", "email_opt_out_at", "TIMESTAMP WITH TIME ZONE"),
     ("email_campaigns", "button", "VARCHAR(60) NOT NULL DEFAULT ''"),
+    ("orders", "coupon_code", "VARCHAR(40)"),
+    ("orders", "discount_usd", "FLOAT NOT NULL DEFAULT 0"),
+    ("orders", "payer_hash", "VARCHAR(64)"),
 ]
 
 

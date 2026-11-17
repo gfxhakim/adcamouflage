@@ -9,6 +9,7 @@ from pathlib import Path
 
 from celery.exceptions import SoftTimeLimitExceeded
 
+from . import costs
 from .celery_app import celery_app
 from .config import settings
 from .db import get_session_factory
@@ -108,6 +109,7 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
     if options.seed is not None:
         seed = (options.seed + asset.variant_index * 7919) % (2**31)
 
+    started = time.monotonic()
     try:
         report = mutate(
             source,
@@ -149,6 +151,16 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
         finished_at=datetime.now(timezone.utc),
         error=None,
     )
+    # Hosting-cost bookkeeping only (Admin > Sales > Batch costs).
+    costs.record_render(
+        asset_id,
+        asset.batch_id,
+        kind=asset.kind.value,
+        render_seconds=time.monotonic() - started,
+        output_bytes=output.stat().st_size,
+        resolution=str((report.metrics or {}).get("output_resolution", "")),
+        duration=float((report.metrics or {}).get("duration", 0) or 0),
+    )
     logger.info("mutated %s -> %s", asset.original_filename, output.name)
     return {"asset_id": asset_id, "status": "completed", "output": output.name}
 
@@ -163,6 +175,17 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
 )
 def process_asset(self, asset_id: str) -> dict[str, object]:
     return run_asset_job(asset_id, task_id=self.request.id)
+
+
+@celery_app.task(name="app.tasks.pay_referral_rewards")
+def pay_referral_rewards() -> dict[str, int]:
+    """Give friend-referral token rewards whose hold period has passed."""
+
+    from .affiliates import process_due_rewards
+    from .db import get_session_factory
+
+    with get_session_factory()() as db:
+        return {"rewarded": process_due_rewards(db)}
 
 
 @celery_app.task(name="app.tasks.purge_expired_assets")

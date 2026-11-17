@@ -1,5 +1,6 @@
 import type { PlanFeatureId } from "@/lib/plan-features";
 import { API_BASE, ApiError } from "./api";
+import { deviceHeaders } from "./referrals";
 import type { BillingMode, PaymentProviderId, TokenPlanCard, TopupOption } from "./types";
 
 export type { PaymentProviderId };
@@ -53,7 +54,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
       method: "POST",
       credentials: "include",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...deviceHeaders() },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -144,7 +145,9 @@ export interface TokenSubscription {
 export interface TokenBalance {
   subscription_tokens: number;
   topup_tokens: number;
-  /** Subscription + top-up while active; 0 once the period has ended. */
+  /** Reward tokens from inviting friends: spent after subscription tokens, before top-ups. */
+  referral_tokens?: number;
+  /** Everything spendable while active; 0 once the period has ended. */
   usable_tokens: number;
   generations_left: number;
   /** Top-up tokens are kept but unusable while the subscription has lapsed. */
@@ -280,9 +283,12 @@ export function requestPlan(planId: string, note = "") {
 
 export type OrderKind = "subscription" | "topup";
 
-export type OrderStatus = "pending" | "paid" | "expired" | "invalid";
+export type OrderStatus = "pending" | "paid" | "expired" | "invalid" | "refunded";
 
 export interface Order {
+  /** The referral or partner code used, and what it took off the price. */
+  coupon_code?: string | null;
+  discount?: number;
   id: string;
   kind: OrderKind;
   plan_id: string;
