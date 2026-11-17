@@ -159,6 +159,14 @@ class Settings(BaseSettings):
     # Where customer replies go; empty = back to the From address.
     email_reply_to: str = ""
 
+    # --- sign-in with Google -------------------------------------------------
+    # The button appears on the login and sign-up pages once both are
+    # set on the api service. See docs/LOGIN.md for where to get them.
+    google_client_id: str = ""
+    google_client_secret: SecretStr | None = None
+    # Minutes a code emailed for sign-up, password reset or a change stays valid.
+    email_code_minutes: int = 15
+
     # --- media engine -----------------------------------------------------
     ffmpeg_binary: str = "ffmpeg"
     ffprobe_binary: str = "ffprobe"
@@ -289,6 +297,11 @@ class Settings(BaseSettings):
         key = self.whop_api_key.get_secret_value() if self.whop_api_key else ""
         secret = self.whop_webhook_secret.get_secret_value() if self.whop_webhook_secret else ""
         return bool(key.strip() and secret.strip())
+
+    @property
+    def google_ready(self) -> bool:
+        secret = self.google_client_secret.get_secret_value() if self.google_client_secret else ""
+        return bool(self.google_client_id.strip() and secret.strip())
 
     @property
     def billing_configured(self) -> bool:

@@ -443,12 +443,15 @@ export const connectTelegramButtons = () =>
 
 // --- customer emails -----------------------------------------------------------
 
-export type EmailKind = "welcome" | "activated" | "ending" | "ended";
+/** welcome, activated, ending, ended, verify, reset, password_code, ... (the server lists them in order). */
+export type EmailKind = string;
 
 export interface EmailTemplate {
   label: string;
   when: string;
   enabled: boolean;
+  /** Codes and security notices: always sent, cannot be switched off. */
+  locked?: boolean;
   subject: string;
   body: string;
   /** Renewal reminder only: how many days before the period ends. */

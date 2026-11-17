@@ -99,12 +99,70 @@ class User(Base):
     # reminders) still go out.
     email_opt_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # --- sign-in ---------------------------------------------------------------
+    # False until the owner types the code we emailed them. Accounts that
+    # existed before verification was added are treated as verified (the added
+    # column defaults to TRUE); new sign-ups start unverified and the ORM
+    # always writes this column, so the database default never applies to them.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     batches: Mapped[list["BatchRecord"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", lazy="selectin"
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<User {self.id} {self.email}>"
+
+
+class AuthCode(Base):
+    """A one-time 6-digit code sent by email (sign-up, password reset, changes).
+
+    Only a keyed hash of the code is kept. A code works once, for a few
+    minutes, and only for a handful of wrong guesses.
+    """
+
+    __tablename__ = "auth_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    # verify | reset | password | email
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # For an email change: the new address the code was sent to.
+    target: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OAuthIdentity(Base):
+    """A Google account that can sign in to a user."""
+
+    __tablename__ = "oauth_identities"
+    __table_args__ = (UniqueConstraint("provider", "subject", name="uq_oauth_identity"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)  # google
+    # The provider's stable id for the person ("sub"); emails can change.
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class KnownDevice(Base):
+    """A browser + system a user has signed in from, for the new sign-in alert."""
+
+    __tablename__ = "known_devices"
+    __table_args__ = (UniqueConstraint("user_id", "fingerprint", name="uq_known_device"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class BatchRecord(Base):
@@ -615,6 +673,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Unsubscribed from group emails.
     ("users", "email_opt_out_at", "TIMESTAMP WITH TIME ZONE"),
     ("email_campaigns", "button", "VARCHAR(60) NOT NULL DEFAULT ''"),
+    # Everyone who signed up before email codes existed counts as verified.
+    ("users", "email_verified", "BOOLEAN NOT NULL DEFAULT TRUE"),
     ("orders", "coupon_code", "VARCHAR(40)"),
     ("orders", "discount_usd", "FLOAT NOT NULL DEFAULT 0"),
     ("orders", "payer_hash", "VARCHAR(64)"),

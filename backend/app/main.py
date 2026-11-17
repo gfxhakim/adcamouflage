@@ -26,6 +26,7 @@ from .affiliate_routes import admin_router as affiliate_admin_router
 from .affiliate_routes import router as affiliate_router
 from .auth_routes import record_batch
 from .auth_routes import router as auth_router
+from .oauth import router as oauth_router
 from .billing_routes import router as billing_router
 from .config import settings
 from .db import User, get_db, get_session_factory, init_db
@@ -117,6 +118,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(admin_router)
 app.include_router(subscription_router)
 app.include_router(billing_router)
