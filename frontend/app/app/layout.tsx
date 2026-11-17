@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import { ContentProvider } from "@/components/cms/ContentProvider";
+import { SidebarStateProvider } from "@/components/SidebarState";
+import { SIDEBAR_COOKIE } from "@/lib/sidebarCookie";
 import { loadPublishedContent } from "@/lib/siteContent";
 
 // Admin > Workspace edits these pages: every label, the logo, colours, fonts
@@ -20,9 +23,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function WorkspaceLayout({ children }: { children: ReactNode }) {
   const content = await loadPublishedContent("workspace");
+  // The sidebar remembers open / collapsed in a cookie, so the page arrives in the right shape.
+  const sidebarOpen = cookies().get(SIDEBAR_COOKIE)?.value !== "false";
   return (
     <ContentProvider namespace="workspace" initial={content} autoText>
-      {children}
+      <SidebarStateProvider initialOpen={sidebarOpen}>{children}</SidebarStateProvider>
     </ContentProvider>
   );
 }

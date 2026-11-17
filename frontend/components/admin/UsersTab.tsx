@@ -28,10 +28,12 @@ interface UsersTabProps {
   refreshKey: number;
   onSelectUser: (id: number) => void;
   onChanged: () => void;
+  /** Starts the list already searching for this (from the dashboard search). */
+  initialQuery?: string;
 }
 
-export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged }: UsersTabProps) {
-  const [query, setQuery] = useState("");
+export function UsersTab({ plans, currency, refreshKey, onSelectUser, onChanged, initialQuery = "" }: UsersTabProps) {
+  const [query, setQuery] = useState(initialQuery);
   const [plan, setPlan] = useState("");
   const [state, setState] = useState("");
   const [sort, setSort] = useState("newest");

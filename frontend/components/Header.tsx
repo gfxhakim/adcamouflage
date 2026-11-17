@@ -10,6 +10,7 @@ import {
   Waves,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import BrandLogo from "@/components/BrandLogo";
 import { type UserProfile } from "@/lib/auth";
@@ -23,9 +24,11 @@ interface HeaderProps {
   user?: UserProfile | null;
   /** Render for a dark surface (the Command Deck workspace shell). */
   onDark?: boolean;
+  /** Shown before the logo: the sidebar's menu button. The sidebar then carries the logo on desktop. */
+  leading?: ReactNode;
 }
 
-export function Header({ health, healthError, user, onDark = false }: HeaderProps) {
+export function Header({ health, healthError, user, onDark = false, leading }: HeaderProps) {
   const showEngine = health !== undefined || healthError !== undefined;
 
   const online = Boolean(health) && !healthError;
@@ -49,10 +52,18 @@ export function Header({ health, healthError, user, onDark = false }: HeaderProp
 
   return (
     <header className="sticky top-0 z-40 border-b border-black/[0.07] dark:border-white/10 bg-white/[0.85] dark:bg-slate-900/85 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="ProteusFlow home">
-          <BrandLogo caption="Workspace" captionClassName="hidden sm:block" onDark={onDark} />
-        </Link>
+      {/* The height the logo gives the bar, kept when the logo moves into the sidebar, so the two top edges line up. */}
+      <div className="mx-auto flex min-h-[4.25rem] max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          {leading}
+          <Link
+            href="/"
+            className={clsx("flex min-w-0 items-center gap-3", leading ? "lg:hidden" : null)}
+            aria-label="ProteusFlow home"
+          >
+            <BrandLogo caption="Workspace" captionClassName="hidden sm:block" onDark={onDark} />
+          </Link>
+        </div>
 
         <div className="flex items-center gap-2">
           {health ? (

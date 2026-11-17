@@ -20,10 +20,9 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import Header from "@/components/Header";
 import { CmsSection, T } from "@/components/cms/Cms";
-import DeckRail from "@/components/DeckRail";
 import ThemeDock from "@/components/ThemeDock";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import WelcomeTour from "@/components/help/WelcomeTour";
 import HelpDrawer from "@/components/help/HelpDrawer";
 import CoachMark from "@/components/help/CoachMark";
@@ -59,7 +58,6 @@ import type {
   PosterSettings,
   PresetCatalogue,
 } from "@/lib/types";
-import { useDeckTheme } from "@/lib/deckTheme";
 
 /** A queued file is treated as a video by its extension (matches the API's own classifier). */
 function isVideoFile(file: File): boolean {
@@ -145,7 +143,6 @@ const POLL_INTERVAL_MS = 1200;
 const HEALTH_INTERVAL_MS = 15000;
 
 export default function WorkspacePage() {
-  const onDark = useDeckTheme() === "dark";
   const [files, setFiles] = useState<File[]>([]);
   const [step, setStep] = useState(0);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayer[]>([createOverlayLayer()]);
@@ -578,18 +575,15 @@ export default function WorkspacePage() {
     : null;
 
   return (
-    <div className="deck min-h-screen">
-      <Header health={health} healthError={healthError} user={user} onDark={onDark} />
-
-      <div className="mx-auto flex max-w-7xl gap-5 px-4 pb-40 pt-6 sm:px-6 sm:pt-8 md:pb-28 lg:px-8">
-        {/* Left rail — signed-in navigation -------------------------- */}
-        <DeckRail
-          onDark={onDark}
-          user={user}
-          onOpenHelp={openHelpDrawer}
-          helpUnread={helpUnread}
-        />
-
+    <WorkspaceShell
+      deck
+      user={user}
+      health={health}
+      healthError={healthError}
+      onOpenHelp={openHelpDrawer}
+      helpUnread={helpUnread}
+    >
+      <div className="mx-auto flex w-full max-w-7xl gap-5 px-4 pb-40 pt-6 sm:px-6 sm:pt-8 md:pb-28 lg:px-8">
         {/* Step Flow: one step at a time in a single framed console ---- */}
         <main className="relative flex min-w-0 flex-1 flex-col gap-4">
           {user?.announcement ? (
@@ -1098,6 +1092,6 @@ export default function WorkspacePage() {
       />
       <SupportBotWidget onOpenGuide={openHelpDrawer} />
       <ThemeDock />
-    </div>
+    </WorkspaceShell>
   );
 }
