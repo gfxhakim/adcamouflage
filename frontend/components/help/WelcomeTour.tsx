@@ -40,21 +40,18 @@ export function WelcomeTour({ open, activeStep, onStartTour, onSkip, onJumpStep 
 
   return (
     // The card is taller than a phone screen: the layer scrolls, so the close and Start buttons can
-    // be reached. The dimmed backdrop lies inside what scrolls, so a wheel or finger on it moves the
-    // card too and never the page behind. `m-auto` on the card centres it whenever it fits.
+    // be reached. The layer itself carries the dim, so its own scrollbar is dimmed with the rest.
+    // The backdrop that takes the "skip" click lies inside what scrolls, so a wheel or finger on it
+    // moves the card too and never the page behind. `m-auto` centres the card whenever it fits.
     <div
-      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain"
+      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-slate-950/75 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="welcome-tour-title"
     >
       <div className="relative flex min-h-full p-4 sm:p-6">
         {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm transition-opacity"
-          onClick={onSkip}
-          aria-hidden
-        />
+        <div className="absolute inset-0" onClick={onSkip} aria-hidden />
 
         {/* Modal */}
         <div className="relative z-10 m-auto grid w-full max-w-[880px] overflow-hidden rounded-[28px] border border-meta-500/35 bg-[#0b0e15] text-slate-100 shadow-[0_40px_120px_rgba(0,0,0,0.75),0_0_0_1px_rgba(8,102,255,0.15)] lg:grid-cols-2">
