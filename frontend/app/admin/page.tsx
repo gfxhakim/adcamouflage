@@ -68,18 +68,28 @@ export default function AdminPage() {
     cancelJump();
   }, []);
 
+  // A different page always opens at its top. Left alone, the window keeps the last page's scroll:
+  // a page whose data is already there (the Dashboard) opened as far down as that, and a search
+  // jump that was still gliding carried on down the new page.
+  const shownTab = useRef<TabId | null>(null); // null until the first page is on screen
+  const showTab = useCallback((id: TabId) => {
+    if (shownTab.current !== null && shownTab.current !== id) window.scrollTo({ top: 0, behavior: "instant" });
+    shownTab.current = id;
+    setTab(id);
+  }, []);
+
   useEffect(() => {
     const syncTab = () => {
       dropJump();
-      setTab(tabFromHash());
+      showTab(tabFromHash());
     };
-    setTab(tabFromHash());
+    showTab(tabFromHash());
     window.addEventListener("hashchange", syncTab);
     return () => {
       window.removeEventListener("hashchange", syncTab);
       dropJump();
     };
-  }, [dropJump]);
+  }, [dropJump, showTab]);
 
   // Anyone who is not a signed-in admin sees the ordinary "page not found"
   // screen, with no redirect to sign-in, so customers cannot tell this page
@@ -154,11 +164,11 @@ export default function AdminPage() {
   const openTab = useCallback(
     (id: TabId) => {
       dropJump();
-      setTab(id);
+      showTab(id);
       setUsersQuery("");
       window.history.replaceState(null, "", `#${id}`);
     },
-    [dropJump],
+    [dropJump, showTab],
   );
 
   // "See all" under the dashboard search: the Users page opens on the same search.
