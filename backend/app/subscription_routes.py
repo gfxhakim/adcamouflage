@@ -137,7 +137,7 @@ class Alert(BaseModel):
 
 
 class PaymentProvider(BaseModel):
-    id: str  # btcpay | volet
+    id: str  # whop
     label: str
 
 

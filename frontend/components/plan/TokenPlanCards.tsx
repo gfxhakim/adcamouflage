@@ -7,6 +7,7 @@ import NeonCard from "@/components/NeonCard";
 import type { TokenSubscription } from "@/lib/auth";
 import { formatMoney, formatTokens } from "@/lib/format";
 import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes } from "@/lib/plan-features";
+import type { ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type TokenPlanCard } from "@/lib/types";
 
 interface TokenPlanCardsProps {
@@ -17,6 +18,8 @@ interface TokenPlanCardsProps {
   /** The plan whose checkout is being created, if any. */
   busy: string | null;
   onBuy: (plan: TokenPlanCard) => void;
+  /** A referral or creator code waiting on this customer's first payment. */
+  offer?: ReferralOffer | null;
 }
 
 /** The plan the page highlights when the user has none yet. */
@@ -44,10 +47,10 @@ function rolloverLine(plan: TokenPlanCard): string {
 
 /**
  * Starter, Pro and Max side by side. Buying any of them starts a fresh 30-day
- * period on BTCPay; the button says whether that is a first subscription, a
- * renewal, an upgrade or a switch down.
+ * period via Whop checkout; the button says whether that is a first
+ * subscription, a renewal, an upgrade or a switch down.
  */
-export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy, onBuy }: TokenPlanCardsProps) {
+export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy, onBuy, offer }: TokenPlanCardsProps) {
   const currentPlan = current ? plans.find((p) => p.id === current.plan_id) : undefined;
 
   return (
@@ -56,6 +59,8 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
         {plans.map((plan) => {
           const action = actionFor(plan, current, currentPlan);
           const isCurrent = current?.plan_id === plan.id;
+          const couponPrice = offer?.prices?.[plan.id];
+          const discounted = !current && couponPrice !== undefined && couponPrice < plan.price;
           const highlight = isCurrent || (!current && plan.id === POPULAR);
           const note =
             action === "switch"
@@ -100,9 +105,15 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                 </p>
               ) : null}
               <p className={clsx(plan.regular_price && plan.regular_price > plan.price ? "mt-0.5" : "mt-3", "text-2xl font-bold tracking-tight text-black")}>
-                {formatMoney(plan.price, currency)}
+                {formatMoney(discounted ? couponPrice : plan.price, currency)}
                 <span className="text-xs font-medium text-ink-subtle"> / 30 days</span>
               </p>
+              {discounted && offer ? (
+                <p className="mt-1 text-xs font-medium text-emerald-700">
+                  {offer.discount_pct}% off with {offer.code} on your first payment, then{" "}
+                  {formatMoney(plan.price, currency)}
+                </p>
+              ) : null}
 
               <ul className="mt-3 space-y-1.5 text-xs text-ink-muted">
                 <li className="flex items-center gap-1.5">

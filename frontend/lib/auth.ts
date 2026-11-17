@@ -1,5 +1,6 @@
 import type { PlanFeatureId } from "@/lib/plan-features";
 import { API_BASE, ApiError } from "./api";
+import { deviceHeaders } from "./referrals";
 import type { BillingMode, PaymentProviderId, TokenPlanCard, TopupOption } from "./types";
 
 export type { PaymentProviderId };
@@ -24,6 +25,41 @@ export interface UserProfile {
   /** Tokens that can be spent right now (0 while the subscription has lapsed). */
   tokens_usable: number;
   subscription_active: boolean;
+  /** True for accounts made with Google until a password is set (older APIs leave it out). */
+  social_only?: boolean;
+}
+
+/** Sign-up accepted; the account opens once the emailed code is entered. */
+export interface PendingSignup {
+  verify: true;
+  email: string;
+}
+
+export function isPending(result: UserProfile | PendingSignup): result is PendingSignup {
+  return (result as PendingSignup).verify === true;
+}
+
+export interface AuthProviders {
+  google: boolean;
+  /** New sign-ups must enter an emailed code. */
+  email_codes: boolean;
+}
+
+/** Which sign-in buttons the server has keys for. */
+export async function fetchProviders(): Promise<AuthProviders> {
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/auth/providers`, { cache: "no-store" });
+    if (response.ok) return (await response.json()) as AuthProviders;
+  } catch {
+    /* fall through */
+  }
+  return { google: false, email_codes: false };
+}
+
+/** Where the "Continue with Google" button goes; the API redirects to Google. */
+export function oauthStartUrl(provider: "google", next?: string | null): string {
+  const query = next ? `?next=${encodeURIComponent(next)}` : "";
+  return `${API_BASE}/api/v1/auth/oauth/${provider}/start${query}`;
 }
 
 export interface BatchSummary {
@@ -53,7 +89,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
       method: "POST",
       credentials: "include",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...deviceHeaders() },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -65,7 +101,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export function signUp(email: string, password: string, displayName?: string) {
-  return post<UserProfile>("/api/v1/auth/register", {
+  return post<UserProfile | PendingSignup>("/api/v1/auth/register", {
     email,
     password,
     display_name: displayName || null,
@@ -80,11 +116,41 @@ export function signOut() {
   return post<void>("/api/v1/auth/logout");
 }
 
-export function changePassword(currentPassword: string, newPassword: string) {
+export function verifyEmail(email: string, code: string) {
+  return post<UserProfile>("/api/v1/auth/verify-email", { email, code });
+}
+
+export function resendVerification(email: string) {
+  return post<{ ok: boolean }>("/api/v1/auth/verify-email/resend", { email });
+}
+
+export function forgotPassword(email: string) {
+  return post<{ ok: boolean; email_ready?: boolean }>("/api/v1/auth/password/forgot", { email });
+}
+
+export function resetPassword(email: string, code: string, newPassword: string) {
+  return post<UserProfile>("/api/v1/auth/password/reset", { email, code, new_password: newPassword });
+}
+
+/** Email the code that confirms a password change. `required` is false when the server cannot send email. */
+export function requestPasswordCode() {
+  return post<{ sent: boolean; required: boolean }>("/api/v1/auth/password/code");
+}
+
+export function changePassword(currentPassword: string, newPassword: string, code = "") {
   return post<UserProfile>("/api/v1/auth/password", {
     current_password: currentPassword,
     new_password: newPassword,
+    code,
   });
+}
+
+export function requestEmailChange(newEmail: string, currentPassword: string) {
+  return post<{ sent_to: string }>("/api/v1/auth/email/code", { new_email: newEmail, current_password: currentPassword });
+}
+
+export function confirmEmailChange(code: string) {
+  return post<UserProfile>("/api/v1/auth/email", { code });
 }
 
 /** The signed-in user, or null when there is no valid session. */
@@ -144,7 +210,9 @@ export interface TokenSubscription {
 export interface TokenBalance {
   subscription_tokens: number;
   topup_tokens: number;
-  /** Subscription + top-up while active; 0 once the period has ended. */
+  /** Reward tokens from inviting friends: spent after subscription tokens, before top-ups. */
+  referral_tokens?: number;
+  /** Everything spendable while active; 0 once the period has ended. */
   usable_tokens: number;
   generations_left: number;
   /** Top-up tokens are kept but unusable while the subscription has lapsed. */
@@ -280,9 +348,12 @@ export function requestPlan(planId: string, note = "") {
 
 export type OrderKind = "subscription" | "topup";
 
-export type OrderStatus = "pending" | "paid" | "expired" | "invalid";
+export type OrderStatus = "pending" | "paid" | "expired" | "invalid" | "refunded";
 
 export interface Order {
+  /** The referral or partner code used, and what it took off the price. */
+  coupon_code?: string | null;
+  discount?: number;
   id: string;
   kind: OrderKind;
   plan_id: string;
@@ -297,12 +368,9 @@ export interface Order {
 
 export interface Checkout {
   order_id: string;
+  /** Whop plan id (`plan_xxx`) passed to `<WhopCheckout />`. */
+  whop_plan: string;
   provider: PaymentProviderId;
-  /**
-   * Where the browser goes to pay: BTCPay's invoice page, or the app's own
-   * /api/v1/billing/orders/{id}/pay page that forwards to Volet. Either way it
-   * comes back to /app/plan with ?order=.
-   */
   checkout_url: string;
   amount: number;
   tokens: number;
@@ -314,8 +382,7 @@ export interface SubscriptionState {
 }
 
 /**
- * Start a checkout for a plan period or a top-up on the current plan. The
- * provider is sent only when given; the server then uses the first one set up.
+ * Start a checkout for a plan period or a top-up on the current plan.
  */
 export function startCheckout(
   kind: OrderKind,
@@ -336,7 +403,7 @@ async function get<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** One order's status; the server also checks BTCPay if a webhook was missed. */
+/** One order's status (used while confirming a Whop payment). */
 export function fetchOrder(orderId: string) {
   return get<Order>(`/api/v1/billing/orders/${encodeURIComponent(orderId)}`);
 }

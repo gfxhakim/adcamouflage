@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils";
 
 export const EASE = [0.16, 1, 0.3, 1] as const;
 
+/** Word-by-word delay, capped so long headlines on narrow screens don't sit half-shown. */
+const stagger = (i: number) => Math.min(i, 8) * 0.05;
+
 /**
  * A big landing headline. Wrap words in [brackets] to set them on a blue
  * marker that sweeps in from the left once the heading scrolls into view.
@@ -30,7 +33,7 @@ export function Headline({
   "data-cms"?: string;
 }) {
   const ref = useRef<HTMLHeadingElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-80px" });
+  const inView = useInView(ref, { once: true, margin: "0px 0px -12% 0px" });
   const reduce = useReducedMotion();
   const show = inView || reduce;
 
@@ -44,7 +47,7 @@ export function Headline({
       style={style}
       aria-label={text.replace(/[[\]|]/g, (c) => (c === "|" ? " " : ""))}
       className={cn(
-        "font-sans font-semibold leading-[0.98] tracking-[-0.045em]",
+        "font-sans font-semibold leading-[0.98] tracking-[-0.045em] [text-wrap:balance]",
         dark ? "text-white" : "text-black",
         className,
       )}
@@ -69,7 +72,7 @@ export function Headline({
                             className="absolute -inset-x-[0.08em] inset-y-[0.04em] origin-left rounded-[0.12em] bg-meta-500"
                             initial={{ scaleX: 0 }}
                             animate={show ? { scaleX: 1 } : {}}
-                            transition={{ duration: 0.7, delay: 0.25 + i * 0.06, ease: EASE }}
+                            transition={{ duration: 0.7, delay: 0.2 + stagger(i), ease: EASE }}
                           />
                         ) : null}
                         <motion.span
@@ -78,7 +81,7 @@ export function Headline({
                           // Largest Contentful Paint; other headlines still fade in on scroll.
                           initial={{ y: "0.5em", opacity: Tag === "h1" ? 1 : 0 }}
                           animate={show ? { y: 0, opacity: 1 } : {}}
-                          transition={{ duration: 0.7, delay: i * 0.06, ease: EASE }}
+                          transition={{ duration: 0.6, delay: stagger(i), ease: EASE }}
                         >
                           {w}
                         </motion.span>
@@ -107,10 +110,10 @@ export function Reveal({
   return (
     <motion.div
       className={className}
-      initial={{ opacity: 0, y: 28 }}
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.8, delay, ease: EASE }}
+      viewport={{ once: true, margin: "0px 0px -8% 0px" }}
+      transition={{ duration: 0.65, delay, ease: EASE }}
     >
       {children}
     </motion.div>

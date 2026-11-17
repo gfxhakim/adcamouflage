@@ -13,25 +13,25 @@ import { cn } from "@/lib/utils";
 
 export function Faq() {
   const cms = useCms();
-  const faqs = cms.list("faq.items", FAQS, "Questions", FAQS.map((f) => f.q));
+  const faqs = cms.list("faq.studioItems", FAQS, "Questions", FAQS.map((f) => f.q));
   const [open, setOpen] = useState(0);
 
   return (
     <CmsSection k="faq" label="FAQ" id="faq" className="scroll-mt-24 bg-white py-20 sm:py-28">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:px-8">
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <CmsHeadline k="faq.headline" text="Everything You Need to Know Before You Upload." className="text-4xl sm:text-5xl lg:text-6xl" />
+          <CmsHeadline k="faq.studioHeadline" text="Frequently Asked Questions." className="text-4xl sm:text-5xl lg:text-6xl" />
 
           <CmsSection k="faq.card" label="Help card" as="div" className="mt-10 max-w-sm rounded-3xl bg-black p-6 text-white">
             <p className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-white/60">
               <span className="h-1.5 w-1.5 rounded-full bg-meta-400" />
-              <T k="faq.card.kicker">Ready to try it?</T>
+              <T k="faq.card.studioKicker">Ready to try it?</T>
             </p>
-            <T k="faq.card.title" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
-              Render your first creative batch in under a minute.
+            <T k="faq.card.studioTitle" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
+              Export your first branded video batch in minutes.
             </T>
-            <T k="faq.card.body" long as="p" className="mt-2 text-sm text-white/60">
-              Create an account, drop in your master video or image, and export studio-ready variations in seconds.
+            <T k="faq.card.studioBody" long as="p" className="mt-2 text-sm text-white/60">
+              Create an account, drop in your master video or image, add your brand watermark and cover frame, and download your batch.
             </T>
             <CmsLink
               k="faq.card.cta"

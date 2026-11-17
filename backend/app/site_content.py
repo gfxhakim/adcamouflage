@@ -106,8 +106,42 @@ def _validated(document: Any) -> dict[str, Any]:
     return document
 
 
+_LEGACY_TEXT_RE = re.compile(
+    r"\b(?:fingerprint|phash|dhash|perceptual\s*hash|hash\s*wipe|hashes|algorithm|scanner|scanners|"
+    r"duplicate|mutat(?:e|es|ed|ing|ion)|cloak(?:ing|ed)?|camouflag(?:e|ed|ing)|bypass(?:ing|es|ed)?|"
+    r"evad(?:e|ing)|evasion|undetectable|scrub(?:s|bed|bing)?|23[- ]*layer|micro[- ]*crop|sub[- ]*pixel|"
+    r"inaudible|signature|shadowban|flagged|rejected|disapproved|checksum|spoof(?:ing|ed)?|adversarial|"
+    r"perturbation|stealth|nuclear|blu[\s-]?clo(?:a)?c?k|ad[\s-]?camouflage)\b",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_document(doc: dict[str, Any]) -> dict[str, Any]:
+    """Strip pre-rebrand or policy-sensitive text/meta overrides so clean defaults show."""
+    if not isinstance(doc, dict):
+        return {}
+    out = dict(doc)
+    raw_text = out.get("text")
+    if isinstance(raw_text, dict):
+        out["text"] = {
+            k: v
+            for k, v in raw_text.items()
+            if not str(k).startswith("faq.items")
+            and not (isinstance(v, str) and _LEGACY_TEXT_RE.search(v))
+        }
+    raw_meta = out.get("meta")
+    if isinstance(raw_meta, dict):
+        meta = dict(raw_meta)
+        for field in ("title", "description"):
+            val = meta.get(field)
+            if isinstance(val, str) and (_LEGACY_TEXT_RE.search(val) or "$37.50" in val):
+                meta.pop(field, None)
+        out["meta"] = meta
+    return out
+
+
 def published_content(db: Session, namespace: str) -> dict[str, Any]:
-    return _load(db, namespace)["published"]
+    return _sanitize_document(_load(db, namespace)["published"])
 
 
 # --------------------------------------------------------------------------
@@ -119,7 +153,7 @@ def published_content(db: Session, namespace: str) -> dict[str, Any]:
 def read_published(namespace: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     _check_namespace(namespace)
     record = _load(db, namespace)
-    return {"content": record["published"], "published_at": record["published_at"]}
+    return {"content": _sanitize_document(record["published"]), "published_at": record["published_at"]}
 
 
 @public_router.get("/site-media/{name}")

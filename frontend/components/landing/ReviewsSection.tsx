@@ -82,12 +82,12 @@ export function ReviewsSection() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
-            <T k="reviews.headline" as="h2" className="text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
-              Built for media buyers who ship new creatives every week.
+            <T k="reviews.studioHeadline" as="h2" className="text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
+              Trusted by video editors, creative teams, and e-commerce brands.
             </T>
           </div>
-          <T k="reviews.lede" long as="p" className="text-sm leading-relaxed text-white/80">
-            Upload one finished video and get every size and version you need, rendered and ready to download. Here is what people using it say.
+          <T k="reviews.studioLede" long as="p" className="text-sm leading-relaxed text-white/80">
+            Format for Reels, TikTok, and Shorts, add brand watermarks and cover frames, and export clean batches in minutes. Here is what teams using ProteusFlow say.
           </T>
         </div>
       </div>

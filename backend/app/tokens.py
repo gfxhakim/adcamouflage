@@ -11,7 +11,12 @@ two buckets:
   next purchase up to the plan's cap (``rollover_months`` x tokens) and
   written off beyond it, or entirely on a downgrade, after a cancellation or
   when the renewal comes later than the grace window.
-* ``topup`` - never expires, spent after the subscription bucket, and frozen
+* ``referral`` - reward tokens from the friend referral program (see
+  affiliates.py): spent after the subscription bucket and before paid
+  top-ups, never roll over and never expire while the account stays
+  subscribed, and are written off when the subscription is cancelled or
+  lapses past the grace window.
+* ``topup`` - never expires, spent after the other buckets, and frozen
   (kept but unusable) while the subscription has lapsed.
 
 The defaults below are the owner's price list; an admin can edit them from
@@ -43,6 +48,9 @@ logger = logging.getLogger(__name__)
 
 SUBSCRIPTION = "subscription"
 TOPUP = "topup"
+REFERRAL = "referral"
+# Order in which a batch spends the buckets.
+SPEND_ORDER = (SUBSCRIPTION, REFERRAL, TOPUP)
 LEGACY = "legacy"
 TOKENS = "tokens"
 
@@ -113,7 +121,7 @@ class TokenPlan:
 DEFAULT_PLANS: dict[str, TokenPlan] = {
     plan.id: plan
     for plan in (
-        TokenPlan("starter", "Starter", 37.50, 1500, 100, 0, 40, full_engine=False, metadata_wipe=False),
+        TokenPlan("starter", "Starter", 37.0, 1500, 100, 0, 40, full_engine=False, metadata_wipe=False),
         TokenPlan("pro", "Pro", 89.0, 4500, 90, 1, 50),
         TokenPlan("max", "Max", 149.0, 9600, 80, 2, 65, seats=5),
     )
@@ -351,16 +359,38 @@ def generation_cost(user: User, plans: dict[str, TokenPlan] | None = None) -> in
     return plan.tokens_per_generation if plan else 0
 
 
-def balances(db: Session, user: User) -> tuple[int, int]:
-    """(subscription tokens, top-up tokens) as the ledger sums them."""
+def bucket_totals(db: Session, user: User) -> dict[str, int]:
+    """Every bucket's balance as the ledger sums them."""
 
     rows = db.execute(
         select(TokenLedger.bucket, func.coalesce(func.sum(TokenLedger.amount), 0))
         .where(TokenLedger.user_id == user.id)
         .group_by(TokenLedger.bucket)
     ).all()
-    totals = {bucket: int(total or 0) for bucket, total in rows}
-    return totals.get(SUBSCRIPTION, 0), totals.get(TOPUP, 0)
+    totals = {bucket: 0 for bucket in SPEND_ORDER}
+    totals.update({bucket: int(total or 0) for bucket, total in rows})
+    return totals
+
+
+def balances(db: Session, user: User) -> tuple[int, int]:
+    """(subscription tokens, extra tokens): extra is top-ups plus referral rewards."""
+
+    totals = bucket_totals(db, user)
+    return totals[SUBSCRIPTION], totals[TOPUP] + totals[REFERRAL]
+
+
+def referral_balance(db: Session, user: User) -> int:
+    return bucket_totals(db, user)[REFERRAL]
+
+
+def write_off_referral(db: Session, user: User, reason: str) -> int:
+    """Write off the user's referral reward tokens (cancelled or lapsed). Does not commit."""
+
+    left = referral_balance(db, user)
+    if left > 0:
+        _entry(db, user.id, REFERRAL, "expire", -left, note=f"{left} referral reward tokens written off: {reason}")
+        return left
+    return 0
 
 
 def usable_tokens(db: Session, user: User, now: datetime | None = None) -> int:
@@ -515,14 +545,15 @@ def consume(db: Session, user: User, generations: int, batch_id: str) -> int:
                     ),
                 )
             raise InsufficientTokens(quote)
-        from_sub = min(cost, max(0, sub))
-        from_top = cost - from_sub
+        totals = bucket_totals(db, user)
         noun = "generation" if generations == 1 else "generations"
         note = f"{generations} {noun} x {per_generation} tokens"
-        if from_sub:
-            _entry(db, user.id, SUBSCRIPTION, "consume", -from_sub, batch_id=batch_id, note=note)
-        if from_top:
-            _entry(db, user.id, TOPUP, "consume", -from_top, batch_id=batch_id, note=note)
+        remaining = cost
+        for bucket in SPEND_ORDER:
+            take = remaining if bucket == TOPUP else min(remaining, max(0, totals[bucket]))
+            if take:
+                _entry(db, user.id, bucket, "consume", -take, batch_id=batch_id, note=note)
+                remaining -= take
         db.commit()
     except BaseException:
         db.rollback()
@@ -598,6 +629,15 @@ def activate_period(
             + (f": {reason}" if reason else ""),
         )
 
+    # Referral rewards last only while the account stays subscribed.
+    if old_plan is not None and (
+        user.sub_cancelled_at is not None
+        or (old_end is not None and now > old_end + timedelta(days=rules["grace_days"]))
+    ):
+        write_off_referral(
+            db, user, "the previous period was cancelled" if user.sub_cancelled_at else "the subscription lapsed"
+        )
+
     granted = int(tokens) if tokens else plan.tokens * max(1, periods)
     grant_note = (note or f"{plan.label} period") + (f" x{periods}" if periods > 1 else "")
     if rollover:
@@ -642,6 +682,7 @@ def cancel_period(db: Session, user: User, *, immediately: bool, reason: str = "
                 note=f"{leftover} subscription tokens written off: cancelled now by admin"
                 + (f" ({reason})" if reason else ""),
             )
+        write_off_referral(db, user, "subscription cancelled now")
         end = aware(user.sub_period_end)
         if end is None or end > now:
             user.sub_period_end = now
@@ -708,12 +749,13 @@ def new_order(
     tokens: int,
     *,
     bonus: int = 0,
-    provider: str = "btcpay",
+    provider: str = "whop",
+    coupon_code: str | None = None,
+    discount: float = 0.0,
 ) -> Order:
     """Record a purchase with the credit it was quoted at, so a later settlement applies exactly that.
 
-    ``provider`` names who will take the money ('btcpay' or 'volet'); the
-    route that starts the checkout fills in that provider's own ids after.
+    ``provider`` names who takes the payment (``'whop'``).
     """
 
     order = Order(
@@ -727,6 +769,8 @@ def new_order(
         tokens_per_generation=plan.tokens_per_generation,
         status="pending",
         provider=provider,
+        coupon_code=coupon_code,
+        discount_usd=float(discount or 0.0),
     )
     db.add(order)
     db.commit()
@@ -734,11 +778,12 @@ def new_order(
 
 
 # Statuses a settlement may move to 'paid'. An expired or invalid order was
-# never credited, so a payment that BTCPay confirms late is still applied once.
+# never credited, so a payment confirmed after marking it expired/invalid is
+# still applied once.
 SETTLEABLE = ("pending", "expired", "invalid")
 
 
-def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str = "", periods: int = 1) -> bool:
+def settle_order(db: Session, order: Order, *, source: str = "Whop", note: str = "", periods: int = 1) -> bool:
     """Apply a paid order exactly once. Returns False when it was already paid.
 
     Shared by the webhook, the order poll and the admin grant so there is one
@@ -755,12 +800,18 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
     plans = get_token_plans(db)
     plan = plans.get(order.plan_id)
     if user is None or plan is None:
-        void_order(db, order, "invalid")
+        void_order(db, order, "invalid", tell_customer=False)
         logger.warning("order %s cannot be applied: user or plan missing", order.id)
         return False
 
     now = _now()
     paid_late = order.status != "pending"
+    # Had the subscription already ended (past the grace window) before this
+    # purchase? A partner's commission stops there (see affiliates.py).
+    returning = False
+    if order.kind == "subscription" and user.sub_plan is not None:
+        old_end = aware(user.sub_period_end)
+        returning = old_end is not None and now > old_end + timedelta(days=get_billing_rules(db)["grace_days"])
     try:
         claimed = db.execute(
             update(Order)
@@ -822,21 +873,42 @@ def settle_order(db: Session, order: Order, *, source: str = "BTCPay", note: str
         from . import notify
 
         notify.paid(order, user.email, plan.label, currency(db), source, name=user.display_name)
-    if order.kind == "subscription":
-        from . import mailer
+    if order.amount_usd and order.amount_usd > 0:
+        # Referral reward clock / partner commission (see affiliates.py).
+        from . import affiliates
 
+        try:
+            affiliates.on_order_paid(db, order, returning=returning)
+        except Exception:  # noqa: BLE001 - the program must never undo a payment
+            db.rollback()
+            logger.exception("referral bookkeeping for order %s failed", order.id)
+    from . import mailer
+
+    if order.kind == "subscription":
         granted = order.tokens or plan.tokens * max(1, periods)
-        mailer.plan_activated(db, user, plan.label, granted)
+        mailer.plan_activated(db, user, plan.label, granted, order)
+    elif order.amount_usd and order.amount_usd > 0:
+        mailer.topup_receipt(db, user, order, plan.label)
     return True
 
 
-def void_order(db: Session, order: Order, status: str) -> bool:
-    """Mark a pending order expired or invalid. Paid orders are left alone."""
+def void_order(db: Session, order: Order, status: str, *, tell_customer: bool | None = None) -> bool:
+    """Mark a pending order expired or invalid. Paid orders are left alone.
+
+    The buyer gets the "payment did not go through" email when the order is
+    marked invalid (provider says invalid, or the admin rejected it), or when
+    ``tell_customer`` is True (a cancellation at the provider). A checkout
+    that simply timed out unpaid sends nothing.
+    """
 
     if order.status != "pending":
         return False
     order.status = status
     db.commit()
+    if tell_customer if tell_customer is not None else status == "invalid":
+        from . import mailer
+
+        mailer.payment_failed(db, order)
     return True
 
 
@@ -886,14 +958,14 @@ def _refund_in_session(db: Session, batch_id: str, asset_id: str) -> int:
         return 0  # a legacy batch, or one that was never charged
 
     user_id = rows[0][0]
-    consumed = {SUBSCRIPTION: 0, TOPUP: 0}
-    refunded = {SUBSCRIPTION: 0, TOPUP: 0}
+    consumed = {bucket: 0 for bucket in SPEND_ORDER}
+    refunded = {bucket: 0 for bucket in SPEND_ORDER}
     for _uid, bucket, kind, amount in rows:
         if kind == "consume":
             consumed[bucket] += -int(amount)
         else:
             refunded[bucket] += int(amount)
-    total = consumed[SUBSCRIPTION] + consumed[TOPUP]
+    total = sum(consumed.values())
 
     record = db.get(BatchRecord, batch_id)
     generations = record.asset_count if record and record.asset_count else 0
@@ -906,7 +978,7 @@ def _refund_in_session(db: Session, batch_id: str, asset_id: str) -> int:
         return 0
 
     remaining = per_generation
-    for bucket in (SUBSCRIPTION, TOPUP):
+    for bucket in SPEND_ORDER:
         room = consumed[bucket] - refunded[bucket]
         give = min(remaining, max(0, room))
         if give:
@@ -947,13 +1019,15 @@ def subscription_summary(db: Session, user: User, now: datetime | None = None) -
 
 def balance_summary(db: Session, user: User, now: datetime | None = None) -> dict[str, Any]:
     now = now or _now()
-    sub, top = balances(db, user)
+    totals = bucket_totals(db, user)
+    sub, top, ref = totals[SUBSCRIPTION], totals[TOPUP], totals[REFERRAL]
     active = subscription_active(user, now)
-    usable = max(0, sub + top) if active else 0
+    usable = max(0, sub + top + ref) if active else 0
     per_generation = generation_cost(user, get_token_plans(db))
     return {
         "subscription_tokens": sub,
         "topup_tokens": top,
+        "referral_tokens": ref,
         "usable_tokens": usable,
         "generations_left": usable // per_generation if per_generation else 0,
         "frozen_topup": top > 0 and not active,

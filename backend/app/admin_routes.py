@@ -227,12 +227,14 @@ class AdminOrder(BaseModel):
     amount: float
     tokens: int
     status: str
-    provider: str  # btcpay | volet
+    provider: str  # whop
     created_at: datetime
     paid_at: datetime | None
     # How the Meta Purchase for a paid order went: sent / failed / no consent
     # / sending; empty when Meta is not set up or the order is not a sale.
     meta_purchase: str = ""
+    coupon_code: str | None = None
+    discount: float = 0.0
 
 
 class AuditEntry(BaseModel):
@@ -887,6 +889,8 @@ def _user_billing(db: Session, user: User) -> UserBilling:
                 created_at=o.created_at,
                 paid_at=o.paid_at,
                 meta_purchase=meta_capi.purchase_status(o),
+                coupon_code=o.coupon_code,
+                discount=o.discount_usd or 0.0,
             )
             for o in orders
         ],
@@ -1499,6 +1503,8 @@ def create_user(
         email=email,
         password_hash=hash_password(password),
         display_name=(payload.display_name or "").strip() or None,
+        # The admin typed the address; the customer does not need a code.
+        email_verified=True,
     )
     apply_plan(db, user, plan_id)
     db.add(user)

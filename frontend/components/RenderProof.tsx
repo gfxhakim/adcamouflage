@@ -27,30 +27,41 @@ const hex = (n: number) =>
   Array.from({ length: n }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
 
 const ROWS: Row[] = [
-  { label: "Export ID", before: "6fa82c49ec91…", next: () => `${hex(10)}…` },
   {
-    label: "Resolution",
-    before: "1280 × 720",
-    next: () => pick(["1274 × 708", "1276 × 712", "1272 × 716", "1278 × 706", "1270 × 710"]),
+    label: "Social format",
+    before: "16:9 Master.mov",
+    next: () => pick(["9:16 Reels · MP4", "9:16 TikTok · MP4", "9:16 Shorts · MP4", "4:5 Feed · MP4", "1:1 Square · MP4"]),
   },
   {
-    label: "Frame rate",
-    before: "30 fps",
-    next: () => pick(["23.976 fps", "29.97 fps", "25 fps", "24 fps", "59.94 fps"]),
+    label: "Output frame",
+    before: "Raw timeline",
+    next: () => pick(["1080 × 1920 Full HD", "1080 × 1350 Portrait", "1080 × 1080 Square", "1920 × 1080 Landscape"]),
   },
-  { label: "Project metadata", before: "camera, editor, title", next: () => "clean" },
   {
-    label: "Audio tuning",
-    before: "0 cents",
-    next: () => {
-      const cents = (Math.random() * 50 + 15) * (Math.random() < 0.5 ? -1 : 1);
-      return `${cents > 0 ? "+" : "−"}${Math.abs(cents).toFixed(1)} cents`;
-    },
+    label: "Color grade",
+    before: "Unleveled source",
+    next: () => pick(["Rec.709 Studio LUT", "Warm Commercial Grade", "Crisp Daylight Balance", "Clean Neutral Contrast"]),
+  },
+  {
+    label: "Brand & cover",
+    before: "Unbranded clip",
+    next: () => pick(["PNG Logo + Cover Frame", "Corner Watermark + Poster", "Branded End-Card + Cover"]),
+  },
+  {
+    label: "Audio master",
+    before: "Raw audio track",
+    next: () => pick(["−14 LUFS Broadcast Master", "Voice Clarity EQ + Limiter", "Stereo Loudness Leveled"]),
   },
 ];
 
 // What the server renders and what shows first, so hydration matches.
-const FIRST = ["358da85223…", "1274 × 708", "23.976 fps", "clean", "+39.8 cents"];
+const FIRST = [
+  "9:16 Reels · MP4",
+  "1080 × 1920 Full HD",
+  "Rec.709 Studio LUT",
+  "PNG Logo + Cover Frame",
+  "−14 LUFS Broadcast Master",
+];
 
 /** One value assembling itself letter by letter, intro style. */
 function ShutterValue({ text, delay }: { text: string; delay: number }) {
@@ -124,10 +135,10 @@ export function RenderProof({ dark = false }: { dark?: boolean } = {}) {
       innerClassName={dark ? "text-white [outline-color:rgb(255_255_255/0.08)]" : undefined}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className={cn("label", dark && "!text-white/60")}>What changes on every render</p>
+        <p className={cn("label", dark && "!text-white/60")}>Studio batch export preview</p>
         <span className={cn("inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums", dark ? "text-meta-400" : "text-meta-600")}>
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-500" aria-hidden />
-          copy #{String(render).padStart(3, "0")}
+          export #{String(render).padStart(3, "0")}
         </span>
       </div>
 
@@ -152,8 +163,8 @@ export function RenderProof({ dark = false }: { dark?: boolean } = {}) {
       </dl>
 
       <p className={cn("mt-5 border-t pt-4 text-[11px] leading-relaxed", dark ? "border-white/10 text-white/50" : "border-black/10 text-ink-faint")}>
-        A live preview: every variation you render gets its own studio parameters. Each job ships with a full report
-        of export checksums, studio layers applied, and clean metadata status.
+        Live studio preview: set your target social aspect ratio, Rec.709 color grade, −14 LUFS broadcast audio
+        normalization, and brand watermark once—then export your entire batch ready to publish.
       </p>
     </NeonCard>
   );

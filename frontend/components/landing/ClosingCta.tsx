@@ -54,13 +54,13 @@ export function ClosingCta({ startHref }: { startHref: string }) {
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)] lg:px-8">
         <div>
           <CmsHeadline
-            k="cta.headline"
+            k="cta.studioHeadline"
             dark
-            text="Ship More Creative Variations in Less Time."
+            text="Format, Brand & Export Your Next Video Batch."
             className="text-4xl sm:text-6xl lg:text-7xl"
           />
-          <T k="cta.lede" long as="p" className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">
-            Turn one winning video or static creative into ten studio-polished variations with custom branding, cover frames, and clean export packaging in seconds.
+          <T k="cta.studioLede" long as="p" className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">
+            Drop in your master video or image, apply Reels, TikTok, and Shorts presets, burn in your brand logo and cover frame, and download your finished batch in minutes.
           </T>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <CmsLink
@@ -96,10 +96,10 @@ export function ClosingCta({ startHref }: { startHref: string }) {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-400" />
               <T k="cta.card.kicker">Your workspace · private</T>
             </p>
-            <T k="cta.card.title" as="p" className="mt-3 text-3xl font-semibold tracking-tight">Render queue</T>
+            <T k="cta.card.studioTitle" as="p" className="mt-3 text-3xl font-semibold tracking-tight">Batch export queue</T>
             <QueueBar />
-            <T k="cta.card.caption" as="p" className="mt-2 font-mono text-[10px] uppercase tracking-wider text-white/40">
-              One creative in · ten fresh copies out
+            <T k="cta.card.studioCaption" as="p" className="mt-2 font-mono text-[10px] uppercase tracking-wider text-white/40">
+              Master file in · formatted & branded exports out
             </T>
             <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4 font-mono text-[11px] uppercase tracking-wider text-white/50">
               <T k="cta.card.clock">Your time</T>

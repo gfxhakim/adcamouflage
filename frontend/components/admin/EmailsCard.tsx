@@ -17,13 +17,12 @@ import {
 } from "@/lib/admin";
 import { contentAdmin } from "@/lib/siteContent";
 
-const ORDER: EmailKind[] = ["welcome", "activated", "ending", "ended"];
 const DESIGN_TAB = "design" as const;
 type Tab = EmailKind | typeof DESIGN_TAB;
 
 const COLOURS: { key: keyof EmailStyle; label: string }[] = [
-  { key: "header_color", label: "Header" },
-  { key: "header_text_color", label: "Header text" },
+  { key: "header_color", label: "Accent" },
+  { key: "header_text_color", label: "Highlight text" },
   { key: "page_color", label: "Background" },
   { key: "card_color", label: "Card" },
   { key: "text_color", label: "Message text" },
@@ -104,6 +103,8 @@ export default function EmailsCard() {
   }
 
   const ready = data.transport !== "";
+  // Every email the server knows, in its order (account, security, billing).
+  const ORDER: EmailKind[] = Object.keys(data.templates);
   const dirty =
     JSON.stringify(drafts) !== JSON.stringify(data.templates) || JSON.stringify(style) !== JSON.stringify(data.style);
 
@@ -213,10 +214,11 @@ export default function EmailsCard() {
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-meta-500"
-                  checked={draft.enabled}
+                  checked={draft.locked ? true : draft.enabled}
+                  disabled={draft.locked}
                   onChange={(e) => patch(tab, { enabled: e.target.checked })}
                 />
-                Send this email
+                {draft.locked ? "Always sent (needed to sign up or get back into an account)" : "Send this email"}
               </label>
               {draft.days_before !== undefined ? (
                 <label className={label}>
@@ -237,13 +239,13 @@ export default function EmailsCard() {
               </label>
 
               <fieldset className="space-y-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
-                <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint dark:text-slate-500">Blue header</legend>
+                <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint dark:text-slate-500">Top line and highlight box</legend>
                 <label className={label}>
                   Small top line
                   <input className="field mt-1" maxLength={200} value={draft.kicker} onChange={(e) => patch(tab, { kicker: e.target.value })} />
                 </label>
                 <label className={label}>
-                  Big text
+                  Big text in the highlight box
                   <input className="field mt-1" maxLength={200} value={draft.stat} onChange={(e) => patch(tab, { stat: e.target.value })} />
                 </label>
                 <label className={label}>
@@ -313,9 +315,9 @@ export default function EmailsCard() {
             <>
               <p className="text-xs text-ink-faint dark:text-slate-500">The logo, colours and footer used by every customer email.</p>
               <div className="flex items-center gap-3">
-                <div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl" style={{ background: style.header_color }}>
+                <div className="grid h-20 w-36 shrink-0 place-items-center rounded-xl border border-black/10 bg-white px-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={style.logo_url || "/brand/proteusflow-mark-email.png"} alt="" className="max-h-16 max-w-16" />
+                  <img src={style.logo_url || "/brand/proteusflow-email-lockup.png"} alt="" className="max-h-14 max-w-full" />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <input
@@ -350,7 +352,7 @@ export default function EmailsCard() {
                 <span className={hint}>PNG or JPG works best. Many email apps do not show SVG or WebP.</span>
               </label>
               <label className={label}>
-                Logo size: {style.logo_size}px
+                Logo size: {style.logo_size}px (your own logo only)
                 <input
                   type="range"
                   min={24}

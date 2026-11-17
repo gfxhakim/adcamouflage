@@ -18,12 +18,15 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from sqlalchemy.orm import Session
 
-from . import __version__
+from . import __version__, costs
 from .accounts import current_user, ensure_admin_account
 from .activity import log_activity
 from .admin_routes import router as admin_router
+from .affiliate_routes import admin_router as affiliate_admin_router
+from .affiliate_routes import router as affiliate_router
 from .auth_routes import record_batch
 from .auth_routes import router as auth_router
+from .oauth import router as oauth_router
 from .billing_routes import router as billing_router
 from .config import settings
 from .db import User, get_db, get_session_factory, init_db
@@ -117,10 +120,13 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(admin_router)
 app.include_router(subscription_router)
 app.include_router(billing_router)
 app.include_router(team_router)
+app.include_router(affiliate_router)
+app.include_router(affiliate_admin_router)
 app.include_router(site_content_router)
 app.include_router(site_content_admin_router)
 app.include_router(guides_router)
@@ -547,6 +553,10 @@ async def download_asset(
     path = resolve_within(settings.outputs_dir, asset.output_filename)
     if not path.exists():
         raise HTTPException(status_code=410, detail="The output file has been purged by the retention policy.")
+
+    # Download bandwidth is most of what a batch costs us; count it.
+    with get_session_factory()() as cost_db:
+        costs.record_download(cost_db, asset_id, path.stat().st_size)
 
     return FileResponse(
         path,

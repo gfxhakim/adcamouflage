@@ -1,4 +1,4 @@
-"""Customer emails: welcome, plan activated and renewal reminders.
+"""Customer emails: account codes, security notices, receipts and reminders.
 
 Mail goes out through any SMTP server (``ADCAM_SMTP_HOST`` and friends) or,
 when no SMTP server is set, through Resend (``ADCAM_RESEND_API_KEY``). With
@@ -76,6 +76,19 @@ PLACEHOLDERS: dict[str, str] = {
     "days_left": "Days until the plan ends (renewal reminder)",
     "app_url": "Link to the workspace",
     "plan_url": "Link to the customer's plan page",
+    "code": "The 6-digit code (code emails)",
+    "minutes": "Minutes the code stays valid",
+    "amount": "Amount paid, e.g. $89",
+    "order_id": "Transaction ID of the payment",
+    "paid_date": "Date of the payment",
+    "method": "How they paid (Volet, BTCPay, ...)",
+    "time": "Date and time of the event (UTC)",
+    "device": "Browser and system of a sign-in",
+    "ip": "IP address of a sign-in",
+    "provider": "Google",
+    "new_email": "The new email address (email change)",
+    "login_url": "Link to the log in page",
+    "reset_url": "Link to the forgot password page",
 }
 
 DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
@@ -104,13 +117,14 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
         "stat_sub": "tokens added · until {end_date}",
         "headline": "",
         "button": "Open workspace",
-        "when": "When a plan payment is confirmed or approved (Volet, BTCPay, Admin or Telegram).",
+        "when": "When a plan payment is confirmed or approved (Whop, Admin or Telegram).",
         "enabled": True,
         "subject": "Your {plan} plan is active",
         "body": (
             "Hi {name},\n\n"
             "Your {plan} plan is now active. {tokens} tokens were added to your account, "
             "and this period runs until {end_date}.\n\n"
+            "Receipt\nAmount: {amount}\nTransaction ID: {order_id}\nPaid with: {method}\nDate: {paid_date}\n\n"
             "Open your workspace:\n{app_url}\n\n"
             "Thanks for choosing us.\n\n"
             f"{SIGN_OFF}"
@@ -153,6 +167,198 @@ DEFAULT_TEMPLATES: dict[str, dict[str, Any]] = {
             f"{SIGN_OFF}"
         ),
     },
+
+    # --- security: codes ---------------------------------------------------
+    "verify": {
+        "label": "Sign-up code",
+        "kicker": "Confirm your email",
+        "stat": "{code}",
+        "stat_sub": "Expires in {minutes} minutes",
+        "headline": "",
+        "button": "",
+        "when": "Right after someone signs up with email and password. Always sent.",
+        "enabled": True,
+        "locked": True,
+        "subject": "{code} is your " + BRAND + " code",
+        "body": (
+            "Hi {name},\n\n"
+            "Enter this code on the sign-up page to confirm your email and open your account:\n\n"
+            "{code}\n\n"
+            "If you did not sign up, you can ignore this email. No account is opened without the code.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "reset": {
+        "label": "Password reset code",
+        "kicker": "Password reset",
+        "stat": "{code}",
+        "stat_sub": "Expires in {minutes} minutes",
+        "headline": "",
+        "button": "",
+        "when": "When someone uses Forgot password. Always sent.",
+        "enabled": True,
+        "locked": True,
+        "subject": "Your " + BRAND + " password reset code",
+        "body": (
+            "Hi {name},\n\n"
+            "Someone asked to reset the password of your account. Enter this code to choose a new one:\n\n"
+            "{code}\n\n"
+            "If it was not you, ignore this email. Your password stays the same.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "password_code": {
+        "label": "Password change code",
+        "kicker": "Confirm password change",
+        "stat": "{code}",
+        "stat_sub": "Expires in {minutes} minutes",
+        "headline": "",
+        "button": "",
+        "when": "When a signed-in customer changes their password. Always sent.",
+        "enabled": True,
+        "locked": True,
+        "subject": "Confirm your " + BRAND + " password change",
+        "body": (
+            "Hi {name},\n\n"
+            "Enter this code on your plan page to confirm the new password:\n\n"
+            "{code}\n\n"
+            "If you did not ask for this, someone may know your password. Change it now and contact support.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "email_code": {
+        "label": "Email change code",
+        "kicker": "Confirm new email",
+        "stat": "{code}",
+        "stat_sub": "Expires in {minutes} minutes",
+        "headline": "",
+        "button": "",
+        "when": "Sent to the NEW address when a customer changes their email. Always sent.",
+        "enabled": True,
+        "locked": True,
+        "subject": "Confirm your new " + BRAND + " email",
+        "body": (
+            "Hi {name},\n\n"
+            "Enter this code on your plan page to use {new_email} for your account:\n\n"
+            "{code}\n\n"
+            "If you did not ask for this, ignore this email.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    # --- security: notices ---------------------------------------------------
+    "password_changed": {
+        "label": "Password changed",
+        "kicker": "Security notice",
+        "stat": "",
+        "stat_sub": "",
+        "headline": "Your password was changed",
+        "button": "Reset password",
+        "when": "After a password change or reset. Always sent.",
+        "enabled": True,
+        "locked": True,
+        "subject": "Your " + BRAND + " password was changed",
+        "body": (
+            "Hi {name},\n\n"
+            "The password of your account was changed on {time}. Every other device was signed out.\n\n"
+            "If this was you, there is nothing to do. If it was not, reset your password right away and reply to this email:\n"
+            "{reset_url}\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "email_changed": {
+        "label": "Email changed",
+        "kicker": "Security notice",
+        "stat": "",
+        "stat_sub": "",
+        "headline": "Your account email was changed",
+        "button": "",
+        "when": "Sent to the OLD address after a customer changes their email. Always sent.",
+        "enabled": True,
+        "locked": True,
+        "subject": "Your " + BRAND + " email was changed",
+        "body": (
+            "Hi {name},\n\n"
+            "On {time} the email of your account was changed to {new_email}. From now on, use that address to log in.\n\n"
+            "If this was not you, reply to this email straight away so we can lock the account.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "new_login": {
+        "label": "New sign-in alert",
+        "kicker": "New sign-in",
+        "stat": "",
+        "stat_sub": "",
+        "headline": "New sign-in to your account",
+        "button": "Reset password",
+        "when": "When someone signs in from a browser or device not used on the account before.",
+        "enabled": True,
+        "subject": "New sign-in to your " + BRAND + " account",
+        "body": (
+            "Hi {name},\n\n"
+            "Your account was just signed in to from a new device.\n\n"
+            "Device: {device}\nIP address: {ip}\nTime: {time}\n\n"
+            "If this was you, there is nothing to do. If it was not, reset your password now:\n"
+            "{reset_url}\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "linked": {
+        "label": "Google linked",
+        "kicker": "Security notice",
+        "stat": "",
+        "stat_sub": "",
+        "headline": "",
+        "button": "Log in",
+        "when": "When a Google login is connected to an existing account.",
+        "enabled": True,
+        "subject": "{provider} sign-in added to your " + BRAND + " account",
+        "body": (
+            "Hi {name},\n\n"
+            "On {time} your {provider} account was connected to your {email} account. "
+            "You can now log in with the Continue with {provider} button.\n\n"
+            "{login_url}\n\n"
+            "If this was not you, reply to this email straight away.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    # --- billing ---------------------------------------------------------------
+    "topup": {
+        "label": "Top-up receipt",
+        "kicker": "Payment received",
+        "stat": "+{tokens}",
+        "stat_sub": "tokens added to your balance",
+        "headline": "",
+        "button": "Open workspace",
+        "when": "When a top-up payment is confirmed or approved.",
+        "enabled": True,
+        "subject": "Receipt: {tokens} tokens added",
+        "body": (
+            "Hi {name},\n\n"
+            "Thanks for your top-up. {tokens} tokens were added to your {plan} balance.\n\n"
+            "Receipt\nAmount: {amount}\nTransaction ID: {order_id}\nPaid with: {method}\nDate: {paid_date}\n\n"
+            "Open your workspace:\n{app_url}\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
+    "payment_failed": {
+        "label": "Payment not completed",
+        "kicker": "Payment not completed",
+        "stat": "{amount}",
+        "stat_sub": "was not charged",
+        "headline": "",
+        "button": "Try again",
+        "when": "When you reject a payment (Admin or Telegram), or an order is marked invalid.",
+        "enabled": True,
+        "subject": "Your " + BRAND + " payment did not go through",
+        "body": (
+            "Hi {name},\n\n"
+            "Your payment of {amount} for {plan} (transaction ID {order_id}) did not go through, "
+            "so nothing was added to your account.\n\n"
+            "You can try again from your plan page:\n{plan_url}\n\n"
+            "If money left your account, reply to this email with the transaction ID and we will sort it out.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
 }
 KINDS = tuple(DEFAULT_TEMPLATES)
 SUBJECT_MAX = 200
@@ -169,7 +375,7 @@ DEFAULT_STYLE: dict[str, Any] = {
     "logo_size": 96,
     "header_color": "#0866ff",
     "header_text_color": "#ffffff",
-    "page_color": "#eef2f9",
+    "page_color": "#f2f4f8",
     "card_color": "#ffffff",
     "text_color": "#1f232a",
     "button_color": "#0b0d12",
@@ -183,6 +389,10 @@ _SAFE_URL = re.compile(r"^(?:https://|/)[^\s\"'<>()\\]*$")
 # The logo on a white rounded tile, so it stands out on the blue header.
 LOGO_DEFAULT_PATH = "/brand/proteusflow-mark-email.png"
 WORDMARK_PATH = "/brand/proteusflow-wordmark.png"
+# The default logo of the current design: trident mark + ProteusFlow wordmark.
+LOCKUP_PATH = "/brand/proteusflow-email-lockup.png"
+LOCKUP_WIDTH = 210
+MARK_PATH = "/brand/proteusflow-mark.png"
 
 
 def clean_style(raw: Any) -> dict[str, Any]:
@@ -198,7 +408,10 @@ def clean_style(raw: Any) -> dict[str, Any]:
     logo = raw.get("logo_url")
     if isinstance(logo, str) and (not logo.strip() or _SAFE_URL.match(logo.strip())):
         # The old shield file gives way to the current default logo.
-        out["logo_url"] = "" if "blucloacking-" in logo else logo.strip()
+        # Old shield files and the logo made for the old blue header give way
+        # to the current default (the mark + wordmark lockup).
+        old = "blucloacking-" in logo or logo.strip() in (LOGO_DEFAULT_PATH, WORDMARK_PATH)
+        out["logo_url"] = "" if old else logo.strip()
     size = raw.get("logo_size")
     if isinstance(size, int) and not isinstance(size, bool):
         out["logo_size"] = max(24, min(160, size))
@@ -223,7 +436,9 @@ def get_templates(db: Session) -> dict[str, dict[str, Any]]:
         merged = dict(default)
         mine = saved.get(kind) if isinstance(saved, dict) else None
         if isinstance(mine, dict):
-            if isinstance(mine.get("enabled"), bool):
+            # Codes and security notices cannot be switched off: without them
+            # nobody could finish signing up or get back into an account.
+            if isinstance(mine.get("enabled"), bool) and not default.get("locked"):
                 merged["enabled"] = mine["enabled"]
             for field in ("subject", "body"):
                 value = mine.get(field)
@@ -314,6 +529,9 @@ def _split_at_button(body: str, has_button: bool) -> tuple[list[str], str | None
     return before, link, after
 
 
+_CODE = re.compile(r"^\d{4,8}$")
+
+
 def to_html(
     body: str,
     footer: str = "",
@@ -321,11 +539,17 @@ def to_html(
     design: dict[str, Any] | None = None,
     style: dict[str, Any] | None = None,
 ) -> str:
-    """Plain text -> the branded HTML email (blue header, white card).
+    """Plain text -> the branded ProteusFlow HTML email.
+
+    Layout: a white card with a thin accent bar, the ProteusFlow logo, a
+    small coloured top line (kicker), the headline, an optional highlight box
+    (the big ``stat`` + ``stat_sub``; a code is shown spaced out in mono),
+    the message, a pill button and a footer under the card.
 
     ``design`` holds the filled-in per-email parts (kicker, stat, stat_sub,
-    headline, button); without it the email is just the header logo and the
-    text. ``style`` is the shared look from :func:`get_style`. ``footer`` is
+    headline, button). ``style`` is the shared look from :func:`get_style`:
+    ``header_color`` is the accent (bar, top line, highlight box) and
+    ``header_text_color`` the text inside the highlight box. ``footer`` is
     extra trusted HTML from the app (for example an unsubscribe link) shown
     under the footer text. Customer and admin text is always escaped.
     """
@@ -333,47 +557,69 @@ def to_html(
     st = clean_style(style) if style is not None else dict(DEFAULT_STYLE)
     d = {k: str(v) for k, v in (design or {}).items() if v is not None}
     esc = html_lib.escape
-    hdr, hdr_text = st["header_color"], st["header_text_color"]
+    accent, accent_text = st["header_color"], st["header_text_color"]
     text_color = st["text_color"]
     button = d.get("button", "").strip()
+    stat = d.get("stat", "").strip()
+    is_code = bool(_CODE.match(stat))
     before, link, after = _split_at_button(body, bool(button))
+    if is_code:
+        # The code is in the highlight box; don't repeat it as a paragraph.
+        before = [b for b in before if b.strip() != stat]
+        after = [b for b in after if b.strip() != stat]
 
-    logo = _abs(st["logo_url"] or LOGO_DEFAULT_PATH)
-    size = int(st["logo_size"])
-    header = [
-        f'<img src="{esc(logo)}" width="{size}" alt="{BRAND}" style="display:block;border:0;width:{size}px;'
-        f'height:auto;max-width:100%;margin:0 auto">'
-    ]
+    if st["logo_url"]:
+        size = int(st["logo_size"])
+        logo = (
+            f'<img src="{esc(_abs(st["logo_url"]))}" width="{size}" alt="{BRAND}" style="display:block;border:0;'
+            f'width:{size}px;height:auto;max-width:100%">'
+        )
+    else:
+        logo = (
+            f'<img src="{esc(_abs(LOCKUP_PATH))}" width="{LOCKUP_WIDTH}" alt="{BRAND}" style="display:block;border:0;'
+            f'width:{LOCKUP_WIDTH}px;height:auto;max-width:100%">'
+        )
+
+    content = [f'<div style="padding-bottom:28px">{logo}</div>']
     if d.get("kicker", "").strip():
-        header.append(
-            f'<div style="font-family:{MONO};font-size:11px;letter-spacing:2px;text-transform:uppercase;'
-            f'color:{hdr_text};opacity:.8;padding-top:14px">{esc(d["kicker"])}</div>'
+        content.append(
+            f'<div style="font-family:{MONO};font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;'
+            f'color:{accent};padding-bottom:10px">{esc(d["kicker"])}</div>'
         )
-    if d.get("stat", "").strip():
-        header.append(
-            f'<div style="font-family:{SANS};font-weight:800;font-size:54px;line-height:1.05;letter-spacing:-1.5px;'
-            f'color:{hdr_text};padding-top:10px">{esc(d["stat"])}</div>'
-        )
-    if d.get("stat_sub", "").strip():
-        header.append(
-            f'<div style="font-family:{SANS};font-size:14px;color:{hdr_text};opacity:.85;padding-top:6px">'
-            f'{esc(d["stat_sub"])}</div>'
-        )
-    pad = "30px 32px 34px" if len(header) > 1 else "24px 32px"
-
-    content = []
     if d.get("headline", "").strip():
         content.append(
-            f'<h1 style="margin:0 0 16px;font-family:{SANS};font-weight:700;font-size:21px;line-height:1.3;'
-            f'color:{text_color}">{esc(d["headline"])}</h1>'
+            f'<h1 style="margin:0 0 18px;font-family:{SANS};font-weight:700;font-size:26px;line-height:1.25;'
+            f'letter-spacing:-0.4px;color:{text_color}">{esc(d["headline"])}</h1>'
+        )
+    if stat:
+        if is_code:
+            big = (
+                f'<div style="font-family:{MONO};font-weight:700;font-size:38px;line-height:1.1;letter-spacing:10px;'
+                f'color:{accent_text};padding-left:10px">{esc(stat)}</div>'
+            )
+        else:
+            big = (
+                f'<div style="font-family:{SANS};font-weight:800;font-size:40px;line-height:1.1;letter-spacing:-1px;'
+                f'color:{accent_text}">{esc(stat)}</div>'
+            )
+        sub = ""
+        if d.get("stat_sub", "").strip():
+            sub = (
+                f'<div style="font-family:{SANS};font-size:13px;color:{accent_text};opacity:.85;padding-top:6px">'
+                f'{esc(d["stat_sub"])}</div>'
+            )
+        content.append(
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px">'
+            f'<tr><td align="center" style="background:{accent};border-radius:16px;padding:24px 20px">{big}{sub}</td></tr>'
+            "</table>"
         )
     content.append(_paragraphs(before, text_color))
     if link:
         content.append(
-            '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px"><tr>'
-            f'<td style="border-radius:12px;background:{st["button_color"]}">'
-            f'<a href="{esc(link)}" style="display:inline-block;padding:13px 26px;font-family:{SANS};font-size:15px;'
-            f'font-weight:600;color:{st["button_text_color"]};text-decoration:none;border-radius:12px">'
+            '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 24px"><tr>'
+            f'<td style="border-radius:999px;background:{st["button_color"]}">'
+            f'<a href="{esc(link)}" style="display:inline-block;padding:13px 28px;font-family:{SANS};font-size:15px;'
+            f'font-weight:600;color:{st["button_text_color"]};text-decoration:none;border-radius:999px">'
             f"{esc(button)} &rarr;</a></td></tr></table>"
         )
     content.append(_paragraphs(after, text_color))
@@ -381,16 +627,16 @@ def to_html(
     foot = []
     if st["show_footer_logo"]:
         foot.append(
-            f'<img src="{esc(_abs(WORDMARK_PATH))}" width="96" alt="{BRAND}" '
-            'style="display:block;border:0;width:96px;height:auto;margin:0 auto 8px">'
+            f'<img src="{esc(_abs(MARK_PATH))}" width="28" alt="" '
+            'style="display:block;border:0;width:28px;height:auto;margin:0 auto 10px">'
         )
     if st["footer_text"].strip():
         foot.append(
-            f'<div style="font-family:{SANS};font-size:12px;line-height:1.5;color:#8a8d91">'
+            f'<div style="font-family:{SANS};font-size:12px;line-height:1.6;color:#8a8f98">'
             f'{esc(st["footer_text"]).replace(chr(10), "<br>")}</div>'
         )
     if footer:
-        foot.append(f'<div style="font-family:{SANS};font-size:12px;line-height:1.5;color:#8a8d91;padding-top:6px">{footer}</div>')
+        foot.append(f'<div style="font-family:{SANS};font-size:12px;line-height:1.6;color:#8a8f98;padding-top:6px">{footer}</div>')
 
     return (
         '<!doctype html><html><head><meta charset="utf-8">'
@@ -398,12 +644,12 @@ def to_html(
         '<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>'
         f'<body style="margin:0;padding:0;background:{st["page_color"]}">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{st["page_color"]}">'
-        '<tr><td align="center" style="padding:28px 12px">'
+        '<tr><td align="center" style="padding:32px 12px">'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px">'
-        f'<tr><td align="center" style="background:{hdr};border-radius:20px 20px 0 0;padding:{pad}">{"".join(header)}</td></tr>'
-        f'<tr><td style="background:{st["card_color"]};border-radius:0 0 20px 20px;padding:30px 32px 16px;'
+        f'<tr><td style="background:{accent};height:5px;line-height:5px;font-size:0;border-radius:20px 20px 0 0">&nbsp;</td></tr>'
+        f'<tr><td style="background:{st["card_color"]};border-radius:0 0 20px 20px;padding:32px 36px 14px;'
         f'border:1px solid #e3e7ef;border-top:0">{"".join(content)}</td></tr>'
-        f'<tr><td align="center" style="padding:20px 8px">{"".join(foot)}</td></tr>'
+        f'<tr><td align="center" style="padding:22px 8px">{"".join(foot)}</td></tr>'
         "</table></td></tr></table></body></html>"
     )
 
@@ -587,11 +833,15 @@ def _log(db: Session, user_id: int, detail: str) -> None:
 # --------------------------------------------------------------------------
 
 
-def _send_in_background(user_id: int, to: str, subject: str, text_body: str, html: str, label: str) -> None:
+def _send_in_background(
+    user_id: int, to: str, subject: str, text_body: str, html: str, label: str, *, real_subject: str | None = None
+) -> None:
+    """Send in a thread and log it. ``subject`` is what the log shows; ``real_subject`` (if given) is sent."""
+
     def job() -> None:
         from .db import get_session_factory
 
-        ok = send_email(to, subject, html, text_body)
+        ok = send_email(to, real_subject or subject, html, text_body)
         try:
             with get_session_factory()() as db:
                 _log(db, user_id, f"{label} {'sent' if ok else 'NOT sent'}: {subject}")
@@ -629,8 +879,35 @@ def welcome(db: Session, user: User) -> bool:
         return False
 
 
-def plan_activated(db: Session, user: User, plan_label: str, tokens: int) -> bool:
-    """Queue the plan activated email. Called once per applied order. Never raises."""
+def _order_values(db: Session, order: Any) -> dict[str, Any]:
+    """Receipt placeholders for an order: amount, transaction ID, method, date."""
+
+    from .app_settings import currency
+    from .notify import order_ref
+
+    amount = float(getattr(order, "amount_usd", 0) or 0)
+    cur = currency(db)
+    if amount <= 0:
+        money = "Free (added by support)"
+    elif cur.upper() == "USD":
+        money = f"${amount:,.2f}".replace(".00", "")
+    else:
+        money = f"{amount:,.2f} {cur.upper()}".replace(".00", "")
+    provider = str(getattr(order, "provider", "") or "")
+    method = {"whop": "Whop", "volet": "Volet", "btcpay": "Crypto (BTCPay)"}.get(provider, provider.capitalize() or "-")
+    if amount <= 0:
+        method = "Added by support"
+    paid = aware(getattr(order, "paid_at", None)) or aware(getattr(order, "created_at", None)) or datetime.now(timezone.utc)
+    return {
+        "amount": money,
+        "order_id": order_ref(order),
+        "method": method,
+        "paid_date": f"{paid:%d %B %Y}",
+    }
+
+
+def plan_activated(db: Session, user: User, plan_label: str, tokens: int, order: Any = None) -> bool:
+    """Queue the plan activated email (with the receipt). Called once per applied order. Never raises."""
 
     try:
         if not configured():
@@ -641,7 +918,13 @@ def plan_activated(db: Session, user: User, plan_label: str, tokens: int) -> boo
             "plan": plan_label,
             "tokens": f"{int(tokens):,}",
             "end_date": f"{end:%d %B %Y}" if end else "",
+            "amount": "-",
+            "order_id": "-",
+            "method": "-",
+            "paid_date": f"{datetime.now(timezone.utc):%d %B %Y}",
         }
+        if order is not None:
+            values.update(_order_values(db, order))
         rendered = render(db, "activated", values)
         if rendered is None:
             return False
@@ -650,6 +933,71 @@ def plan_activated(db: Session, user: User, plan_label: str, tokens: int) -> boo
         return True
     except Exception:  # noqa: BLE001 - email must never undo a payment
         logger.exception("plan activated email for user %s failed", user.id)
+        return False
+
+
+def _now_text() -> str:
+    return f"{datetime.now(timezone.utc):%d %B %Y, %H:%M} UTC"
+
+
+def security_values(user: User) -> dict[str, Any]:
+    """Placeholders every account and security email can use."""
+
+    base = _base_url()
+    return {
+        **base_values(user),
+        "time": _now_text(),
+        "login_url": f"{base}/login" if base else "/login",
+        "reset_url": f"{base}/forgot-password" if base else "/forgot-password",
+        "minutes": settings.email_code_minutes,
+    }
+
+
+def send_kind(db: Session, user: User, kind: str, values: dict[str, Any] | None = None, *, to: str | None = None) -> bool:
+    """Queue one of the account emails (codes, notices, receipts) for ``user``. Never raises.
+
+    ``to`` overrides the recipient (an email change code goes to the new address).
+    """
+
+    try:
+        if not configured():
+            return False
+        rendered = render(db, kind, {**security_values(user), **(values or {})})
+        if rendered is None:
+            return False
+        subject, body, html = rendered
+        label = DEFAULT_TEMPLATES[kind]["label"]
+        # Codes are never written to the activity log, only that one was sent.
+        logged = subject if "code" not in kind and kind not in ("verify", "reset") else label
+        _send_in_background(user.id, to or user.email, logged, body, html, label, real_subject=subject)
+        return True
+    except Exception:  # noqa: BLE001 - email must never break the request that triggered it
+        logger.exception("%s email for user %s failed", kind, user.id)
+        return False
+
+
+def topup_receipt(db: Session, user: User, order: Any, plan_label: str) -> bool:
+    values = {"plan": plan_label, "tokens": f"{int(order.tokens or 0):,}", **_order_values(db, order)}
+    return send_kind(db, user, "topup", values)
+
+
+def payment_failed(db: Session, order: Any) -> bool:
+    """Tell the buyer a payment did not go through (cancelled, invalid or rejected). Never raises."""
+
+    try:
+        if not order or float(order.amount_usd or 0) <= 0:
+            return False
+        user = db.get(User, order.user_id)
+        if user is None or not user.is_active:
+            return False
+        from .tokens import get_token_plans
+
+        plan = get_token_plans(db).get(order.plan_id)
+        label = plan.label if plan else order.plan_id
+        what = f"the {label} plan" if order.kind == "subscription" else f"a top-up on {label}"
+        return send_kind(db, user, "payment_failed", {"plan": what, **_order_values(db, order)})
+    except Exception:  # noqa: BLE001
+        logger.exception("payment failed email for order %s failed", getattr(order, "id", "?"))
         return False
 
 
@@ -843,9 +1191,18 @@ def _check_style(style: EmailStyleIn) -> dict[str, Any]:
 
 def _sample_values(user: User, kind: str, days_before: int) -> dict[str, Any]:
     return {
-        **base_values(user),
-        "plan": "Pro",
-        "tokens": "4,500",
+        **security_values(user),
+        "code": "482913",
+        "amount": "$89",
+        "order_id": "BC-7Q2M-K4XD",
+        "method": "Whop",
+        "paid_date": f"{datetime.now(timezone.utc):%d %B %Y}",
+        "device": "Chrome on Windows",
+        "ip": "203.0.113.24",
+        "provider": "Google",
+        "new_email": "new-address@example.com",
+        "plan": "the Pro plan" if kind == "payment_failed" else "Pro",
+        "tokens": "1,000" if kind == "topup" else "4,500",
         "end_date": f"{datetime.now(timezone.utc) + timedelta(days=days_before if kind == 'ending' else 30):%d %B %Y}",
         "grace_days": 7,
         "days_left": days_before,

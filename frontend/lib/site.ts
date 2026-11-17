@@ -4,7 +4,7 @@
  * SITE_URL is set, visits to www.<host> are sent to it with a permanent
  * redirect so Google sees one site, not two.
  */
-export const DEFAULT_SITE_URL = "https://blucloack.online";
+export const DEFAULT_SITE_URL = "https://proteusflow.com";
 
 export const SITE_NAME = "ProteusFlow";
 export const SITE_SLOGAN = "Seamless adaptation. Peak efficiency.";

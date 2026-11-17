@@ -31,6 +31,12 @@ const LEGACY_WORDING: [RegExp, string][] = [
 /** Old logo image files (the BluCloacking shield). */
 const OLD_LOGO = /blucloacking-(?:mark|wordmark|logo)/i;
 
+// Any saved text entry from before the studio cleanup that still talks about
+// hashes, fingerprints, algorithms, duplicate scanners, or ad-review evasion is
+// dropped completely so the clean built-in default shows instead.
+const DISCARD_SAVED_TEXT =
+  /\b(?:fingerprint|phash|dhash|perceptual\s*hash|hash\s*wipe|hashes|algorithm|scanner|scanners|duplicate|mutat(?:e|es|ed|ing|ion)|cloak(?:ing|ed)?|camouflag(?:e|ed|ing)|bypass(?:ing|es|ed)?|evad(?:e|ing)|evasion|undetectable|scrub(?:s|bed|bing)?|23[- ]*layer|micro[- ]*crop|sub[- ]*pixel|inaudible|signature|shadowban|flagged|rejected|disapproved|checksum|spoof(?:ing|ed)?|adversarial|perturbation|stealth|nuclear|blu[\s-]?clo(?:a)?c?k|ad[\s-]?camouflage)\b/i;
+
 export function cleanLegacyWording(value: string): string {
   let out = value;
   for (const [pattern, replacement] of LEGACY_WORDING) out = out.replace(pattern, replacement);
@@ -43,14 +49,24 @@ export function cleanSiteContent(content: SiteContent): SiteContent {
   if (content.text) {
     const text: Record<string, string> = {};
     for (const [key, value] of Object.entries(content.text)) {
-      text[key] = typeof value === "string" ? cleanLegacyWording(value) : value;
+      if (key.startsWith("faq.items")) continue;
+      if (typeof value === "string") {
+        if (DISCARD_SAVED_TEXT.test(value)) continue;
+        text[key] = cleanLegacyWording(value);
+      }
     }
     out.text = text as SiteContent["text"];
   }
   if (content.meta) {
     const meta = { ...content.meta };
-    if (meta.title) meta.title = cleanLegacyWording(meta.title);
-    if (meta.description) meta.description = cleanLegacyWording(meta.description);
+    if (meta.title) {
+      if (DISCARD_SAVED_TEXT.test(meta.title) || /\$37\.50|variation/i.test(meta.title)) delete meta.title;
+      else meta.title = cleanLegacyWording(meta.title);
+    }
+    if (meta.description) {
+      if (DISCARD_SAVED_TEXT.test(meta.description) || /\$37\.50|variation/i.test(meta.description)) delete meta.description;
+      else meta.description = cleanLegacyWording(meta.description);
+    }
     // A tab icon pointing at the old logo gives way to the built-in ProteusFlow icon.
     if (meta.favicon && OLD_LOGO.test(meta.favicon)) delete meta.favicon;
     out.meta = meta;

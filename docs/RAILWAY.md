@@ -237,57 +237,27 @@ start. The API log should show `celery@… ready` shortly after boot, and
 
 **Uploads fail at a certain size.** See the section above.
 
-## Billing variables (BTCPay / Volet)
+## Billing variables (Whop)
 
-Token plans are sold through one or both of two payment methods: a
-self-hosted BTCPay Server (Greenfield API) and Volet.com's Hosted Checkout.
-Set the variables for the method(s) you use on the `api` service. Until at
-least one method is complete (BTCPay's first three variables, or Volet's
-three), checkout answers 503 and the plan page says payments are being set
-up. When both are complete, the plan page shows a "Pay with" choice and the
-customer picks one; BTCPay is the default.
-
-BTCPay (click-by-click guide: [BTCPAY.md](BTCPAY.md)):
+Token plans and top-ups are sold through **Whop Embedded Checkout** (guide:
+[WHOP.md](WHOP.md)). Set the variables below on the `api` service. Until both
+`ADCAM_WHOP_API_KEY` and `ADCAM_WHOP_WEBHOOK_SECRET` are set, checkout answers
+503 and `/app/plan` says payments are being set up.
 
 ```bash
-ADCAM_BTCPAY_URL=https://pay.yourdomain.com      # no trailing slash
-ADCAM_BTCPAY_STORE_ID=<store id from BTCPay>
-ADCAM_BTCPAY_API_KEY=<Greenfield API key with btcpay.store.cancreateinvoice + canviewinvoices>
-ADCAM_BTCPAY_WEBHOOK_SECRET=<secret entered on the BTCPay webhook>
-ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # where the customer is sent back after paying
+ADCAM_WHOP_API_KEY=<your Whop company API key>
+ADCAM_WHOP_WEBHOOK_SECRET=ws_<your Whop webhook signing secret>
+ADCAM_WHOP_PLAN_SUBSCRIPTION={"starter":"plan_xxx","pro":"plan_yyy","max":"plan_zzz"}
+ADCAM_WHOP_PLAN_TOPUP={"20":"plan_t20","40":"plan_t40","80":"plan_t80","160":"plan_t160","240":"plan_t240"}
+ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app
 ```
 
-In BTCPay, add a webhook on the store pointing at
-`https://<api or web domain>/api/v1/billing/btcpay/webhook` with the same
-secret, sending the invoice events (`InvoiceSettled` is the one that credits
-tokens; expired/invalid close the order). A missed webhook is caught up when
-the customer's plan page polls the order.
-
-Volet (click-by-click guide: [VOLET.md](VOLET.md)):
-
-```bash
-ADCAM_VOLET_ACCOUNT_EMAIL=<the e-mail of your Volet.com account>
-ADCAM_VOLET_SCI_NAME=<the Hosted Checkout (SCI) name, exactly as created in Volet>
-ADCAM_VOLET_SCI_SECRET=<the Hosted Checkout password set when creating it>
-ADCAM_PUBLIC_URL=https://your-web-domain.up.railway.app   # required for Volet; 40 characters or fewer
-ADCAM_VOLET_NOTIFY_IPS=50.7.115.5,51.255.40.139,13.53.55.89,13.61.247.159   # optional; built-in default (SCI doc + the dashboard's notification server)
-```
-
-`ADCAM_PUBLIC_URL` is the base of the success, fail and status addresses
-the app sends to Volet with every payment, so for Volet it is required (a
-checkout without it stops with a message saying the link has no site
-address); Volet limits each of them to 100 characters, which caps the public
-URL at 40. In Volet, the Hosted Checkout's Status URL is
-`https://<web domain>/api/v1/billing/volet/status` with method POST, and
-"Use a digital signature" must be on. The app acts on a notification only
-when its hash checks out and it was sent from one of Volet's sender
-addresses (`ADCAM_VOLET_NOTIFY_IPS`; the default is the list in Volet's SCI
-document plus the "notification server" address Volet's dashboard shows on
-the Hosted Checkout's Payment methods tab - compare that tab with the
-default before the first payment - and an empty value turns the check off;
-see VOLET.md sections 4 and 6 before changing it). The status notification is the only thing that credits
-a Volet order (there is no polling fallback), so an order whose notification
-never arrives stays pending until you settle it by hand from the admin panel.
+In your Whop dashboard, add a webhook pointing at
+`https://<web or api domain>/api/v1/billing/whop/webhook` subscribed to
+`payment.succeeded` using the same signing secret (`ws_...`). Fulfilment happens
+exclusively from the verified webhook: the embedded checkout attaches `order_id`
+in `metadata`, and `/app/plan` polls `GET /api/v1/billing/orders/{order_id}`
+until it turns `paid`.
 
 Optional customer emails (welcome, plan activated, renewal reminder, plan
 ended) go out through any SMTP server, or Resend. Setup, variables and the

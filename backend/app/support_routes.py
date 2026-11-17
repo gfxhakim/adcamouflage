@@ -323,10 +323,9 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "topup",
             "top-up",
             "top up",
-            "btcpay",
-            "crypto",
-            "bitcoin",
-            "volet",
+            "whop",
+            "card",
+            "checkout",
             "payment",
             "refund",
             "rollover",
@@ -341,7 +340,7 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "- **Rollover & Top-ups**:\n"
             "  - Unused subscription tokens roll over when you renew before your period expires (or within the grace window).\n"
             "  - **Top-up tokens** never expire while your subscription is active.\n"
-            "- **Payments**: You can subscribe or top up on `/app/plan` via **BTCPay (Crypto)** or **Volet**. Balances credit automatically as soon as payment settles."
+            "- **Payments**: You can subscribe or top up directly on `/app/plan` via **Whop** (card, Apple Pay, Google Pay, and supported payment methods). Balances credit automatically as soon as payment confirms."
         ),
         follow_up_question=(
             "What do you need help with regarding your plan or tokens — checking why a payment is pending, calculating batch cost, or renewing a subscription?"

@@ -326,10 +326,13 @@ export interface AdminOrder {
   plan_id: string;
   amount: number;
   tokens: number;
-  status: "pending" | "paid" | "expired" | "invalid";
+  status: "pending" | "paid" | "expired" | "invalid" | "refunded";
   provider: PaymentProviderId;
   created_at: string;
   paid_at: string | null;
+  /** The referral or partner code used at checkout, and what it took off. */
+  coupon_code?: string | null;
+  discount?: number;
   /** Meta Purchase for a paid order: "sent" | "failed" | "no consent" | "sending" | "no data" | "" */
   meta_purchase?: string;
 }
@@ -351,6 +354,8 @@ export interface AdminSubscription {
 export interface AdminBalance {
   subscription_tokens: number;
   topup_tokens: number;
+  /** Reward tokens from the friend referral program. */
+  referral_tokens?: number;
   usable_tokens: number;
   generations_left: number;
   frozen_topup: boolean;
@@ -438,12 +443,15 @@ export const connectTelegramButtons = () =>
 
 // --- customer emails -----------------------------------------------------------
 
-export type EmailKind = "welcome" | "activated" | "ending" | "ended";
+/** welcome, activated, ending, ended, verify, reset, password_code, ... (the server lists them in order). */
+export type EmailKind = string;
 
 export interface EmailTemplate {
   label: string;
   when: string;
   enabled: boolean;
+  /** Codes and security notices: always sent, cannot be switched off. */
+  locked?: boolean;
   subject: string;
   body: string;
   /** Renewal reminder only: how many days before the period ends. */
@@ -612,6 +620,181 @@ export const purgeUsers = (confirm: string, expectedUsers: number) =>
     method: "POST",
     body: JSON.stringify({ confirm, expected_users: expectedUsers }),
   });
+
+// --------------------------------------------------------------------------
+// Referral and partner program (Admin > Affiliates) and batch costs
+// --------------------------------------------------------------------------
+
+export interface AffiliateTier {
+  min: number;
+  pct: number;
+}
+
+export interface AffiliateProgram {
+  link_days: number;
+  friend: {
+    enabled: boolean;
+    discount_pct: number;
+    plans: string[];
+    reward_tokens: Record<string, number>;
+    hold_days: number;
+    monthly_cap: number;
+  };
+  partner: {
+    enabled: boolean;
+    applications_open: boolean;
+    discount_pct: number;
+    plans: string[];
+    tiers: AffiliateTier[];
+    hold_days: number;
+    min_payout: number;
+  };
+}
+
+export interface AffiliateTotals {
+  pending: number;
+  payable: number;
+  paid: number;
+}
+
+export interface AffiliatePartnerRow {
+  user_id: number;
+  email: string;
+  name: string;
+  status: "pending" | "approved" | "rejected" | "suspended";
+  requested_code: string;
+  code: string | null;
+  audience: string;
+  payout_method: string;
+  payout_address: string;
+  admin_note: string;
+  created_at: string;
+  stats: { clicks: number; signups: number; paying: number };
+  totals: AffiliateTotals;
+  month_customers: number;
+  month_rate_pct: number;
+}
+
+export interface AffiliateOverview {
+  program: AffiliateProgram;
+  plans: { id: string; label: string; price: number }[];
+  summary: {
+    friend_signups: number;
+    friend_paying: number;
+    friend_rewards: number;
+    friend_reward_tokens: number;
+    partner_signups: number;
+    partner_paying: number;
+    flagged: number;
+    applications: number;
+    commission: AffiliateTotals;
+  };
+  partners: AffiliatePartnerRow[];
+}
+
+export interface AffiliateReferral {
+  id: number;
+  channel: "friend" | "partner";
+  code: string;
+  source: string;
+  status: string;
+  flags: string[];
+  referrer_id: number;
+  referrer_email: string;
+  customer_id: number;
+  customer_email: string;
+  reward_tokens: number;
+  reward_due_at: string | null;
+  reward_given_at: string | null;
+  first_paid_at: string | null;
+  note: string;
+  created_at: string;
+}
+
+export interface AffiliateCommissionRow {
+  id: number;
+  order_id: string;
+  customer_id: number;
+  customer_email: string;
+  kind: "sale" | "clawback";
+  amount: number;
+  month: string;
+  rate_pct: number;
+  commission: number;
+  status: "pending" | "payable" | "paid" | "void";
+  payable_at: string;
+  created_at: string;
+  note: string;
+}
+
+export interface AffiliatePartnerDetail {
+  partner: AffiliatePartnerRow;
+  statement: { month: string; customers: number; revenue: number; rate_pct: number; commission: number }[];
+  commissions: AffiliateCommissionRow[];
+  payouts: { id: number; amount: number; method: string; reference: string; note: string; admin_email: string; created_at: string }[];
+}
+
+const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
+
+export const getAffiliates = () => call<AffiliateOverview>("/affiliates");
+export const saveAffiliateProgram = (program: AffiliateProgram) =>
+  call<AffiliateProgram>("/affiliates/settings", json("PUT", program));
+export const decidePartner = (
+  userId: number,
+  body: { action: "approve" | "reject" | "suspend" | "reinstate" | "note"; code?: string; note?: string },
+) => call<AffiliatePartnerRow>(`/affiliates/partners/${userId}`, json("POST", body));
+export const getPartnerDetail = (userId: number) => call<AffiliatePartnerDetail>(`/affiliates/partners/${userId}`);
+export const recordPartnerPayout = (
+  userId: number,
+  body: { method: string; reference: string; note: string; force: boolean },
+) => call<{ id: number; amount: number }>(`/affiliates/partners/${userId}/payout`, json("POST", body));
+export const getAffiliateReferrals = (channel?: "friend" | "partner", flagged = false) =>
+  call<AffiliateReferral[]>(
+    `/affiliates/referrals?${new URLSearchParams({ ...(channel ? { channel } : {}), ...(flagged ? { flagged: "true" } : {}) })}`,
+  );
+export const actOnReferral = (id: number, action: "void" | "allow" | "reward_now", reason = "") =>
+  call<{ id: number; status: string }>(`/affiliates/referrals/${id}`, json("POST", { action, reason }));
+export const markOrderRefunded = (orderId: string, note = "") =>
+  call<{ id: string; status: string; reversed: string }>(
+    `/affiliates/orders/${encodeURIComponent(orderId)}/refund`,
+    json("POST", { note }),
+  );
+
+export interface CostRates {
+  vcpu_per_minute: number;
+  gb_ram_per_minute: number;
+  egress_per_gb: number;
+  vcpus_busy: number;
+  ram_gb: number;
+}
+
+export interface BatchCostRow {
+  batch_id: string;
+  user_id: number | null;
+  email: string;
+  outputs: number;
+  resolution: string;
+  duration_seconds: number;
+  render_seconds: number;
+  output_mb: number;
+  downloads: number;
+  created_at: string;
+  compute: number;
+  egress: number;
+  total: number;
+}
+
+export interface BatchCosts {
+  days: number;
+  rates: CostRates;
+  totals: { batches: number; outputs: number; compute: number; egress: number; total: number; average: number };
+  batches: BatchCostRow[];
+  /** Expected cost of a batch of 5 by video length (seconds), heaviest settings. */
+  estimate: { seconds: number; "1080p": number; "4K": number }[];
+}
+
+export const getBatchCosts = (days = 30) => call<BatchCosts>(`/affiliates/batch-costs?days=${days}`);
+export const saveCostRates = (rates: CostRates) => call<CostRates>("/affiliates/batch-costs/rates", json("PUT", rates));
 
 // --- guides (Admin > Guides) --------------------------------------------------
 

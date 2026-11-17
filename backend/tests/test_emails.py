@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from app import mailer
 from app.config import settings
-from tests.test_volet import (  # noqa: F401 - fixtures
+from tests.test_whop import (  # noqa: F401 - fixtures
     _database,
     _reset_limiter,
     _activity,
@@ -47,7 +47,9 @@ def outbox(monkeypatch):
 
 
 def _mine(outbox, email):
-    return [m for m in outbox if m["to"] == email]
+    """Mail to ``email``, leaving out the sign-up code every new account gets first."""
+
+    return [m for m in outbox if m["to"] == email and "is your ProteusFlow code" not in m["subject"]]
 
 
 def test_nothing_is_sent_without_a_mail_server(monkeypatch):
@@ -212,7 +214,7 @@ def test_branded_design_button_and_logo(outbox):
     assert "https://shop.example.test/app" in body
     # Big number, kicker and headline from the design text.
     assert ">4,500<" in html and "Payment confirmed" in html and ">Your Pro plan is active<" in html
-    assert 'src="https://shop.example.test/brand/proteusflow-mark-email.png"' in html
+    assert 'src="https://shop.example.test/brand/proteusflow-email-lockup.png"' in html
 
 
 def test_admin_edits_design_and_style(outbox, admin):

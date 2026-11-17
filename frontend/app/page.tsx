@@ -31,10 +31,13 @@ const METADATA: Metadata = {
 // Admin > Landing can override the tab title, description and icon.
 export async function generateMetadata(): Promise<Metadata> {
   const meta = (await loadPublishedContent("landing")).meta ?? {};
+  const legacyMeta = /fingerprint|hash|cloak|camouflage|bypass|mutate|duplicate|scanner|algorithm|\$37\.50|variation/i;
+  const cleanTitle = meta.title && !legacyMeta.test(meta.title) ? meta.title : undefined;
+  const cleanDesc = meta.description && !legacyMeta.test(meta.description) ? meta.description : undefined;
   return {
     ...METADATA,
-    ...(meta.title ? { title: { absolute: meta.title } } : {}),
-    ...(meta.description ? { description: meta.description } : {}),
+    ...(cleanTitle ? { title: { absolute: cleanTitle } } : {}),
+    ...(cleanDesc ? { description: cleanDesc } : {}),
     ...(meta.favicon ? { icons: { icon: meta.favicon } } : {}),
   };
 }
@@ -44,7 +47,7 @@ export async function generateMetadata(): Promise<Metadata> {
 const FALLBACK_PRICING: PublicPricing = {
   currency: "USD",
   plans: [
-    { id: "starter", label: "Starter", price: 37.5, tokens: 1500, tokens_per_generation: 100, generations: 15, price_per_generation: 2.5, rollover_months: 0, rollover_cap: 0, topup_rate: 40, seats: 1 },
+    { id: "starter", label: "Starter", price: 37, tokens: 1500, tokens_per_generation: 100, generations: 15, price_per_generation: 2.47, rollover_months: 0, rollover_cap: 0, topup_rate: 40, seats: 1 },
     { id: "pro", label: "Pro", price: 89, tokens: 4500, tokens_per_generation: 90, generations: 50, price_per_generation: 1.78, rollover_months: 1, rollover_cap: 4500, topup_rate: 50, seats: 1 },
     { id: "max", label: "Max", price: 149, tokens: 9600, tokens_per_generation: 80, generations: 120, price_per_generation: 1.24, rollover_months: 2, rollover_cap: 19200, topup_rate: 65, seats: 5 },
   ],
@@ -196,7 +199,6 @@ export default async function LandingPage() {
         dangerouslySetInnerHTML={{ __html: structuredData(pricing, content) }}
       />
       <SiteHeader floating nav={<LandingNav variant="header" />} />
-      <LandingNav variant="dock" />
       <CursorRing />
 
       <main className="overflow-x-clip">

@@ -74,6 +74,28 @@ export interface ListEntry {
   from: number;
 }
 
+/**
+ * The entries a list shows. With nothing saved, the built-in items in `order`
+ * (default: as declared). A saved list is used as is, except that built-in
+ * items named in `order` which it never mentions (added to the site after the
+ * admin saved the list) are slotted in at their built-in position.
+ */
+export function listEntries(saved: ListEntry[] | undefined, count: number, order?: number[]): ListEntry[] {
+  const base = order ?? Array.from({ length: count }, (_, i) => i);
+  if (!saved) return base.map((i) => ({ id: String(i), from: i }));
+  if (!order) return saved;
+  const out = [...saved];
+  const seen = new Set(saved.map((e) => e.from));
+  order.forEach((from, pos) => {
+    if (seen.has(from)) return;
+    const before = order.slice(0, pos).reverse().find((i) => seen.has(i));
+    const at = before === undefined ? 0 : out.findIndex((e) => e.from === before) + 1;
+    out.splice(at, 0, { id: String(from), from });
+    seen.add(from);
+  });
+  return out;
+}
+
 export interface ThemeValue {
   accent?: string;
   page?: string;
@@ -109,7 +131,7 @@ export interface ReviewItem {
  * Bump when the default reviews are replaced. Reviews saved in Admin before
  * this version (ids without the prefix) are ignored so the new set shows.
  */
-export const REVIEWS_VERSION = "v2";
+export const REVIEWS_VERSION = "v3";
 const REVIEW_ID_PREFIX = `${REVIEWS_VERSION}-`;
 
 /** A fresh id for a review added in Admin, tied to the current version. */
@@ -125,124 +147,124 @@ export function currentReviews(saved: ReviewItem[] | undefined): ReviewItem[] {
 
 export const DEFAULT_REVIEWS: ReviewItem[] = [
   {
-    id: "v2-1",
+    id: "v3-1",
     name: "Karim B.",
     handle: "Media Buyer · Meta & TikTok",
-    body: "I used to wait two days on the editor for new versions. Now I upload the winner, pick 10 variations, and launch fresh ad sets the same afternoon.",
+    body: "Formatting campaign videos for Reels, TikTok, and Shorts used to take our team two days. Now we drop in the master cut, apply our brand preset, and export the whole batch in minutes.",
   },
   {
-    id: "v2-2",
+    id: "v3-2",
     name: "Laura M.",
     handle: "Skincare Brand Owner",
-    body: "I'm not technical at all. Upload, choose Meta, press render. My product videos come out looking exactly like the original, just in more versions.",
+    body: "I'm not a professional video editor. With ProteusFlow I upload our product clips, pick the Instagram Reels preset, add our logo watermark, and download clean HD videos ready to post.",
   },
   {
-    id: "v2-3",
+    id: "v3-3",
     name: "Daniel R.",
     handle: "Creative Strategist · DTC Agency",
-    body: "We test hooks and angles weekly. ProteusFlow gives us clean variations of each concept, so my team spends time on ideas instead of exports.",
+    body: "We produce dozens of social deliverables every week. ProteusFlow handles the aspect-ratio formatting, color grading, and cover frames so our strategists stay focused on creative direction.",
   },
   {
-    id: "v2-4",
+    id: "v3-4",
     name: "Aditya S.",
     handle: "Freelance Video Editor",
-    body: "Clients always want 'five more versions'. I deliver the main cut, run it through ProteusFlow, and send a ZIP of variations in minutes. Huge time saver.",
+    body: "Clients always ask for multiple aspect ratios and branded cuts. I finish the main edit, run the batch through ProteusFlow, and deliver a single organized ZIP in minutes.",
   },
   {
-    id: "v2-5",
+    id: "v3-5",
     name: "Lucas F.",
     handle: "Senior Media Buyer",
-    body: "Creative fatigue was killing my scaling. Having 10 fresh versions of the same winning ad ready on day one changed how I plan my campaigns.",
+    body: "Having our brand watermark, frame-0 thumbnail, and −14 LUFS audio leveling applied automatically across every video in a campaign saves us hours on every launch.",
   },
   {
-    id: "v2-6",
+    id: "v3-6",
     name: "Reem A.",
     handle: "Supplements E-Com Founder",
-    body: "I run my store and ads alone. The logo watermark and cover frame tools mean every video goes out branded without opening another app.",
+    body: "I run my store and social channels myself. The built-in logo placement and custom cover frame picker mean every product video goes out looking polished without opening Premiere.",
   },
   {
-    id: "v2-7",
+    id: "v3-7",
     name: "Sofia G.",
     handle: "Creative Strategist",
-    body: "What sold me is the quality. Captions stay sharp, colors stay true, the voiceover sounds natural. I can't tell the variations apart from the master.",
+    body: "What impressed me most is the export quality. On-screen captions stay razor-sharp, skin tones look natural with the Rec.709 LUT, and the voiceover leveling is broadcast-clean.",
   },
   {
-    id: "v2-8",
+    id: "v3-8",
     name: "Miguel T.",
     handle: "Video Editor · UGC Studio",
-    body: "I edit 30+ UGC videos a week. Batch rendering 20 files at once and downloading one ZIP saves me hours of exporting one by one in Premiere.",
+    body: "I edit 30+ UGC videos a week. Batch-processing 20 clips at once with consistent audio normalization and downloading one ZIP saves me hours of manual timeline exports.",
   },
   {
-    id: "v2-9",
+    id: "v3-9",
     name: "Hamza Q.",
     handle: "Performance Media Buyer",
-    body: "Support actually answers. I had a question about presets, the bot walked me through it, and an agent followed up in under 20 minutes.",
+    body: "Customer support is genuinely fast. I had a question about setting up custom cover thumbnails, the assistant guided me right away, and a live agent followed up in under 20 minutes.",
   },
   {
-    id: "v2-10",
+    id: "v3-10",
     name: "Nadia K.",
     handle: "Cosmetics Brand Owner",
-    body: "Our launches need lots of creatives fast. One master video becomes a full set for Reels, TikTok and Shorts. My small team feels like a big studio.",
+    body: "Product launches require so many video formats at once. One shoot day turns into a complete set of branded Reels, TikToks, and YouTube Shorts in a single afternoon.",
   },
   {
-    id: "v2-11",
+    id: "v3-11",
     name: "Tom W.",
     handle: "Head of Creative · E-Com Brand",
-    body: "We built a simple routine: edit once, generate variations in ProteusFlow, hand them to the buyers. Production bottlenecks basically disappeared.",
+    body: "We standardized our post-production around ProteusFlow: edit the hero cut once, apply our brand overlay and audio master in the cloud, and hand the finished ZIP to the marketing team.",
   },
   {
-    id: "v2-12",
+    id: "v3-12",
     name: "Priya N.",
     handle: "Freelance Motion Editor",
-    body: "I was skeptical about quality loss, so I compared frame by frame. Clean encode, no banding, audio untouched to my ears. Now it's in my workflow.",
+    body: "I compared the H.264 exports frame by frame against my local render queue. Clean gradients, zero banding, and crisp typography—now it's a permanent part of my delivery pipeline.",
   },
   {
-    id: "v2-13",
+    id: "v3-13",
     name: "Ahmed E.",
     handle: "Media Buyer · E-Com",
-    body: "Platform presets are the best part. I choose TikTok or Meta and it sets things up for me. No more guessing settings before every launch.",
+    body: "The platform presets take all the guesswork out of export specs. Whether we're preparing assets for Reels, TikTok, or Shorts, the framing and audio levels come out right every time.",
   },
   {
-    id: "v2-14",
+    id: "v3-14",
     name: "Carla D.",
     handle: "Parapharmacy Store Owner",
-    body: "Simple pricing with tokens, and failed renders refund automatically. I like knowing exactly what I pay for each batch of videos.",
+    body: "Transparent token pricing and automatic refunds if an upload ever fails. It's refreshing to use a cloud video studio where billing is completely predictable.",
   },
   {
-    id: "v2-15",
+    id: "v3-15",
     name: "Jonas H.",
     handle: "Creative Strategist · Paid Social",
-    body: "For creative testing, volume matters. ProteusFlow lets us test more versions of every idea without hiring another editor. Easy decision for us.",
+    body: "Our agency manages eight e-commerce brands. Being able to drag each client's PNG watermark onto the live preview and batch-export their campaigns has doubled our weekly output.",
   },
   {
-    id: "v2-16",
+    id: "v3-16",
     name: "Rizal P.",
     handle: "Video Editor · Agency",
-    body: "The live preview for logo placement is great. Drag it where you want, set the size and fade, done. Every export matches the brand guidelines.",
+    body: "The interactive watermark preview is spot on. Position the logo, set the opacity and fade timing, pick a cover frame, and apply it across the entire batch in one click.",
   },
   {
-    id: "v2-17",
+    id: "v3-17",
     name: "Fatima Z.",
     handle: "Fashion E-Com Founder",
-    body: "Before, every new campaign meant paying for new edits. Now I reuse my best videos in fresh versions and keep my ad budget for actual ads.",
+    body: "We shoot lookbooks on iPhone and polish them in ProteusFlow. The color grading and aspect-ratio tools make our vertical videos look like they came from a dedicated post house.",
   },
   {
-    id: "v2-18",
+    id: "v3-18",
     name: "Bruno C.",
     handle: "Media Buying Team Lead",
-    body: "My buyers don't wait for the creative team anymore. They generate the versions they need, download, and launch. Team seats made it easy to share.",
+    body: "Our marketers don't have to bottleneck the video editors for simple logo placements or aspect-ratio exports anymore. The 5-seat Max plan lets the whole team collaborate seamlessly.",
   },
   {
-    id: "v2-19",
+    id: "v3-19",
     name: "Elif Y.",
     handle: "Creative Strategist · Beauty",
-    body: "The guided tour and help bot got my whole team using it in one day. Nobody needed training, which never happens with new tools.",
+    body: "The 4-step studio layout and interactive walkthrough got our entire creative team onboarded in ten minutes. Clean interface, fast cloud queue, and reliable ZIP downloads.",
   },
   {
-    id: "v2-20",
+    id: "v3-20",
     name: "Owen L.",
     handle: "Freelance Editor & Media Buyer",
-    body: "I edit and run ads for my clients. ProteusFlow sits right between those two jobs: finish the cut, generate versions, launch. It just fits.",
+    body: "I handle both post-production and campaign launches for my clients. ProteusFlow bridges that gap perfectly—finish the edit, apply branding and audio polish, and export the batch.",
   },
 ];
 
@@ -284,6 +306,8 @@ export interface FieldInfo {
   fixed?: boolean;
   /** For lists: built-in items that were removed from the site (hidden in the editor). */
   retired?: number[];
+  /** For lists: the built-in arrangement, by item number (default: as declared). */
+  order?: number[];
   /** Editor heading to list the field under (auto-found labels use their page). */
   group?: string;
   page?: string;

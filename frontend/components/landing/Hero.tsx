@@ -47,19 +47,19 @@ export function Hero({ startHref }: { startHref: string }) {
           transition={{ duration: 0.6, ease: EASE }}
         >
           <CmsIcon k="hero.badge.icon" fallback={ShieldCheck} className="h-3.5 w-3.5 text-meta-400" aria-hidden />
-          <T k="hero.badge">CREATIVE VARIATION STUDIO • CLOUD BATCH RENDERING</T>
+          <T k="hero.studioBadge">CLOUD VIDEO FORMATTER • BRAND OVERLAYS & BATCH EXPORT</T>
         </motion.span>
 
         <CmsHeadline
-          k="hero.headline"
+          k="hero.studioHeadline"
           as="h1"
           dark
-          text="One Winning Creative. | [Ten Studio-Ready] | [Variations in Seconds.]"
-          className="text-[2.6rem] sm:text-6xl lg:text-[5.4rem]"
+          text="One Master Video. | [Formatted, Branded &] | [Exported in Minutes.]"
+          className="text-[2.15rem] min-[400px]:text-[2.4rem] sm:text-6xl lg:text-[5.4rem]"
         />
 
         <T
-          k="hero.lede"
+          k="hero.studioLede"
           long
           as={motion.p}
           className="mt-6 max-w-3xl text-sm leading-relaxed text-white/75 sm:text-base"
@@ -69,7 +69,7 @@ export function Hero({ startHref }: { startHref: string }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.5, ease: EASE }}
         >
-          {"ProteusFlow turns your finished video and static creatives into fresh, broadcast-ready variations in seconds. Apply studio color grading, subtle framing polish, audio mastering, brand logo overlays, and clean export packaging for Meta, TikTok, and YouTube without opening a timeline editor."}
+          {"ProteusFlow is an online video and image production studio for marketing teams and creators. Format clips for Reels, TikTok, and YouTube Shorts, apply studio Rec.709 color grading and −14 LUFS audio leveling, burn in your brand logo and cover frame, and batch-export ready-to-publish files."}
         </T>
 
         <motion.div
@@ -79,9 +79,9 @@ export function Hero({ startHref }: { startHref: string }) {
           transition={{ duration: 0.8, delay: 0.65, ease: EASE }}
         >
           <CmsLink
-            k="hero.cta"
+            k="hero.studioCta"
             href={startHref}
-            label="Create My First Batch Now"
+            label="Open ProteusFlow Studio"
             className="group inline-flex items-center gap-3 rounded-full bg-white py-1.5 pl-5 pr-1.5 text-sm font-semibold text-black transition hover:bg-meta-50"
           >
             {(label) => (
@@ -95,8 +95,8 @@ export function Hero({ startHref }: { startHref: string }) {
           </CmsLink>
         </motion.div>
 
-        <T k="hero.footnote" as="p" className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-white/70">
-          Instant Web App Access • Batch Processing Ready • Zero Visual Quality Loss
+        <T k="hero.studioFootnote" as="p" className="mt-4 font-mono text-[10px] uppercase tracking-[0.16em] text-white/70">
+          Browser-Based Studio • Multi-Format Batch Export • Broadcast-Grade H.264 / H.265 Quality
         </T>
       </div>
     </CmsSection>

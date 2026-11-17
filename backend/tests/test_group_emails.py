@@ -11,7 +11,7 @@ from app import broadcast, mailer
 from app.config import settings
 from app.db import AdminAudit, EmailRecipient
 from app.main import app
-from tests.test_volet import (  # noqa: F401 - fixtures
+from tests.test_whop import (  # noqa: F401 - fixtures
     _database,
     _grant,
     _load,

@@ -47,6 +47,10 @@ celery_app.conf.update(
             # at the daily cap; the next run carries on where it left off.
             "schedule": 120.0,
         },
+        "pay-referral-rewards": {
+            "task": "app.tasks.pay_referral_rewards",
+            "schedule": 3600.0,
+        },
         "open-waiting-support-tickets": {
             "task": "app.tasks.open_waiting_support_tickets",
             "schedule": 120.0,
