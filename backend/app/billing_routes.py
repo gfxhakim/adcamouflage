@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import affiliates, meta_capi, notify, refunds, whop
-from .accounts import current_user
+from .accounts import require_studio_user
 from .activity import log_activity
 from .app_settings import currency
 from .db import Order, User, get_db
@@ -153,7 +153,7 @@ def _open_order(db: Session, user: User, kind: str, plan_id: str, amount: float,
 def checkout(
     payload: CheckoutIn,
     request: Request,
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
     db: Session = Depends(get_db),
 ) -> CheckoutOut:
     from .teams import membership
@@ -473,8 +473,14 @@ def _handle_payment_succeeded(db: Session, event: dict) -> JSONResponse:
 
 def _handle_payment_failed(db: Session, event: dict) -> JSONResponse:
     order_id = whop.order_id_from_event(event)
+    payment_id = whop.payment_id_from_event(event)
     membership_id = whop.membership_id_from_event(event)
+
     order = db.get(Order, order_id) if order_id else None
+    if order is None and payment_id:
+        order = db.execute(
+            select(Order).where(Order.provider == whop.PROVIDER, Order.provider_ref == payment_id).limit(1)
+        ).scalar_one_or_none()
     if order is not None and order.provider == whop.PROVIDER and order.status == "pending":
         void_order(db, order, "invalid")
         log_activity(db, order.user_id, "payment", f"Whop payment failed for order {order.id}")
@@ -483,12 +489,28 @@ def _handle_payment_failed(db: Session, event: dict) -> JSONResponse:
     user: User | None = db.get(User, order.user_id) if order is not None else None
     if user is None and membership_id:
         user = db.execute(select(User).where(User.whop_membership_id == membership_id).limit(1)).scalar_one_or_none()
+        if order is None:
+            order = db.execute(
+                select(Order)
+                .where(Order.provider == whop.PROVIDER, Order.whop_membership_id == membership_id)
+                .order_by(Order.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if user is None and order is not None:
+                user = db.get(User, order.user_id)
     if user is not None:
+        if order is None:
+            order = db.execute(
+                select(Order)
+                .where(Order.user_id == user.id, Order.provider == whop.PROVIDER)
+                .order_by(Order.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
         log_activity(db, user.id, "payment", "Whop renewal payment failed")
         if order is not None:
             notify.needs_review(order, user.email, "Whop renewal payment failed", name=user.display_name)
         return JSONResponse({"ok": True, "failed_noted": True})
-    return JSONResponse({"ok": True, "ignored": "payment.failed"})
+    return JSONResponse({"ok": True, "ignored": "unknown payment"})
 
 
 def _handle_membership_deactivated(db: Session, event: dict) -> JSONResponse:
@@ -630,7 +652,7 @@ async def whop_webhook(request: Request, db: Session = Depends(get_db)) -> JSONR
 
 
 @router.get("/orders", response_model=list[OrderOut])
-def my_orders(user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[OrderOut]:
+def my_orders(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> list[OrderOut]:
     rows = (
         db.execute(
             select(Order)
@@ -645,7 +667,7 @@ def my_orders(user: User = Depends(current_user), db: Session = Depends(get_db))
 
 
 @router.get("/orders/{order_id}", response_model=OrderOut)
-def order_status(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> OrderOut:
+def order_status(order_id: str, user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> OrderOut:
     order = db.get(Order, order_id)
     if order is None or order.user_id != user.id:
         raise HTTPException(status_code=404, detail="Order not found.")
@@ -663,7 +685,7 @@ class CancelIn(BaseModel):
 
 @router.post("/cancel", response_model=SubscriptionState)
 def cancel_subscription(
-    payload: CancelIn | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)
+    payload: CancelIn | None = None, user: User = Depends(require_studio_user), db: Session = Depends(get_db)
 ) -> SubscriptionState:
     """Stop auto-renewal on Whop at period end; days and tokens left stay active until then."""
 
@@ -694,7 +716,7 @@ def cancel_subscription(
 
 
 @router.post("/resume", response_model=SubscriptionState)
-def resume_subscription(user: User = Depends(current_user), db: Session = Depends(get_db)) -> SubscriptionState:
+def resume_subscription(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> SubscriptionState:
     if not subscription_active(user):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="There is no active subscription to resume.")
     mem_id = _resolve_user_whop_membership(db, user)

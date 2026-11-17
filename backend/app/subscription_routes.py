@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .accounts import current_user
+from .accounts import require_studio_user
 from .activity import log_activity
 from .app_settings import currency
 from .billing_routes import available_providers, provider_label
@@ -219,7 +219,7 @@ def _pending_request(db: Session, user: User) -> PlanRequestOut | None:
 
 
 @router.get("/subscription", response_model=Subscription)
-def subscription(user: User = Depends(current_user), db: Session = Depends(get_db)) -> Subscription:
+def subscription(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> Subscription:
     now = datetime.now(timezone.utc)
     plans = get_plans(db)
     current = plans.get(user.plan)
@@ -327,7 +327,7 @@ def _token_fields(db: Session, user: User, now: datetime) -> dict[str, Any]:
 @router.post("/plan-request", response_model=PlanRequestOut, status_code=status.HTTP_201_CREATED)
 def request_plan(
     payload: PlanRequestIn,
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
     db: Session = Depends(get_db),
 ) -> PlanRequestOut:
     plans = get_plans(db)

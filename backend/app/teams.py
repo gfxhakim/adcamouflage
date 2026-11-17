@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .accounts import AuthError, current_user, validate_email
+from .accounts import AuthError, require_studio_user, validate_email
 from .activity import log_activity
 from .db import TeamMember, User, get_db
 from .plans import aware
@@ -164,12 +164,12 @@ def _conflict(detail: str, code: int = status.HTTP_409_CONFLICT) -> HTTPExceptio
 
 
 @router.get("", response_model=TeamOut)
-def my_team(user: User = Depends(current_user), db: Session = Depends(get_db)) -> TeamOut:
+def my_team(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> TeamOut:
     return team_summary(db, user)
 
 
 @router.post("/members", response_model=TeamOut, status_code=status.HTTP_201_CREATED)
-def add_member(payload: MemberIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> TeamOut:
+def add_member(payload: MemberIn, user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> TeamOut:
     if membership(db, user) is not None:
         raise _conflict("You are on someone else's team. Leave it before adding your own members.")
     seats = seats_for(db, user)
@@ -213,7 +213,7 @@ def add_member(payload: MemberIn, user: User = Depends(current_user), db: Sessio
 
 
 @router.delete("/members/{email}", response_model=TeamOut)
-def remove_member(email: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> TeamOut:
+def remove_member(email: str, user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> TeamOut:
     cleaned = email.strip().lower()
     row = db.execute(
         select(TeamMember).where(TeamMember.owner_id == user.id, TeamMember.email == cleaned)
@@ -227,7 +227,7 @@ def remove_member(email: str, user: User = Depends(current_user), db: Session = 
 
 
 @router.post("/leave", response_model=TeamOut)
-def leave_team(user: User = Depends(current_user), db: Session = Depends(get_db)) -> TeamOut:
+def leave_team(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> TeamOut:
     row = membership(db, user)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="You are not on a team.")

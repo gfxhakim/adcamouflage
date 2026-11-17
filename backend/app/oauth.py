@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 
 from . import account_security as security
 from . import mailer
-from .accounts import create_session_token, is_admin, normalise_email, set_session_cookie
+from .accounts import create_session_token, is_admin, is_affiliate_only, normalise_email, set_session_cookie
 from .activity import log_activity
 from .app_settings import registration_open
 from .config import settings
@@ -178,6 +178,7 @@ def find_or_create_user(
     email: str | None,
     email_verified: bool,
     name: str | None,
+    account_role: str = "customer",
 ) -> tuple[User, bool]:
     """The account for this Google person, and whether it was just opened."""
 
@@ -222,11 +223,13 @@ def find_or_create_user(
 
     if not registration_open(db):
         raise OAuthFailure("closed", "registration closed")
+    role = "affiliate" if account_role == "affiliate" and email not in settings.admin_emails else "customer"
     user = User(
         email=email,
         password_hash=security.NO_PASSWORD,
         display_name=(name or "").strip()[:120] or None,
         billing_mode=TOKENS,
+        account_role=role,
         email_verified=True,
     )
     apply_plan(db, user, default_plan(db).id)
@@ -288,7 +291,7 @@ def _fail(request: Request, code: str) -> HTMLResponse:
 
 
 @router.get("/{provider}/start")
-def start(provider: str, request: Request, next: str | None = None) -> RedirectResponse:
+def start(provider: str, request: Request, next: str | None = None, role: str | None = None) -> RedirectResponse:
     if provider not in LABELS or not _ready(provider):
         return RedirectResponse("/login?oauth_error=unavailable", status_code=303)
     state = secrets.token_urlsafe(24)
@@ -307,7 +310,15 @@ def start(provider: str, request: Request, next: str | None = None) -> RedirectR
     secure = _secure(request)
     response.set_cookie(
         STATE_COOKIE,
-        _sign_state({"p": provider, "s": state, "n": nonce, "next": _safe_next(next)}),
+        _sign_state(
+            {
+                "p": provider,
+                "s": state,
+                "n": nonce,
+                "next": _safe_next(next),
+                "r": "affiliate" if role == "affiliate" else "customer",
+            }
+        ),
         max_age=STATE_TTL,
         httponly=True,
         secure=secure,
@@ -358,7 +369,9 @@ def _callback(provider: str, request: Request, db: Session, fields: dict[str, st
         if not fields.get("code"):
             raise OAuthFailure("failed", "no code")
         who = _identity(provider, request, fields["code"], str(state.get("n", "")))
-        user, opened = find_or_create_user(db, request, provider=provider, **who)
+        user, opened = find_or_create_user(
+            db, request, provider=provider, account_role=str(state.get("r", "customer")), **who
+        )
     except OAuthFailure as failure:
         logger.warning("%s sign-in failed: %s", provider, failure)
         return _fail(request, failure.code)
@@ -372,7 +385,13 @@ def _callback(provider: str, request: Request, db: Session, fields: dict[str, st
     else:
         security.note_sign_in(db, user, request)
 
-    target = state.get("next") or ("/admin" if is_admin(user) else "/app")
+    if is_admin(user):
+        target = state.get("next") or "/admin"
+    elif is_affiliate_only(user):
+        next_url = str(state.get("next") or "")
+        target = next_url if next_url.startswith("/affiliates") else "/affiliates/dashboard"
+    else:
+        target = state.get("next") or "/app"
     response = _go(target)
     set_session_cookie(response, create_session_token(user))
     _clear_state(response, request)

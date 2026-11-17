@@ -593,3 +593,47 @@ def test_a_reward_is_only_ever_given_once():
         assert affiliates.give_reward(second, row_b, now=later) == "rewarded"  # sees it is done, pays nothing
     with session() as db:
         assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 750
+
+
+def test_public_program_and_affiliate_only_account_isolation():
+    pub = TestClient(app).get("/api/v1/referrals/public-program")
+    assert pub.status_code == 200
+    data = pub.json()
+    assert data["partner"]["discount_pct"] == 15.0
+    assert [t["pct"] for t in data["partner"]["tiers"]] == [25.0, 30.0, 35.0]
+    assert data["partner"]["hold_days"] == 30 and data["partner"]["min_payout"] == 50.0
+
+    # Sign up from the affiliate join flow using email + password.
+    aff_email = address("affonly")
+    client = TestClient(app)
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={"email": aff_email, "password": PASSWORD, "display_name": "Creator Sam", "account_role": "affiliate"},
+    )
+    assert reg.status_code == 201, reg.text
+    assert reg.json()["account_role"] == "affiliate"
+
+    # Can log back in later with the same email & password.
+    client.post("/api/v1/auth/logout")
+    logged = client.post("/api/v1/auth/login", json={"email": aff_email, "password": PASSWORD})
+    assert logged.status_code == 200 and logged.json()["account_role"] == "affiliate"
+    assert client.get("/api/v1/auth/me").json()["account_role"] == "affiliate"
+
+    # Has full access to their partner affiliate dashboard, with friend-token referrals turned off.
+    prog = client.get("/api/v1/referrals/me")
+    assert prog.status_code == 200 and prog.json()["friend"]["enabled"] is False
+    applied = client.post(
+        "/api/v1/referrals/partner/apply",
+        json={"code": f"SAM{RUN_ID[:4].upper()}", "audience": "YouTube ad creative channel (45k subscribers)"},
+    )
+    assert applied.status_code == 201 or applied.status_code == 200
+    assert applied.json()["status"] == "pending"
+
+    # Strictly blocked from workspace/render/billing/team (403) and admin panel (404).
+    assert client.get("/api/v1/auth/batches").status_code == 403
+    assert client.get("/api/v1/auth/subscription").status_code == 403
+    assert client.get("/api/v1/billing/orders").status_code == 403
+    assert client.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro"}).status_code == 403
+    assert client.get("/api/v1/billing/refunds").status_code == 403
+    assert client.get("/api/v1/team").status_code == 403
+    assert client.get("/api/v1/admin/settings").status_code == 404

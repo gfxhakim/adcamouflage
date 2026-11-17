@@ -548,6 +548,10 @@ def test_whop_payment_failed_and_refund_webhooks(whop_env):
     assert _post_whop(failed_evt).json() == {"ok": True, "failed_order": pending_id}
     assert _order(pending_id).status == "invalid"
 
+    # Unknown test/synthetic payment.failed events acknowledge as "unknown payment", never as an unhandled event type.
+    unknown_fail = _whop_event("unknown-fail-" + RUN_ID, event_type="payment.failed", payment_id="pay_test_999")
+    assert _post_whop(unknown_fail).json() == {"ok": True, "ignored": "unknown payment"}
+
     paid_id = _checkout(client, "pro")["order_id"]
     assert _post_whop(
         _whop_event(paid_id, payment_id="pay_ok_wh_1", variant_id="plan_pro", extra_data={"membership": {"id": "mem_wh_r1"}})

@@ -4,6 +4,7 @@ import { CmsOrder, CmsSection } from "@/components/cms/Cms";
 import { ContentProvider } from "@/components/cms/ContentProvider";
 
 import BeforeAfter from "@/components/landing/BeforeAfter";
+import AffiliateSection from "@/components/landing/AffiliateSection";
 import ClosingCta from "@/components/landing/ClosingCta";
 import CursorRing from "@/components/landing/CursorRing";
 import Faq from "@/components/landing/Faq";
@@ -14,6 +15,7 @@ import SiteFooter from "@/components/landing/SiteFooter";
 import LandingNav from "@/components/LandingNav";
 import PricingSection from "@/components/PricingSection";
 import SiteHeader from "@/components/SiteHeader";
+import { loadPublicAffiliateProgram } from "@/lib/referrals";
 import { loadPublishedContent } from "@/lib/siteContent";
 import { publishedFaqs } from "@/components/landing/faqData";
 import { jsonLd, siteUrl } from "@/lib/seo";
@@ -198,7 +200,11 @@ export default async function LandingPage() {
   // Everyone sees the visitor version of this page, and every start button
   // opens the login page, which also offers to create an account.
   const startHref = "/login";
-  const [pricing, content] = await Promise.all([loadPricing(), loadPublishedContent("landing")]);
+  const [pricing, content, affiliateProgram] = await Promise.all([
+    loadPricing(),
+    loadPublishedContent("landing"),
+    loadPublicAffiliateProgram(true),
+  ]);
 
   return (
     <ContentProvider namespace="landing" initial={content}>
@@ -244,6 +250,7 @@ export default async function LandingPage() {
         />
         {/* Outside the ordered list, so it shows even when a section order was already saved in Admin. */}
         <OurStory />
+        <AffiliateSection program={affiliateProgram} />
       </main>
       <SiteFooter />
     </ContentProvider>

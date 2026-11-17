@@ -126,7 +126,8 @@ export function SiteFooter() {
               © {new Date().getFullYear()} {name}. <T k="footer.rights">All rights reserved.</T>
             </p>
             {/* Fixed links: Meta and Google expect these on every page that runs ads. */}
-            <nav aria-label="Legal" className="flex gap-4">
+            <nav aria-label="Legal" className="flex flex-wrap gap-4">
+              <Link href="/affiliates" className="hover:text-white">Affiliates</Link>
               <Link href="/guides" className="hover:text-white">Guides</Link>
               <Link href="/privacy" className="hover:text-white">Privacy</Link>
               <Link href="/terms" className="hover:text-white">Terms</Link>

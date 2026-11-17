@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import affiliates, audit, mailer, notify, whop
-from .accounts import clear_session_cookie, current_user, require_admin
+from .accounts import clear_session_cookie, require_admin, require_studio_user
 from .activity import log_activity
 from .app_settings import currency, get_setting, set_setting
 from .db import Order, RefundRequest, TokenLedger, User, get_db
@@ -238,7 +238,7 @@ def check_address(network: str, address: str) -> str:
 
 
 @router.get("")
-def my_refunds(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def my_refunds(user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> dict[str, Any]:
     """Every paid or refunded order with whether a refund can be asked for, and any request on it."""
 
     rules = get_rules(db)
@@ -295,7 +295,7 @@ def my_refunds(user: User = Depends(current_user), db: Session = Depends(get_db)
 def request_refund(
     payload: RefundIn,
     response: Response,
-    user: User = Depends(current_user),
+    user: User = Depends(require_studio_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     order = db.get(Order, payload.order_id)
@@ -368,7 +368,7 @@ def request_refund(
 
 
 @router.post("/{request_id}/withdraw")
-def withdraw_refund(request_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+def withdraw_refund(request_id: int, user: User = Depends(require_studio_user), db: Session = Depends(get_db)) -> dict[str, Any]:
     row = db.get(RefundRequest, request_id)
     if row is None or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Request not found.")

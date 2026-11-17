@@ -65,6 +65,8 @@ class User(Base):
     # Admins can open /admin. ADCAM_ADMIN_EMAILS also grants it, which is how
     # the very first admin is created.
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # "customer" gets full studio access; "affiliate" only gets their partner dashboard.
+    account_role: Mapped[str] = mapped_column(String(24), default="customer", nullable=False)
     # A label from plans.PLANS; the quota below is what is actually enforced.
     plan: Mapped[str] = mapped_column(String(32), default="unlimited", nullable=False)
     # Files a user may process per calendar month. None means unlimited.
@@ -719,6 +721,7 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("orders", "payer_hash", "VARCHAR(64)"),
     ("users", "whop_membership_id", "VARCHAR(128)"),
     ("orders", "whop_membership_id", "VARCHAR(128)"),
+    ("users", "account_role", "VARCHAR(24) NOT NULL DEFAULT 'customer'"),
 ]
 
 

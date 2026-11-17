@@ -113,8 +113,17 @@ export default function PlanPage() {
 
   const load = useCallback(async () => {
     try {
-      const [profile, subscription, history, orderList, program] = await Promise.all([
-        fetchMe(),
+      const profile = await fetchMe();
+      if (!profile) {
+        await signOut().catch(() => undefined);
+        window.location.assign("/");
+        return;
+      }
+      if (profile.account_role === "affiliate") {
+        window.location.assign("/affiliates/dashboard");
+        return;
+      }
+      const [subscription, history, orderList, program] = await Promise.all([
         fetchSubscription(),
         fetchMyBatches(),
         fetchOrders().catch(() => [] as Order[]),
@@ -122,7 +131,7 @@ export default function PlanPage() {
       ]);
       setReferrals(program);
       // Same recovery as the workspace: a cookie the API rejects is cleared first.
-      if (!profile || !subscription) {
+      if (!subscription) {
         await signOut().catch(() => undefined);
         window.location.assign("/");
         return;

@@ -11,8 +11,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import affiliates, audit, costs, meta_capi
-from .accounts import current_user, optional_user, require_admin
+from .accounts import current_user, is_affiliate_only, optional_user, require_admin, require_studio_user
 from .activity import log_activity
+from .app_settings import currency
 from .config import settings
 from .db import (
     AffiliateCommission,
@@ -93,7 +94,7 @@ class ApplyIn(BaseModel):
 
 @router.post("/apply")
 def apply_code(
-    payload: ApplyIn, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)
+    payload: ApplyIn, request: Request, user: User = Depends(require_studio_user), db: Session = Depends(get_db)
 ) -> dict[str, Any]:
     """A signed-in customer types a coupon before their first payment."""
 
@@ -219,9 +220,46 @@ def _partner_block(db: Session, user: User, program: dict[str, Any]) -> dict[str
     return block
 
 
+@router.get("/public-program")
+def public_program(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Live partner affiliate strategy numbers for the public /affiliates and landing pages."""
+
+    program = affiliates.get_program(db)
+    partner_cfg = program[PARTNER]
+    plans = get_token_plans(db)
+    return {
+        "link_days": program["link_days"],
+        "currency": currency(db),
+        "plans": [
+            {"id": p.id, "label": p.label, "price": p.price}
+            for p in plans.values()
+            if p.id in partner_cfg["plans"]
+        ],
+        "partner": {
+            "enabled": bool(partner_cfg["enabled"]),
+            "applications_open": bool(partner_cfg["applications_open"]),
+            "discount_pct": partner_cfg["discount_pct"],
+            "plans": partner_cfg["plans"],
+            "tiers": partner_cfg["tiers"],
+            "hold_days": partner_cfg["hold_days"],
+            "min_payout": partner_cfg["min_payout"],
+        },
+    }
+
+
 @router.get("/me")
 def my_program(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
     program = affiliates.get_program(db)
+    if is_affiliate_only(user):
+        friend = _friend_block(db, user, program)
+        friend["enabled"] = False
+        friend["eligible"] = False
+        return {
+            "link_days": program["link_days"],
+            "my_offer": None,
+            "friend": friend,
+            "partner": _partner_block(db, user, program),
+        }
     return {
         "link_days": program["link_days"],
         "my_offer": _my_offer(db, user, program),

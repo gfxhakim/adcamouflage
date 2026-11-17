@@ -66,9 +66,15 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   const [current, setCurrent] = useState<UserProfile | null>(null);
 
   const next = params.get("next");
+  const isAffiliateFlow =
+    params.get("role") === "affiliate" || (next?.startsWith("/affiliates/dashboard") ?? false);
   const refundSubmitted = mode === "signin" && params.get("refund") === "requested";
-  const destination = safeDestination(next);
-  const otherPage = (mode === "signup" ? "/login" : "/signup") + (next ? `?next=${encodeURIComponent(next)}` : "");
+  const destination = isAffiliateFlow && !next ? "/affiliates/dashboard" : safeDestination(next);
+  const otherParams = new URLSearchParams();
+  if (next) otherParams.set("next", next);
+  if (isAffiliateFlow) otherParams.set("role", "affiliate");
+  const otherQs = otherParams.toString();
+  const otherPage = (mode === "signup" ? "/login" : "/signup") + (otherQs ? `?${otherQs}` : "");
 
   useEffect(() => {
     if (mode !== "signin") return;
@@ -84,16 +90,28 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   }, [mode]);
 
   // The API set an httpOnly cookie; a full navigation lets the Next middleware
-  // see it. Admins go to the admin panel, everyone else to the workspace.
-  const enter = useCallback(async () => {
-    window.location.assign(!next && (await isAdmin()) ? "/admin" : destination);
-  }, [destination, next]);
+  // see it. Admins go to /admin, affiliate accounts to /affiliates/dashboard,
+  // and studio users to the workspace.
+  const enter = useCallback(
+    async (profile?: UserProfile | null) => {
+      if (!next && (await isAdmin())) {
+        window.location.assign("/admin");
+        return;
+      }
+      if (profile?.account_role === "affiliate") {
+        window.location.assign("/affiliates/dashboard");
+        return;
+      }
+      window.location.assign(destination);
+    },
+    [destination, next],
+  );
 
   const continueSignedIn = useCallback(async () => {
     if (busy) return;
     setBusy(true);
-    await enter();
-  }, [busy, enter]);
+    await enter(current);
+  }, [busy, current, enter]);
 
   const submit = useCallback(
     async (event: React.FormEvent) => {
@@ -109,20 +127,27 @@ export function AuthPanel({ mode }: { mode: Mode }) {
 
       setBusy(true);
       try {
+        let profile: UserProfile | null = null;
         if (mode === "signup") {
-          const result = await signUp(email.trim(), password, displayName.trim());
+          const result = await signUp(
+            email.trim(),
+            password,
+            displayName.trim(),
+            isAffiliateFlow ? "affiliate" : "customer",
+          );
           if (isPending(result)) {
             setPendingEmail(result.email);
             setCode("");
             setBusy(false);
             return;
           }
+          profile = result;
           // Same event id as the server's Conversions API copy, so Meta counts it once.
           await Promise.race([trackRegistration(result.id), new Promise((r) => setTimeout(r, 800))]);
         } else {
-          await signIn(email.trim(), password);
+          profile = await signIn(email.trim(), password);
         }
-        await enter();
+        await enter(profile);
       } catch (caught) {
         if (caught instanceof ApiError && caught.status === 403 && mode === "signin") {
           // Signed up but never entered the code: the server sent a new one.
@@ -135,7 +160,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         setBusy(false);
       }
     },
-    [busy, displayName, email, enter, mode, password],
+    [busy, displayName, email, enter, isAffiliateFlow, mode, password],
   );
 
   const confirm = useCallback(
@@ -151,7 +176,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       try {
         const profile = await verifyEmail(pendingEmail, code);
         await Promise.race([trackRegistration(profile.id), new Promise((r) => setTimeout(r, 800))]);
-        await enter();
+        await enter(profile);
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "Something went wrong. Try again.");
         setBusy(false);
@@ -226,11 +251,19 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     <NeonCard glow padding="lg" radius="xl" className="w-full max-w-md">
       <div className="mb-6">
         <h1 className="font-display text-4xl font-normal leading-tight text-black">
-          {mode === "signup" ? "Create your account" : "Log in"}
+          {mode === "signup"
+            ? isAffiliateFlow
+              ? "Join Affiliate Program"
+              : "Create your account"
+            : isAffiliateFlow
+              ? "Affiliate Log in"
+              : "Log in"}
         </h1>
         <p className="mt-1.5 text-sm text-ink-muted">
           {mode === "signup"
-            ? "Your assets and outputs are visible only to you."
+            ? isAffiliateFlow
+              ? "Sign up with your email for access to your Affiliate Dashboard only — track clicks, conversions, and payouts."
+              : "Your assets and outputs are visible only to you."
             : "Sign in to your account, or create a new one below."}
         </p>
       </div>
@@ -248,7 +281,11 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         </div>
       ) : null}
 
-      <SocialButtons next={next} mode={mode} />
+      <SocialButtons
+        next={isAffiliateFlow && !next ? "/affiliates/dashboard" : next}
+        mode={mode}
+        role={isAffiliateFlow ? "affiliate" : undefined}
+      />
 
       {refundSubmitted ? (
         <div

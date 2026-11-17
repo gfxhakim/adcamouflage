@@ -11,6 +11,7 @@ export interface UserProfile {
   display_name: string | null;
   created_at: string;
   last_login_at: string | null;
+  account_role?: "customer" | "affiliate";
   plan: string;
   plan_label: string;
   /** Files per calendar month; null means unlimited. */
@@ -57,8 +58,15 @@ export async function fetchProviders(): Promise<AuthProviders> {
 }
 
 /** Where the "Continue with Google" button goes; the API redirects to Google. */
-export function oauthStartUrl(provider: "google", next?: string | null): string {
-  const query = next ? `?next=${encodeURIComponent(next)}` : "";
+export function oauthStartUrl(
+  provider: "google",
+  next?: string | null,
+  role?: "customer" | "affiliate",
+): string {
+  const qs = new URLSearchParams();
+  if (next) qs.set("next", next);
+  if (role === "affiliate") qs.set("role", "affiliate");
+  const query = qs.toString() ? `?${qs.toString()}` : "";
   return `${API_BASE}/api/v1/auth/oauth/${provider}/start${query}`;
 }
 
@@ -100,11 +108,17 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function signUp(email: string, password: string, displayName?: string) {
+export function signUp(
+  email: string,
+  password: string,
+  displayName?: string,
+  accountRole: "customer" | "affiliate" = "customer",
+) {
   return post<UserProfile | PendingSignup>("/api/v1/auth/register", {
     email,
     password,
     display_name: displayName || null,
+    account_role: accountRole,
   });
 }
 

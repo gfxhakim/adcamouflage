@@ -34,7 +34,15 @@ const BUTTON =
  * "Continue with Google" button, shown once the server has Google keys,
  * followed by an "or" divider. Renders nothing when it is not set up, so the email form looks exactly as before.
  */
-export default function SocialButtons({ next, mode }: { next: string | null; mode: "signin" | "signup" }) {
+export default function SocialButtons({
+  next,
+  mode,
+  role,
+}: {
+  next: string | null;
+  mode: "signin" | "signup";
+  role?: "customer" | "affiliate";
+}) {
   const [providers, setProviders] = useState<AuthProviders | null>(null);
 
   useEffect(() => {
@@ -54,7 +62,7 @@ export default function SocialButtons({ next, mode }: { next: string | null; mod
     <div className="mb-5">
       <div className="space-y-3">
         {providers.google ? (
-          <a href={oauthStartUrl("google", next)} className={BUTTON}>
+          <a href={oauthStartUrl("google", next, role)} className={BUTTON}>
             <GoogleLogo />
             {verb} Google
           </a>
