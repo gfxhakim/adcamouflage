@@ -571,6 +571,9 @@ def lookup_promo_code(
     promo_type = str(getattr(matched, "promo_type", "percentage") or "percentage").strip().lower()
     if promo_type not in ("percentage", "flat_amount"):
         promo_type = "percentage"
+    raw_amount = float(getattr(matched, "amount_off", 0.0) or 0.0)
+    # Whop's PromoCodeListItem returns percentage discounts as a decimal fraction (0.2 -> 20%).
+    normalized_amount = round(raw_amount * 100.0, 2) if (promo_type == "percentage" and 0.0 < raw_amount <= 1.0) else round(raw_amount, 2)
     res = {
         "verified": True,
         "valid": True,
@@ -578,7 +581,7 @@ def lookup_promo_code(
         "id": str(getattr(matched, "id", "") or "").strip(),
         "code": clean_code,
         "promo_type": promo_type,
-        "amount_off": round(float(getattr(matched, "amount_off", 0.0) or 0.0), 2),
+        "amount_off": normalized_amount,
         "currency": str(getattr(matched, "currency", None) or "usd").strip().lower(),
         "new_users_only": bool(getattr(matched, "new_users_only", False)),
         "duration": getattr(matched, "duration", None),

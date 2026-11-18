@@ -642,7 +642,7 @@ def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
                         id="promo_live_1",
                         code=code,
                         promo_type="percentage",
-                        amount_off=20.0,
+                        amount_off=0.2,
                         currency="usd",
                         status="active",
                         expires_at=None,
