@@ -127,9 +127,9 @@ export function PricingSection({
             <motion.div
               key={plan.id}
               className={cn(
-                "group relative flex flex-col rounded-3xl border p-6 transition-colors duration-300",
+                "group relative flex flex-col overflow-hidden rounded-3xl border p-6 transition-all duration-300",
                 popular
-                  ? "border-meta-500 bg-gradient-to-b from-meta-900 to-black shadow-[0_0_0_1px_rgba(8,102,255,0.4),0_30px_80px_-30px_rgba(8,102,255,0.8)] xl:-my-3"
+                  ? "pro-glass border-meta-200/45 xl:-my-3"
                   : "border-white/10 bg-white/[0.04] hover:border-meta-500/50",
               )}
               initial={{ opacity: 0, y: 32 }}
@@ -137,22 +137,47 @@ export function PricingSection({
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.7, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
             >
-              <div className="flex items-center justify-between gap-2">
+              {popular ? (
+                <>
+                  {/* Specular top edge, frosted glass reflection dome & animated light sweep */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/85 to-transparent"
+                  />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-meta-300/25 blur-3xl transition-opacity duration-500 group-hover:opacity-100"
+                  />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -bottom-16 -left-10 h-44 w-44 rounded-full bg-meta-500/25 blur-3xl"
+                  />
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.14] via-white/[0.02] to-transparent opacity-80"
+                  />
+                  <span
+                    aria-hidden
+                    className="pro-shine pointer-events-none absolute inset-y-0 -left-1/3 w-2/3"
+                  />
+                </>
+              ) : null}
+              <div className="relative z-10 flex items-center justify-between gap-2">
                 <span className="font-mono text-[11px] text-white/45">0{index + 1}</span>
                 {popular ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-black">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,255,255,0.45)]">
                     <CmsIcon k="pricing.popular.icon" fallback={Sparkles} className="h-3 w-3 text-meta-500" aria-hidden />
                     <T k="pricing.popular">Most popular</T>
                   </span>
                 ) : null}
               </div>
-              <h3 className="mt-4 text-2xl font-semibold tracking-tight text-white">{plan.label}</h3>
-              <T k={`pricing.blurb.${plan.id}`} long as="p" className="mt-1 min-h-[2.5rem] text-xs leading-relaxed text-white/55">
+              <h3 className="relative z-10 mt-4 text-2xl font-semibold tracking-tight text-white">{plan.label}</h3>
+              <T k={`pricing.blurb.${plan.id}`} long as="p" className="relative z-10 mt-1 min-h-[2.5rem] text-xs leading-relaxed text-white/55">
                 {BLURBS[plan.id] ?? ""}
               </T>
 
               {regular ? (
-                <p className="mt-6 flex flex-wrap items-center gap-2">
+                <p className="relative z-10 mt-6 flex flex-wrap items-center gap-2">
                   <span className="text-lg font-medium text-white/45 line-through decoration-red-400/80 decoration-2">
                     <span className="sr-only">Regular price </span>
                     {price(regular, currency)}
@@ -162,26 +187,33 @@ export function PricingSection({
                   </span>
                 </p>
               ) : null}
-              <p className={cn("flex items-baseline gap-1.5", regular ? "mt-1" : "mt-6")}>
+              <p className={cn("relative z-10 flex items-baseline gap-1.5", regular ? "mt-1" : "mt-6")}>
                 {regular ? <span className="sr-only">Launch price </span> : null}
                 <span className="text-5xl font-semibold tracking-[-0.05em] text-white">
                   {price(plan.price, currency)}
                 </span>
                 <T k="pricing.perMonth" className="text-sm text-white/45">/mo</T>
               </p>
-              <p className="mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
+              <p className="relative z-10 mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-meta-400" aria-hidden />
                 {number(plan.tokens)} <T k="pricing.tokensWord">tokens</T> · {number(plan.generations)} <T k="pricing.generationsWord">generations</T>
               </p>
 
-              <dl className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-xs">
+              <dl
+                className={cn(
+                  "relative z-10 mt-5 rounded-2xl border p-3 text-xs",
+                  popular
+                    ? "border-white/20 bg-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
+                    : "border-white/10 bg-white/[0.03]",
+                )}
+              >
                 <div>
                   <T k="pricing.rollover" as="dt" className="text-white/45">Rollover</T>
                   <dd className="font-semibold text-white">{rolloverText(plan)}</dd>
                 </div>
               </dl>
 
-              <ul className="mt-5 flex flex-1 flex-col gap-2.5 border-t border-white/10 pt-5">
+              <ul className="relative z-10 mt-5 flex flex-1 flex-col gap-2.5 border-t border-white/10 pt-5">
                 {included.map(({ item: feature, key, id }) => {
                   // The engine and metadata lines follow each plan's switches in Admin > Token plans.
                   const gate = featureForLine(feature);
@@ -243,8 +275,10 @@ export function PricingSection({
                 label="Choose"
                 onClick={() => reportPlanClick(plan.id)}
                 className={cn(
-                  "group/btn mt-7 flex w-full items-center justify-between rounded-full py-1.5 pl-5 pr-1.5 text-sm font-semibold transition-colors",
-                  popular ? "bg-white text-black hover:bg-meta-50" : "bg-white/[0.08] text-white hover:bg-white/[0.14]",
+                  "group/btn relative z-10 mt-7 flex w-full items-center justify-between rounded-full py-1.5 pl-5 pr-1.5 text-sm font-semibold transition-all",
+                  popular
+                    ? "bg-white text-black shadow-[0_6px_28px_rgba(102,163,255,0.45)] hover:bg-meta-50"
+                    : "bg-white/[0.08] text-white hover:bg-white/[0.14]",
                 )}
               >
                 {(label) => (

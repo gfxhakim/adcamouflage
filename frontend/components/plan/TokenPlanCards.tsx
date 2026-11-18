@@ -80,8 +80,24 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
               padding="md"
               radius="lg"
               className="h-full"
-              innerClassName="flex h-full flex-col"
+              innerClassName={clsx(
+                "relative flex h-full flex-col overflow-hidden",
+                plan.id === "pro" &&
+                  "bg-gradient-to-b from-meta-50/80 via-white/85 to-white/95 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:from-[#0c2e70]/75 dark:via-[#07183d]/70 dark:to-[#050a16]/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]",
+              )}
             >
+              {plan.id === "pro" ? (
+                <>
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent"
+                  />
+                  <span
+                    aria-hidden
+                    className="pro-shine-subtle pointer-events-none absolute inset-y-0 -left-1/3 w-2/3"
+                  />
+                </>
+              ) : null}
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-black">{plan.label}</p>
                 {isCurrent ? (
