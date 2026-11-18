@@ -70,23 +70,37 @@ export default function AdminPage() {
 
   // A different page always opens at its top. Left alone, the window keeps the last page's scroll:
   // a page whose data is already there (the Dashboard) opened as far down as that, and a search
-  // jump that was still gliding carried on down the new page.
+  // jump that was still gliding carried on down the new page. Back and Forward are the exception
+  // (`keepPlace`): the browser has just put the window back where that page was left.
   const shownTab = useRef<TabId | null>(null); // null until the first page is on screen
-  const showTab = useCallback((id: TabId) => {
-    if (shownTab.current !== null && shownTab.current !== id) window.scrollTo({ top: 0, behavior: "instant" });
+  const showTab = useCallback((id: TabId, keepPlace = false) => {
+    if (!keepPlace && shownTab.current !== null && shownTab.current !== id) window.scrollTo({ top: 0, behavior: "instant" });
     shownTab.current = id;
     setTab(id);
   }, []);
 
   useEffect(() => {
+    // Did Back or Forward change the address, or a new one? Only the Navigation API can tell;
+    // a browser without it opens the page at its top after Back and Forward as well.
+    let traversed = false;
+    const navigation = (window as unknown as { navigation?: EventTarget }).navigation;
+    const noteNavigation = (event: Event) => {
+      const { hashChange, navigationType } = event as Event & { hashChange?: boolean; navigationType?: string };
+      // Only the navigation that changes the #page counts: after Back, the router rewrites the
+      // history entry (a "replace") before the hashchange event arrives.
+      if (hashChange) traversed = navigationType === "traverse";
+    };
+    navigation?.addEventListener("navigate", noteNavigation);
     const syncTab = () => {
       dropJump();
-      showTab(tabFromHash());
+      showTab(tabFromHash(), traversed);
+      traversed = false;
     };
     showTab(tabFromHash());
     window.addEventListener("hashchange", syncTab);
     return () => {
       window.removeEventListener("hashchange", syncTab);
+      navigation?.removeEventListener("navigate", noteNavigation);
       dropJump();
     };
   }, [dropJump, showTab]);
