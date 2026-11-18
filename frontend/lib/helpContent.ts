@@ -60,7 +60,7 @@ export const HELP_TIPS: Record<HelpStepId, HelpTip[]> = {
     {
       anchor: "settings.platform",
       title: "Where will the creative run?",
-      body: "Meta, TikTok or YouTube. This sets the aspect ratio and delivery rules the variations are built for.",
+      body: "Meta Ads, TikTok Ads or YouTube Ads. This sets the aspect ratio and delivery rules the variations are built for.",
     },
     {
       anchor: "settings.profile",
@@ -111,7 +111,7 @@ export const HELP_GUIDE: HelpGuideSection[] = [
     title: "Choose settings",
     meta: "Platform · profile · copies",
     points: [
-      "Platform: Meta, TikTok or YouTube sets the frame and length rules.",
+      "Platform: Meta Ads, TikTok Ads or YouTube Ads sets the frame and length rules.",
       "Profile: Light for subtle polish, Balanced by default, Studio Pro (Gen-4) for subtitle-safe precision, Dynamic or Max Studio for maximum variation.",
       "Copies: how many independent variations you want per upload.",
     ],

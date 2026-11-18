@@ -60,12 +60,12 @@ def locked_features(db: Session, user: User) -> list[str]:
 
 
 def validate_plan_platform(options: MutationOptions, locked: list[str]) -> None:
-    """Reject TikTok or YouTube batch requests when the paying plan only allows Meta."""
+    """Reject TikTok Ads or YouTube Ads batch requests when the paying plan only allows Meta Ads."""
 
     if "multi_platform" in locked and options.platform is not Platform.META:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="TikTok and YouTube options are only available on Pro and Max plans. Select Meta or upgrade your plan.",
+            detail="TikTok Ads and YouTube Ads are only available on Pro and Max plans. Select Meta Ads or upgrade your plan.",
         )
 
 

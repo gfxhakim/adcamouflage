@@ -27,7 +27,7 @@ export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyo
     fields: ["strip_metadata"],
   },
   multi_platform: {
-    label: "TikTok & YouTube",
+    label: "TikTok Ads & YouTube Ads",
     fields: [],
   },
 };
@@ -44,7 +44,7 @@ export function featureForLine(line: string): PlanFeatureId | null {
 
 /** Platform availability headline shown on Starter vs Pro/Max plan cards. */
 export function platformLineForPlan(plan: { id: string; features?: Partial<Record<PlanFeatureId, boolean>> }): string {
-  return planIncludes(plan, "multi_platform") ? "Meta, TikTok & YouTube" : "Meta";
+  return planIncludes(plan, "multi_platform") ? "Meta Ads, TikTok Ads & YouTube Ads" : "Meta Ads";
 }
 
 /** The feature (if any) that locks this option for the given locked set. */

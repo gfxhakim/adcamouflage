@@ -11,9 +11,9 @@ import type { PlatformId } from "@/lib/types";
 export type { PlatformId };
 
 const PLATFORMS: { id: PlatformId; label: string; icon: LucideIcon }[] = [
-  { id: "meta", label: "Meta", icon: Facebook },
-  { id: "tiktok", label: "TikTok", icon: Music2 },
-  { id: "youtube", label: "YouTube", icon: Youtube },
+  { id: "meta", label: "Meta Ads", icon: Facebook },
+  { id: "tiktok", label: "TikTok Ads", icon: Music2 },
+  { id: "youtube", label: "YouTube Ads", icon: Youtube },
 ];
 
 const STORAGE_KEY = "adcam.platform";
@@ -28,8 +28,8 @@ function readSaved(): PlatformId | null {
 }
 
 /**
- * Which platform this batch is for — Meta, TikTok or YouTube.
- * Starter only allows Meta exports; TikTok and YouTube unlock on Pro & Max.
+ * Which platform this batch is for — Meta Ads, TikTok Ads or YouTube Ads.
+ * Starter only allows Meta Ads exports; TikTok Ads and YouTube Ads unlock on Pro & Max.
  */
 export function PlatformPicker({
   value,
@@ -88,7 +88,7 @@ export function PlatformPicker({
               disabled={disabled || optionLocked}
               title={
                 optionLocked
-                  ? "Starter plan only supports Meta. Upgrade to Pro or Max to unlock TikTok & YouTube."
+                  ? "Starter plan only supports Meta Ads. Upgrade to Pro or Max to unlock TikTok Ads & YouTube Ads."
                   : undefined
               }
               onClick={() => choose(id)}
@@ -113,7 +113,7 @@ export function PlatformPicker({
       </div>
       {multiPlatformLocked ? (
         <p className="mt-2 text-[11px] text-ink-faint">
-          Starter plan supports Meta only. Upgrade to Pro or Max for TikTok and YouTube.
+          Starter plan supports Meta Ads only. Upgrade to Pro or Max for TikTok Ads and YouTube Ads.
         </p>
       ) : null}
     </section>
