@@ -148,6 +148,7 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                   {formatMoney(plan.price, currency)} / 30 days
                 </p>
               ) : null}
+              <p className="mt-0.5 text-[11px] text-ink-faint">+ applicable sales tax / VAT calculated at checkout</p>
 
               <ul className="mt-3 space-y-1.5 text-xs text-ink-muted">
                 <li className="flex items-center gap-1.5">

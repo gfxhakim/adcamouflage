@@ -702,39 +702,70 @@ export default function PlanPage() {
           <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-black/10 bg-white p-5 shadow-2xl sm:p-6">
             {checkoutStage === "checkout" ? (
               <>
-                <div className="mb-4 flex items-start justify-between gap-3 border-b border-black/[0.06] pb-3.5">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">
-                      <Lock className="h-3 w-3 text-meta-500" aria-hidden /> Secure Whop checkout
-                    </p>
-                    <h2 id="whop-checkout-title" className="mt-1 truncate text-base font-semibold text-black">
-                      {activeCheckout.label} · {formatMoney(activeCheckout.amount, currencyRef.current)}
-                    </h2>
-                    {activeCheckout.promoCode && activeCheckout.discount && activeCheckout.discount > 0 ? (
-                      <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
-                        Code {activeCheckout.promoCode} applied · saved{" "}
-                        {formatMoney(activeCheckout.discount, currencyRef.current)}
-                        {activeCheckout.originalAmount
-                          ? ` off ${formatMoney(activeCheckout.originalAmount, currencyRef.current)}`
-                          : ""}
+                <div className="mb-4 border-b border-black/[0.06] pb-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-ink-subtle">
+                        <Lock className="h-3 w-3 text-meta-500" aria-hidden /> Secure Whop checkout
                       </p>
-                    ) : activeCheckout.whopPromoToPrefill ? (
-                      <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
-                        Code {activeCheckout.whopPromoToPrefill} pre-applied in Whop checkout
+                      <h2 id="whop-checkout-title" className="mt-1 truncate text-base font-semibold text-black">
+                        {activeCheckout.label} · {formatMoney(activeCheckout.amount, currencyRef.current)}
+                      </h2>
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        Includes {formatTokens(activeCheckout.tokens)} tokens · instant activation after payment
                       </p>
-                    ) : null}
-                    <p className="text-xs text-ink-muted">
-                      Includes {formatTokens(activeCheckout.tokens)} tokens · instant activation after payment
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close checkout"
+                      onClick={() => setActiveCheckout(null)}
+                      className="rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-black/[0.08] bg-[#F8F9FB] px-3.5 py-2.5 text-xs">
+                    <div className="space-y-1">
+                      {activeCheckout.promoCode && activeCheckout.discount && activeCheckout.discount > 0 ? (
+                        <>
+                          {activeCheckout.originalAmount ? (
+                            <div className="flex items-center justify-between gap-3 text-ink-muted">
+                              <span>Plan price</span>
+                              <span className="tabular-nums">
+                                {formatMoney(activeCheckout.originalAmount, currencyRef.current)}
+                              </span>
+                            </div>
+                          ) : null}
+                          <div className="flex items-center justify-between gap-3 font-medium text-emerald-700">
+                            <span>Promo code ({activeCheckout.promoCode})</span>
+                            <span className="tabular-nums">
+                              −{formatMoney(activeCheckout.discount, currencyRef.current)}
+                            </span>
+                          </div>
+                        </>
+                      ) : activeCheckout.whopPromoToPrefill ? (
+                        <div className="flex items-center justify-between gap-3 font-medium text-emerald-700">
+                          <span>Promo code ({activeCheckout.whopPromoToPrefill})</span>
+                          <span>Pre-applied below</span>
+                        </div>
+                      ) : null}
+                      <div className="flex items-center justify-between gap-3 font-semibold text-black">
+                        <span>Subtotal (before tax)</span>
+                        <span className="tabular-nums">
+                          {formatMoney(activeCheckout.amount, currencyRef.current)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-ink-muted">
+                        <span>Sales tax / VAT</span>
+                        <span className="text-right font-medium text-black/75">Calculated by Whop at checkout</span>
+                      </div>
+                    </div>
+                    <p className="mt-2 border-t border-black/[0.06] pt-2 text-[11px] leading-snug text-ink-subtle">
+                      Whop adds applicable local sales tax or VAT based on your billing location. Click{" "}
+                      <span className="font-medium text-black">Promo code &amp; details</span> below to expand the exact tax line.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close checkout"
-                    onClick={() => setActiveCheckout(null)}
-                    className="rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black"
-                  >
-                    <X className="h-4 w-4" aria-hidden />
-                  </button>
                 </div>
 
                 <WhopCheckout

@@ -237,6 +237,9 @@ export function PricingSection({
                   {price(plan.price, currency)}/mo
                 </p>
               ) : null}
+              <p className="relative z-10 mt-1 text-[11px] text-white/45">
+                + applicable sales tax / VAT calculated at checkout
+              </p>
               <p className="relative z-10 mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-meta-400" aria-hidden />
                 {number(plan.tokens)} <T k="pricing.tokensWord">tokens</T> · {number(plan.generations)} <T k="pricing.generationsWord">generations</T>
