@@ -29,7 +29,7 @@ function readSaved(): PlatformId | null {
 
 /**
  * Which platform this batch is for — Meta, TikTok or YouTube.
- * Starter only allows Meta Approved exports; TikTok and YouTube unlock on Pro & Max.
+ * Starter only allows Meta exports; TikTok and YouTube unlock on Pro & Max.
  */
 export function PlatformPicker({
   value,

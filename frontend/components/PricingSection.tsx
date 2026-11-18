@@ -68,7 +68,7 @@ function seatsText(plan: TokenPlanCard): string {
 
 /** Seats and platform access are printed per plan, so static duplicates in CMS are skipped. */
 const SEAT_LINE = /single[\s-]*user/i;
-const PLATFORM_LINE = /meta\s*(approved|,)|tiktok|youtube/i;
+const PLATFORM_LINE = /^meta(?:\s*,|\s+and|\s*$)|tiktok|youtube/i;
 
 /** Whole-percent saving of the launch price on the regular price. */
 function savePercent(launch: number, regular: number): number {
