@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from .config import settings
@@ -417,11 +418,175 @@ def refund_payment(
 
 _VARIANT_CACHE: dict[str, tuple[float, dict[str, str]]] = {}
 _VARIANT_TTL_SECONDS = 600.0
+_PROMO_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_PROMO_TTL_SECONDS = 60.0
+
+
+def clear_promo_cache() -> None:
+    """Clear the cached Whop promo code lookup results."""
+
+    _PROMO_CACHE.clear()
 
 
 def _has_live_api_key() -> bool:
     key = settings.whop_api_key.get_secret_value().strip() if settings.whop_api_key else ""
     return bool(key) and "placeholder" not in key.lower()
+
+
+def _is_permission_error(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    if status in (401, 403):
+        return True
+    detail = _error_detail(exc).lower()
+    return any(tok in detail for tok in ("401", "403", "unauthorized", "forbidden", "permission", "scope"))
+
+
+def _parse_iso_dt(raw: Any) -> datetime | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _promo_unusable_reason(item: Any, *, expected_product_id: str) -> str | None:
+    status = str(getattr(item, "status", "") or "").strip().lower()
+    if status != "active":
+        return "inactive"
+    expires_at = _parse_iso_dt(getattr(item, "expires_at", None))
+    if expires_at is not None and expires_at <= datetime.now(timezone.utc):
+        return "expired"
+    unlimited = bool(getattr(item, "unlimited_stock", True))
+    stock = getattr(item, "stock", None)
+    if not unlimited and stock is not None and int(stock) <= 0:
+        return "out_of_stock"
+    product = getattr(item, "product", None)
+    prod_id = str((product.get("id") if isinstance(product, dict) else getattr(product, "id", "")) or "").strip()
+    if prod_id and expected_product_id and prod_id != expected_product_id:
+        return "wrong_product"
+    if float(getattr(item, "amount_off", 0.0) or 0.0) <= 0:
+        return "zero_discount"
+    return None
+
+
+def lookup_promo_code(
+    code: str,
+    *,
+    plan_variants: dict[str, str] | None = None,
+    bypass_cache: bool = False,
+) -> dict[str, Any] | None:
+    """Look up a promo code in Whop's Promo Codes API.
+
+    Returns ``None`` when no live Whop API key or subscription plan mapping is
+    configured. Otherwise returns a structured dict indicating whether Whop
+    confirmed the code (``verified=True/False``) and its real discount rules
+    (``promo_type`` of ``percentage`` or ``flat_amount``, plus ``amount_off``).
+    """
+
+    clean_code = (code or "").strip().upper()
+    if not clean_code or not _has_live_api_key():
+        return None
+
+    variants = {
+        str(k): str(v).strip()
+        for k, v in (plan_variants or settings.whop_plan_subscription).items()
+        if str(v).strip()
+    }
+    if not variants:
+        return None
+
+    cache_key = f"{clean_code}:{'|'.join(f'{k}={v}' for k, v in sorted(variants.items()))}"
+    now = time.monotonic()
+    if not bypass_cache:
+        cached = _PROMO_CACHE.get(cache_key)
+        if cached and now - cached[0] < _PROMO_TTL_SECONDS:
+            return dict(cached[1])
+
+    try:
+        info = retrieve_variant_meta(next(iter(variants.values())))
+    except WhopError as exc:
+        logger.warning("Whop variant meta lookup failed while checking promo %s: %s", clean_code, exc)
+        return {"verified": False, "valid": False, "permission_error": False, "code": clean_code, "plans": []}
+
+    client = _sdk_client()
+    try:
+        page = client.promo_codes.list(account_id=info["account_id"], status="active", first=100)
+    except Exception as exc:  # noqa: BLE001
+        perm_err = _is_permission_error(exc)
+        logger.warning(
+            "Whop promo code lookup failed for %s%s: %s",
+            clean_code,
+            " (check promo_code:read permission on ADCAM_WHOP_API_KEY)" if perm_err else "",
+            _error_detail(exc),
+        )
+        res: dict[str, Any] = {
+            "verified": False,
+            "valid": False,
+            "permission_error": perm_err,
+            "code": clean_code,
+            "plans": [],
+        }
+        if perm_err:
+            _PROMO_CACHE[cache_key] = (now, res)
+        return dict(res)
+
+    items = getattr(page, "data", None)
+    if items is None:
+        items = list(page) if not isinstance(page, list) else page
+
+    matched = None
+    for item in items or []:
+        if str(getattr(item, "code", "") or "").strip().upper() == clean_code:
+            matched = item
+            break
+
+    if matched is None:
+        res = {
+            "verified": True,
+            "valid": False,
+            "permission_error": False,
+            "code": clean_code,
+            "plans": [],
+            "reason": "not_active",
+        }
+        _PROMO_CACHE[cache_key] = (now, res)
+        return dict(res)
+
+    reason = _promo_unusable_reason(matched, expected_product_id=info["product_id"])
+    if reason is not None:
+        res = {
+            "verified": True,
+            "valid": False,
+            "permission_error": False,
+            "code": clean_code,
+            "plans": [],
+            "reason": reason,
+        }
+        _PROMO_CACHE[cache_key] = (now, res)
+        return dict(res)
+
+    promo_type = str(getattr(matched, "promo_type", "percentage") or "percentage").strip().lower()
+    if promo_type not in ("percentage", "flat_amount"):
+        promo_type = "percentage"
+    res = {
+        "verified": True,
+        "valid": True,
+        "permission_error": False,
+        "id": str(getattr(matched, "id", "") or "").strip(),
+        "code": clean_code,
+        "promo_type": promo_type,
+        "amount_off": round(float(getattr(matched, "amount_off", 0.0) or 0.0), 2),
+        "currency": str(getattr(matched, "currency", None) or "usd").strip().lower(),
+        "new_users_only": bool(getattr(matched, "new_users_only", False)),
+        "duration": getattr(matched, "duration", None),
+        "promo_duration_months": getattr(matched, "promo_duration_months", None),
+        "plans": list(variants.keys()),
+    }
+    _PROMO_CACHE[cache_key] = (now, res)
+    return dict(res)
 
 
 def retrieve_variant_meta(whop_plan_id: str) -> dict[str, str]:
@@ -587,31 +752,29 @@ def create_discounted_checkout(
     discount_pct: float = 0.0,
     discount_usd: float = 0.0,
 ) -> dict[str, Any]:
-    """Build a discounted Whop checkout configuration (and sync promo fallback when needed).
+    """Prepare Whop checkout metadata and native ``promoCode`` pre-fill.
 
-    When a coupon/affiliate discount is active and we have a live Whop API key:
-    1. Retrieves ``account_id`` & ``product_id`` from ``base_whop_plan``.
-    2. Creates a ``CheckoutConfiguration`` with an inline renewal variant whose
-       ``initial_price`` is the discounted first-payment total and
-       ``renewal_price`` is the full plan price, carrying full promo/affiliate
-       attribution in Whop ``metadata``.
-    3. If inline variant creation is unavailable on the key/account, falls back
-       to syncing a Whop PromoCode (``ensure_promo_code``) and instructing the
-       frontend embed to prefill ``promoCode``.
+    Never creates synthetic hidden Whop variants for promo reductions: when a
+    promo/partner code is active, we mount the base Whop plan directly with
+    ``promo_to_prefill`` so Whop Checkout validates and applies the promo code
+    configured in Whop before the buyer confirms payment.
     """
+
+    clean_coupon = (coupon_code or "").strip().upper()
+    should_prefill_promo = bool(clean_coupon and (discount_usd > 0 or affiliate_channel == "partner"))
 
     metadata: dict[str, str] = {
         "order_id": order_id,
         "base_whop_plan": base_whop_plan,
         "original_amount_usd": f"{original_amount:.2f}",
     }
-    if coupon_code:
+    if clean_coupon:
         metadata.update(
             {
-                "coupon_code": coupon_code,
-                "promo_code": coupon_code,
+                "coupon_code": clean_coupon,
+                "promo_code": clean_coupon,
                 "affiliate_channel": affiliate_channel or "",
-                "referral_code": coupon_code,
+                "referral_code": clean_coupon,
                 "discount_pct": f"{discount_pct:g}",
                 "discount_usd": f"{discount_usd:.2f}",
             }
@@ -622,84 +785,30 @@ def create_discounted_checkout(
         "checkout_config_id": None,
         "checkout_url": "",
         "metadata": metadata,
-        "promo_to_prefill": coupon_code if discount_usd > 0 and coupon_code else None,
+        "promo_to_prefill": clean_coupon if should_prefill_promo else None,
     }
 
-    if not _has_live_api_key():
+    if should_prefill_promo or not _has_live_api_key() or not return_url:
         return fallback
-
-    if not coupon_code or discount_usd <= 0:
-        if not return_url:
-            return fallback
-        try:
-            info = retrieve_variant_meta(base_whop_plan)
-            cfg = _sdk_client().checkout_configurations.create(
-                account_id=info["account_id"],
-                variant_id=base_whop_plan,
-                metadata=metadata,
-                redirect_url=return_url,
-            )
-            return {
-                "whop_plan": base_whop_plan,
-                "checkout_config_id": str(getattr(cfg, "id", "") or "").strip() or None,
-                "checkout_url": str(getattr(cfg, "purchase_url", "") or "").strip(),
-                "metadata": metadata,
-                "promo_to_prefill": None,
-            }
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Standard Whop CheckoutConfiguration skipped for %s: %s", order_id, _error_detail(exc))
-            return fallback
 
     try:
         info = retrieve_variant_meta(base_whop_plan)
-    except WhopError as exc:
-        logger.warning("Whop variant lookup skipped for order %s: %s", order_id, exc)
-        return fallback
-
-    client = _sdk_client()
-    try:
-        kwargs: dict[str, Any] = {
-            "account_id": info["account_id"],
-            "variant": {
-                "account_id": info["account_id"],
-                "product_id": info["product_id"],
-                "initial_price": round(float(amount), 2),
-                "renewal_price": round(float(original_amount), 2),
-                "billing_type": "renewal",
-                "billing_period": max(1, int(period_days or 30)),
-                "currency": info["currency"],
-                "title": f"{plan_label} ({coupon_code} -{discount_pct:g}%)"[:100],
-                "visibility": "hidden",
-                "unlimited_stock": True,
-            },
+        cfg = _sdk_client().checkout_configurations.create(
+            account_id=info["account_id"],
+            variant_id=base_whop_plan,
+            metadata=metadata,
+            redirect_url=return_url,
+        )
+        return {
+            "whop_plan": base_whop_plan,
+            "checkout_config_id": str(getattr(cfg, "id", "") or "").strip() or None,
+            "checkout_url": str(getattr(cfg, "purchase_url", "") or "").strip(),
             "metadata": metadata,
+            "promo_to_prefill": None,
         }
-        if return_url:
-            kwargs["redirect_url"] = return_url
-        cfg = client.checkout_configurations.create(**kwargs)
-        variant_obj = getattr(cfg, "variant", None)
-        variant_id = str(getattr(variant_obj, "id", "") or "").strip()
-        if variant_id:
-            return {
-                "whop_plan": variant_id,
-                "checkout_config_id": str(getattr(cfg, "id", "") or "").strip() or None,
-                "checkout_url": str(getattr(cfg, "purchase_url", "") or "").strip(),
-                "metadata": metadata,
-                # Discount already baked into initial_price of the checkout variant;
-                # avoid prefilling a Whop promo code so the buyer isn't discounted twice.
-                "promo_to_prefill": None,
-            }
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Whop CheckoutConfiguration create failed for order %s: %s", order_id, _error_detail(exc))
-
-    ensure_promo_code(
-        account_id=info["account_id"],
-        code=coupon_code,
-        discount_pct=discount_pct,
-        base_currency=info["currency"],
-        variant_id=base_whop_plan,
-    )
-    return fallback
+        logger.debug("Standard Whop CheckoutConfiguration skipped for %s: %s", order_id, _error_detail(exc))
+        return fallback
 
 
 def event_type(event: dict[str, Any]) -> str:

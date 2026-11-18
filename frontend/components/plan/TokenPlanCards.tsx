@@ -120,7 +120,11 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                     {formatMoney(plan.price, currency)}
                   </span>
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
-                    −{offer.discount_pct}% · {offer.code}
+                    −
+                    {offer.promo_type === "flat_amount" && (offer.discount_amount ?? 0) > 0
+                      ? formatMoney(offer.discount_amount ?? 0, currency)
+                      : `${offer.discount_pct}%`}{" "}
+                    · {offer.code}
                   </span>
                 </p>
               ) : plan.regular_price && plan.regular_price > plan.price ? (

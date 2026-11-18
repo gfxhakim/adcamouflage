@@ -718,6 +718,10 @@ export default function PlanPage() {
                           ? ` off ${formatMoney(activeCheckout.originalAmount, currencyRef.current)}`
                           : ""}
                       </p>
+                    ) : activeCheckout.whopPromoToPrefill ? (
+                      <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                        Code {activeCheckout.whopPromoToPrefill} pre-applied in Whop checkout
+                      </p>
                     ) : null}
                     <p className="text-xs text-ink-muted">
                       Includes {formatTokens(activeCheckout.tokens)} tokens · instant activation after payment

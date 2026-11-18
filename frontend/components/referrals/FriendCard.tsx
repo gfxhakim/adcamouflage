@@ -25,8 +25,6 @@ function planName(id: string, labels: Record<string, string>): string {
 
 /** The friend referral side: the subscriber's link and code, what they earn and who signed up. */
 export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendProgram; linkDays: number; planLabels: Record<string, string> }) {
-  const plans = friend.plans.map((id) => planName(id, planLabels));
-  const planText = plans.length > 1 ? `${plans.slice(0, -1).join(", ")} or ${plans[plans.length - 1]}` : plans[0] ?? "";
   const rewards = Object.entries(friend.reward_tokens).filter(([, tokens]) => tokens > 0);
 
   return (
@@ -36,8 +34,8 @@ export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendPro
         <h2 className="text-sm font-semibold tracking-tight text-black">Invite friends, earn tokens</h2>
       </div>
       <p className="max-w-2xl text-sm text-ink-muted">
-        Your friend gets {friend.discount_pct}% off their first {planText} payment. You get bonus tokens{" "}
-        {friend.hold_days} days after they pay, up to {friend.monthly_cap} rewards a month.
+        Share your invite link with friends. You earn bonus tokens {friend.hold_days} days after they subscribe, up to{" "}
+        {friend.monthly_cap} rewards a month.
       </p>
 
       {!friend.eligible || !friend.code ? (

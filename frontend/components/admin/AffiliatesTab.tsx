@@ -154,12 +154,6 @@ function SettingsCard({ overview, currency, onSaved }: { overview: AffiliateOver
     }
   };
 
-  const price = (pct: number, plans: string[]) =>
-    overview.plans
-      .filter((plan) => plans.includes(plan.id))
-      .map((plan) => `${plan.label} ${formatMoney(Math.round(plan.price * (100 - pct)) / 100, currency)}`)
-      .join(" · ");
-
   return (
     <Card title="Program settings" hint="Every number of the program. Changes apply to new clicks, payments and rewards.">
       <div className="grid gap-6 xl:grid-cols-2">
@@ -170,13 +164,12 @@ function SettingsCard({ overview, currency, onSaved }: { overview: AffiliateOver
             </p>
             <Toggle label="On" checked={program.friend.enabled} onChange={(enabled) => friend({ enabled })} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Num label="Friend's discount" suffix="%" value={program.friend.discount_pct} step="0.5" onChange={(discount_pct) => friend({ discount_pct })} />
+          <div className="grid gap-3 sm:grid-cols-2">
             <Num label="Reward after" suffix="days" value={program.friend.hold_days} onChange={(hold_days) => friend({ hold_days })} />
             <Num label="Max rewards" suffix="per month" value={program.friend.monthly_cap} onChange={(monthly_cap) => friend({ monthly_cap })} />
           </div>
           <PlanChecks plans={overview.plans} value={program.friend.plans} onChange={(plans) => friend({ plans })} />
-          <p className={clsx("text-[11px]", faint)}>First payment with the coupon: {price(program.friend.discount_pct, program.friend.plans) || "no plan selected"}</p>
+          <p className={clsx("text-[11px]", faint)}>Friend invites award bonus tokens to the referrer; promo reductions apply only via Whop promo codes.</p>
           <div>
             <span className="label">Reward tokens for the referrer, by the friend&apos;s plan</span>
             <div className="mt-1 grid gap-3 sm:grid-cols-3">
@@ -203,13 +196,12 @@ function SettingsCard({ overview, currency, onSaved }: { overview: AffiliateOver
               <Toggle label="On" checked={program.partner.enabled} onChange={(enabled) => partner({ enabled })} />
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Num label="Audience discount" suffix="%" value={program.partner.discount_pct} step="0.5" onChange={(discount_pct) => partner({ discount_pct })} />
+          <div className="grid gap-3 sm:grid-cols-2">
             <Num label="Commission ready after" suffix="days" value={program.partner.hold_days} onChange={(hold_days) => partner({ hold_days })} />
             <Num label="Minimum payout (min $100)" suffix={currency} value={program.partner.min_payout} step="5" onChange={(min_payout) => partner({ min_payout })} />
           </div>
           <PlanChecks plans={overview.plans} value={program.partner.plans} onChange={(plans) => partner({ plans })} />
-          <p className={clsx("text-[11px]", faint)}>First payment with the coupon: {price(program.partner.discount_pct, program.partner.plans) || "no plan selected"}</p>
+          <p className={clsx("text-[11px]", faint)}>Audience discounts come solely from each creator&apos;s active promo code created and validated in Whop.</p>
           <div>
             <span className="label">Commission tiers, by paying customers in the month</span>
             <div className="mt-1 space-y-2">

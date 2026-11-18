@@ -45,16 +45,42 @@ def _fingerprint(request: Request) -> tuple[str, str]:
     )
 
 
-def _offer(db: Session, code: ReferralCode, program: dict[str, Any]) -> dict[str, Any]:
-    """A code's discount with the price each covered plan comes to."""
+def _offer(
+    db: Session,
+    code: ReferralCode,
+    program: dict[str, Any],
+    *,
+    whop_promo: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """A Whop-validated promo code's offer with reduced prices computed on real base plan prices."""
 
-    offer = affiliates.offer_for_code(db, code, program)
+    offer = affiliates.offer_for_code(db, code, program, whop_promo=whop_promo)
     plans = get_token_plans(db)
-    offer["prices"] = {
-        plan_id: round(plans[plan_id].price * (100 - offer["discount_pct"]) / 100, 2)
-        for plan_id in offer["plans"]
-        if plan_id in plans
-    }
+    amount_off = offer["discount_amount"] if offer["promo_type"] == "flat_amount" else offer["discount_pct"]
+    if amount_off > 0:
+        offer["prices"] = {
+            plan_id: affiliates.compute_discounted_price(plans[plan_id].price, offer["promo_type"], amount_off)[0]
+            for plan_id in offer["plans"]
+            if plan_id in plans
+        }
+    else:
+        offer["prices"] = {}
+    return offer
+
+
+def _visible_offer(
+    db: Session,
+    code: ReferralCode,
+    program: dict[str, Any],
+    *,
+    whop_promo: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    offer = _offer(db, code, program, whop_promo=whop_promo)
+    if offer.get("whop_verified") and not offer.get("whop_valid"):
+        return None
+    has_reduction = offer["discount_pct"] > 0 or offer["discount_amount"] > 0
+    if not has_reduction and offer["channel"] != PARTNER:
+        return None
     return offer
 
 
@@ -98,7 +124,7 @@ def click(
         domain=settings.cookie_domain,
         path="/",
     )
-    return {"valid": True, "offer": _offer(db, code, program)}
+    return {"valid": True, "offer": _visible_offer(db, code, program)}
 
 
 class ApplyIn(BaseModel):
@@ -114,12 +140,16 @@ def apply_code(
     code = affiliates.find_code(db, payload.code)
     if code is None:
         raise HTTPException(status_code=422, detail="That code does not exist.")
+    program = affiliates.get_program(db)
+    whop_promo = affiliates.whop_promo_details(code.code, bypass_cache=True)
+    if code.channel == PARTNER and whop_promo and whop_promo.get("verified") and not whop_promo.get("valid"):
+        raise HTTPException(status_code=422, detail=f"Promo code {code.code} is not currently active in Whop.")
     device, ip = _fingerprint(request)
     try:
         affiliates.attribute(db, user, code, source="coupon", device=device, ip=ip)
     except affiliates.AttributionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"offer": _offer(db, code, affiliates.get_program(db))}
+    return {"offer": _visible_offer(db, code, program, whop_promo=whop_promo)}
 
 
 def _parse_social_links(raw: str | None) -> list[str]:
@@ -166,7 +196,7 @@ class PayoutDetailsIn(BaseModel):
 
 
 def _my_offer(db: Session, user: User, program: dict[str, Any]) -> dict[str, Any] | None:
-    """The coupon waiting on this customer's first payment, if any."""
+    """The Whop promo code waiting on this customer's first payment, if any."""
 
     row = affiliates.referral_of(db, user.id)
     if row is None or row.status != "signed_up" or affiliates.has_paid(db, user) or not row.code_id:
@@ -174,7 +204,7 @@ def _my_offer(db: Session, user: User, program: dict[str, Any]) -> dict[str, Any
     code = db.get(ReferralCode, row.code_id)
     if code is None or affiliates.code_usable(db, code, program):
         return None
-    return _offer(db, code, program)
+    return _visible_offer(db, code, program)
 
 
 def _friend_block(db: Session, user: User, program: dict[str, Any]) -> dict[str, Any]:
@@ -351,7 +381,7 @@ def visitor_offer(
     code = affiliates.code_from_cookie(db, request.cookies.get(affiliates.COOKIE), program)
     if code is None or affiliates.code_usable(db, code, program):
         return {"offer": None}
-    return {"offer": _offer(db, code, program)}
+    return {"offer": _visible_offer(db, code, program)}
 
 
 @router.get("/me")
@@ -515,7 +545,7 @@ class TierIn(BaseModel):
 
 class FriendSettingsIn(BaseModel):
     enabled: bool
-    discount_pct: float = Field(ge=0, le=90)
+    discount_pct: float = Field(default=0.0, ge=0, le=90)
     plans: list[str]
     reward_tokens: dict[str, int]
     hold_days: int = Field(ge=0, le=365)
@@ -525,7 +555,7 @@ class FriendSettingsIn(BaseModel):
 class PartnerSettingsIn(BaseModel):
     enabled: bool
     applications_open: bool
-    discount_pct: float = Field(ge=0, le=90)
+    discount_pct: float = Field(default=0.0, ge=0, le=90)
     plans: list[str]
     tiers: list[TierIn] = Field(min_length=1, max_length=10)
     hold_days: int = Field(ge=0, le=365)
@@ -639,6 +669,7 @@ def admin_save_settings(
     program = payload.model_dump()
     for channel in (FRIEND, PARTNER):
         program[channel]["plans"] = [plan for plan in program[channel]["plans"] if plan in plans]
+        program[channel]["discount_pct"] = 0.0
     program[FRIEND]["reward_tokens"] = {
         plan: max(0, int(tokens)) for plan, tokens in program[FRIEND]["reward_tokens"].items() if plan in plans
     }
@@ -680,6 +711,12 @@ def admin_partner_decision(
             taken = affiliates.find_code(db, wanted)
             if taken is not None and (taken.user_id != user_id or taken.channel != PARTNER):
                 raise HTTPException(status_code=409, detail=f"The code {wanted} is already in use.")
+            whop_promo = affiliates.whop_promo_details(wanted, bypass_cache=True)
+            if whop_promo is not None and whop_promo.get("verified") and not whop_promo.get("valid"):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Promo code {wanted} was not found or is not active in Whop. Create and activate it in Whop first.",
+                )
             if code is None:
                 code = ReferralCode(user_id=user_id, code=wanted, channel=PARTNER)
                 db.add(code)

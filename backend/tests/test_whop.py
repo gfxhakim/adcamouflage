@@ -596,7 +596,7 @@ def test_whop_dispute_webhooks_stop_account_and_refund_on_loss(whop_env):
     assert _order(order_id).status == "refunded"
 
 
-def test_whop_discounted_checkout_variant_and_promo_fallback(whop_env, monkeypatch):
+def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
     from types import SimpleNamespace
 
     from pydantic import SecretStr
@@ -626,19 +626,6 @@ def test_whop_discounted_checkout_variant_and_promo_fallback(whop_env, monkeypat
         db.commit()
         partner_id = partner.user_id
 
-    buyer_email = address("whopdisc")
-    buyer_client = _signed_in(buyer_email)
-    click = buyer_client.post(
-        "/api/v1/referrals/click",
-        json={"code": code, "landing_path": "/"},
-        headers={"x-device-id": f"dev-buyer-{RUN_ID}"},
-    )
-    assert click.status_code == 200
-    assert click.json()["offer"]["prices"]["pro"] == 75.65
-
-    captured_cfg: dict = {}
-    promo_calls: list[dict] = []
-
     class _FakeVariants:
         def retrieve(self, *, id: str):
             return SimpleNamespace(
@@ -647,105 +634,119 @@ def test_whop_discounted_checkout_variant_and_promo_fallback(whop_env, monkeypat
                 currency="usd",
             )
 
-    class _FakeCheckoutCfgs:
-        def create(self, **kwargs):
-            captured_cfg.clear()
-            captured_cfg.update(kwargs)
-            return SimpleNamespace(
-                id="ch_disc_1",
-                purchase_url="https://whop.com/checkout/ch_disc_1",
-                variant=SimpleNamespace(id="plan_disc_pro_1"),
-            )
-
     class _FakePromoCodes:
-        def create(self, **kwargs):
-            promo_calls.append(kwargs)
-            return SimpleNamespace(id="promo_1", code=kwargs["code"])
+        def list(self, **kwargs):
+            return SimpleNamespace(
+                data=[
+                    SimpleNamespace(
+                        id="promo_live_1",
+                        code=code,
+                        promo_type="percentage",
+                        amount_off=20.0,
+                        currency="usd",
+                        status="active",
+                        expires_at=None,
+                        unlimited_stock=True,
+                        stock=0,
+                        uses=0,
+                        new_users_only=True,
+                        duration="once",
+                        promo_duration_months=1,
+                        product=SimpleNamespace(id="prod_test_1"),
+                    )
+                ]
+            )
 
     monkeypatch.setattr(settings, "whop_api_key", SecretStr("whop_live_test_secret"))
     whop._VARIANT_CACHE.clear()
+    whop.clear_promo_cache()
     monkeypatch.setattr(
         whop,
         "_sdk_client",
         lambda: SimpleNamespace(
             variants=_FakeVariants(),
-            checkout_configurations=_FakeCheckoutCfgs(),
             promo_codes=_FakePromoCodes(),
         ),
     )
 
+    buyer_email = address("whopdisc")
+    buyer_client = _signed_in(buyer_email)
+    click = buyer_client.post(
+        "/api/v1/referrals/click",
+        json={"code": code, "landing_path": "/"},
+        headers={"x-device-id": f"dev-buyer-{RUN_ID}"},
+    )
+    assert click.status_code == 200
+    offer = click.json()["offer"]
+    assert offer["discount_pct"] == 20.0
+    assert offer["prices"] == {"starter": 29.60, "pro": 71.20, "max": 119.20}
+
+    # Auto-applies the Whop-validated discount via ?ref= click without re-typing,
+    # keeping the real base Whop plan and passing promoCode directly to Whop Elements.
     co_res = buyer_client.post(
         "/api/v1/billing/checkout",
-        json={"kind": "subscription", "plan_id": "pro", "provider": "whop", "coupon": code},
+        json={"kind": "subscription", "plan_id": "pro", "provider": "whop"},
     )
     assert co_res.status_code == 201, co_res.text
     co = co_res.json()
     assert co["original_amount"] == 89.0
-    assert co["discount"] == 13.35
-    assert co["amount"] == 75.65
+    assert co["discount"] == 17.80
+    assert co["amount"] == 71.20
     assert co["promo_code"] == code
-    assert co["whop_plan"] == "plan_disc_pro_1"
-    assert co["whop_promo_to_prefill"] is None
+    assert co["whop_plan"] == "plan_pro"
+    assert co["whop_checkout_config"] is None
+    assert co["whop_promo_to_prefill"] == code
     assert co["whop_metadata"]["promo_code"] == code
     assert co["whop_metadata"]["affiliate_channel"] == "partner"
-    assert captured_cfg["variant"]["initial_price"] == 75.65
-    assert captured_cfg["variant"]["renewal_price"] == 89.0
-    assert captured_cfg["metadata"]["referral_code"] == code
+    assert co["whop_metadata"]["referral_code"] == code
 
-    # Settle via payment.succeeded against the dynamically created discounted variant id.
+    # Settle via payment.succeeded against the base plan with Whop's discounted total.
     order_id = co["order_id"]
     paid_evt = _whop_event(
         order_id,
         payment_id="pay_disc_1",
-        variant_id="plan_disc_pro_1",
+        variant_id="plan_pro",
         extra_data={
-            "usd_total": 75.65,
+            "usd_total": 71.20,
             "metadata": {"order_id": order_id, "coupon_code": code, "promo_code": code},
         },
     )
     assert _post_whop(paid_evt).json() == {"ok": True, "applied": True}
     order = _order(order_id)
     assert order.status == "paid"
-    assert order.whop_plan_id == "plan_disc_pro_1"
+    assert order.whop_plan_id == "plan_pro"
     assert _balances(buyer_email) == (4500, 0)
     with get_session_factory()() as db:
         comm = db.query(AffiliateCommission).filter(AffiliateCommission.order_id == order_id).one()
-        assert round(float(comm.amount_usd), 2) == 75.65
+        assert round(float(comm.amount_usd), 2) == 71.20
         rows = [r for r in affiliates.commission_rows(db, partner_id) if r["order_id"] == order_id]
         assert len(rows) == 1
         assert rows[0]["rate_pct"] == 25.0
-        assert rows[0]["commission"] == round(75.65 * 0.25, 2)
+        assert rows[0]["commission"] == round(71.20 * 0.25, 2)
 
-    # Also verify fallback to promo_codes.create + prefill when checkout_configurations.create fails.
-    class _BrokenCheckoutCfgs:
-        def create(self, **kwargs):
-            raise RuntimeError("variant inline creation disabled")
+    # Also verify graceful behavior if promo_codes.list lacks promo_code:read permission (403):
+    # no fake app reduction is applied locally, yet whop_promo_to_prefill still passes code to Whop.
+    class _ForbiddenPromoCodes:
+        def list(self, **kwargs):
+            raise RuntimeError("403 Forbidden missing promo_code:read")
 
+    whop.clear_promo_cache()
     monkeypatch.setattr(
         whop,
         "_sdk_client",
         lambda: SimpleNamespace(
             variants=_FakeVariants(),
-            checkout_configurations=_BrokenCheckoutCfgs(),
-            promo_codes=_FakePromoCodes(),
+            promo_codes=_ForbiddenPromoCodes(),
         ),
     )
-    fb = whop.create_discounted_checkout(
-        base_whop_plan="plan_pro",
-        order_id="ord_fallback_1",
-        amount=75.65,
-        original_amount=89.0,
-        plan_label="Pro Monthly",
-        period_days=30,
-        coupon_code=code,
-        affiliate_channel="partner",
-        discount_pct=15.0,
-        discount_usd=13.35,
-    )
-    assert fb["whop_plan"] == "plan_pro"
-    assert fb["promo_to_prefill"] == code
-    assert len(promo_calls) == 1
-    assert promo_calls[0]["code"] == code and promo_calls[0]["amount_off"] == 15.0
+    fb_buyer = _signed_in(address("whopperm"))
+    fb_co = fb_buyer.post(
+        "/api/v1/billing/checkout",
+        json={"kind": "subscription", "plan_id": "pro", "provider": "whop", "coupon": code},
+        headers={"x-device-id": f"dev-perm-{RUN_ID}"},
+    ).json()
+    assert fb_co["discount"] == 0.0 and fb_co["amount"] == 89.0
+    assert fb_co["whop_plan"] == "plan_pro" and fb_co["whop_promo_to_prefill"] == code
 
 
 def test_whop_webhook_syncs_whop_native_promo_code_and_discounted_total(whop_env):

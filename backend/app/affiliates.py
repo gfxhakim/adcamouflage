@@ -32,6 +32,7 @@ from typing import Any
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from . import whop
 from .app_settings import get_setting, set_setting
 from .config import settings
 from .db import (
@@ -63,8 +64,8 @@ DEFAULTS: dict[str, Any] = {
     "link_days": 30,
     "friend": {
         "enabled": True,
-        "discount_pct": 10.0,
-        "plans": ["pro", "max"],  # plans the friend's coupon works on
+        "discount_pct": 0.0,
+        "plans": ["starter", "pro", "max"],
         "reward_tokens": {"starter": 300, "pro": 750, "max": 1250},  # by the friend's plan
         "hold_days": 7,
         "monthly_cap": 10,
@@ -72,7 +73,7 @@ DEFAULTS: dict[str, Any] = {
     "partner": {
         "enabled": True,
         "applications_open": True,
-        "discount_pct": 15.0,
+        "discount_pct": 0.0,
         "plans": ["starter", "pro", "max"],
         # Share of collected revenue by paying customers in the month.
         "tiers": [{"min": 0, "pct": 25.0}, {"min": 20, "pct": 30.0}, {"min": 50, "pct": 35.0}],
@@ -97,6 +98,8 @@ def get_program(db: Session) -> dict[str, Any]:
     for channel in (FRIEND, PARTNER):
         merged = dict(DEFAULTS[channel])
         merged.update(saved.get(channel) or {})
+        # Promo discounts come strictly from Whop Promo Codes, never app-side defaults.
+        merged["discount_pct"] = 0.0
         program[channel] = merged
     tiers = sorted(program[PARTNER]["tiers"], key=lambda tier: tier["min"])
     program[PARTNER]["tiers"] = tiers or DEFAULTS[PARTNER]["tiers"]
@@ -281,15 +284,69 @@ def code_usable(db: Session, code: ReferralCode, program: dict[str, Any] | None 
     return None
 
 
-def offer_for_code(db: Session, code: ReferralCode, program: dict[str, Any] | None = None) -> dict[str, Any]:
+def compute_discounted_price(price: float, promo_type: str, amount_off: float) -> tuple[float, float]:
+    """Apply a Whop promo reduction cleanly onto the real base price (never launch compare-at)."""
+
+    base = round(float(price), 2)
+    off = float(amount_off or 0.0)
+    if off <= 0:
+        return (base, 0.0)
+    if promo_type == "flat_amount":
+        final = round(max(0.0, base - off), 2)
+        return (final, round(base - final, 2))
+    pct = max(0.0, min(100.0, off))
+    final = round(base * (100.0 - pct) / 100.0, 2)
+    return (final, round(base - final, 2))
+
+
+def whop_promo_details(code_str: str, *, bypass_cache: bool = False) -> dict[str, Any] | None:
+    """Resolve an active Whop promo code directly from Whop when available."""
+
+    return whop.lookup_promo_code(code_str, bypass_cache=bypass_cache)
+
+
+def offer_for_code(
+    db: Session,
+    code: ReferralCode,
+    program: dict[str, Any] | None = None,
+    *,
+    whop_promo: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     program = program or get_program(db)
     channel = program[code.channel]
-    return {
+    promo = whop_promo if whop_promo is not None else whop_promo_details(code.code)
+
+    base_offer: dict[str, Any] = {
         "code": code.code,
         "channel": code.channel,
-        "discount_pct": float(channel["discount_pct"]),
-        "plans": list(channel["plans"]),
+        "promo_type": "percentage",
+        "discount_pct": 0.0,
+        "discount_amount": 0.0,
+        "plans": [],
+        "whop_verified": bool(promo and promo.get("verified")),
+        "whop_valid": (bool(promo["valid"]) if promo and promo.get("verified") else None),
+        "whop_reason": promo.get("reason") if promo and promo.get("verified") else None,
     }
+    if promo and promo.get("verified"):
+        if not promo.get("valid"):
+            return base_offer
+        promo_type = str(promo.get("promo_type") or "percentage")
+        amount_off = round(float(promo.get("amount_off") or 0.0), 2)
+        whop_plans = promo.get("plans") or []
+        eligible = [p for p in channel["plans"] if not whop_plans or p in whop_plans]
+        base_offer.update(
+            promo_type=promo_type,
+            discount_pct=amount_off if promo_type == "percentage" else 0.0,
+            discount_amount=amount_off if promo_type == "flat_amount" else 0.0,
+            plans=eligible,
+        )
+        return base_offer
+
+    # When Whop promo verification cannot run (no live key or missing promo_code:read),
+    # avoid applying any artificial app discount while preserving partner code pre-fill.
+    if code.channel == PARTNER:
+        base_offer["plans"] = list(channel["plans"])
+    return base_offer
 
 
 # --------------------------------------------------------------------------
@@ -412,21 +469,35 @@ def attribute_signup(db: Session, user: User, cookie: str | None, device: str, i
 
 
 def checkout_discount(db: Session, user: User, plan_id: str, price: float) -> dict[str, Any] | None:
-    """The coupon that comes off ``user``'s first subscription payment on ``plan_id``, if any."""
+    """Whop promo discount and checkout pre-fill state for ``user``'s first subscription payment."""
 
     row = referral_of(db, user.id)
     if row is None or row.status != "signed_up" or row.first_order_id is not None or has_paid(db, user):
         return None
     program = get_program(db)
-    channel = program[row.channel]
     code = db.get(ReferralCode, row.code_id) if row.code_id else None
-    if code is None or code_usable(db, code, program) or plan_id not in channel["plans"]:
+    if code is None or code_usable(db, code, program):
         return None
-    pct = max(0.0, min(90.0, float(channel["discount_pct"])))
-    if pct <= 0:
+    offer = offer_for_code(db, code, program)
+    if offer.get("whop_verified") and not offer.get("whop_valid"):
         return None
-    amount = round(price * (100 - pct) / 100, 2)
-    return {"code": row.code, "channel": row.channel, "pct": pct, "amount": amount, "discount": round(price - amount, 2)}
+    if plan_id not in offer["plans"]:
+        return None
+    amount_off = offer["discount_amount"] if offer["promo_type"] == "flat_amount" else offer["discount_pct"]
+    amount, discount = compute_discounted_price(price, offer["promo_type"], amount_off)
+    if discount <= 0 and row.channel != PARTNER:
+        return None
+    return {
+        "code": row.code,
+        "channel": row.channel,
+        "promo_type": offer["promo_type"],
+        "pct": offer["discount_pct"],
+        "discount_amount": offer["discount_amount"],
+        "amount": amount,
+        "discount": discount,
+        "whop_verified": offer["whop_verified"],
+        "prefill_promo": discount > 0 or row.channel == PARTNER,
+    }
 
 
 # --------------------------------------------------------------------------

@@ -206,7 +206,11 @@ export function PricingSection({
                     {price(plan.price, currency)}
                   </span>
                   <span className="rounded-full bg-emerald-400 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-black">
-                    −{referralOffer.discount_pct}% · {referralOffer.code}
+                    −
+                    {referralOffer.promo_type === "flat_amount" && (referralOffer.discount_amount ?? 0) > 0
+                      ? price(referralOffer.discount_amount ?? 0, currency)
+                      : `${referralOffer.discount_pct}%`}{" "}
+                    · {referralOffer.code}
                   </span>
                 </p>
               ) : regular ? (

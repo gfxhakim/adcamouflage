@@ -235,6 +235,9 @@ def checkout(
             code = affiliates.find_code(db, payload.coupon)
             if code is None:
                 raise HTTPException(status_code=422, detail="That code does not exist.")
+            whop_promo = affiliates.whop_promo_details(code.code, bypass_cache=True)
+            if code.channel == affiliates.PARTNER and whop_promo and whop_promo.get("verified") and not whop_promo.get("valid"):
+                raise HTTPException(status_code=422, detail=f"Promo code {code.code} is not currently active in Whop.")
             try:
                 affiliates.attribute(db, user, code, source="coupon", device=device, ip=ip)
             except affiliates.AttributionError as exc:
@@ -275,6 +278,7 @@ def checkout(
     coupon_code = coupon["code"] if coupon else None
     discount_usd = float(coupon["discount"]) if coupon else 0.0
     discount_pct = float(coupon["pct"]) if coupon else 0.0
+    should_prefill = bool(coupon_code and coupon and coupon.get("prefill_promo"))
     ref_row = affiliates.referral_of(db, user.id)
     ref_code_for_meta = coupon_code or (ref_row.code if ref_row and ref_row.status in ("signed_up", "active", "waiting", "rewarded") else None)
     ref_channel_for_meta = (coupon["channel"] if coupon else None) or (ref_row.channel if ref_row and ref_code_for_meta else None)
@@ -316,7 +320,7 @@ def checkout(
             original_amount=original_amount,
             discount=existing.discount_usd or discount_usd,
             promo_code=coupon_code,
-            whop_promo_to_prefill=coupon_code if (coupon_code and resolved_plan == base_whop_plan and discount_usd > 0) else None,
+            whop_promo_to_prefill=coupon_code if (should_prefill and resolved_plan == base_whop_plan) else None,
             whop_metadata=existing_meta,
             tokens=existing.tokens,
             provider=existing.provider,

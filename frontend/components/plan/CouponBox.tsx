@@ -40,7 +40,8 @@ export function CouponBox({ offer, planLabels, onApplied }: CouponBoxProps) {
         <p className="flex flex-wrap items-center gap-2 text-black">
           <TicketPercent className="h-4 w-4 shrink-0 text-meta-500" aria-hidden />
           <span>
-            Code <span className="font-semibold">{offer.code}</span> applied: {offerLine(offer, planLabels)}.
+            Code <span className="font-semibold">{offer.code}</span>:{" "}
+            {offerLine(offer, planLabels)}.
           </span>
           {!open ? (
             <button type="button" className="text-xs font-semibold text-meta-600 hover:underline" onClick={() => setOpen(true)}>

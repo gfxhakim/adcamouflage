@@ -4,10 +4,14 @@ import { API_BASE, ApiError } from "./api";
 export interface ReferralOffer {
   code: string;
   channel: "friend" | "partner";
+  promo_type?: "percentage" | "flat_amount";
   discount_pct: number;
+  discount_amount?: number;
   plans: string[];
   /** Plan id -> price after the discount. */
   prices: Record<string, number>;
+  whop_verified?: boolean;
+  whop_valid?: boolean | null;
 }
 
 export interface CodeStats {
@@ -159,7 +163,7 @@ export const FALLBACK_PUBLIC_AFFILIATE_PROGRAM: PublicAffiliateProgram = {
   partner: {
     enabled: true,
     applications_open: true,
-    discount_pct: 15,
+    discount_pct: 0,
     plans: ["starter", "pro", "max"],
     tiers: [
       { min: 0, pct: 25 },
@@ -271,7 +275,13 @@ export function referralLink(code: string): string {
 export function offerLine(offer: ReferralOffer, labels: Record<string, string> = {}): string {
   const names = offer.plans.map((id) => labels[id] ?? id.replace(/^\w/, (c) => c.toUpperCase()));
   const where = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}` : names[0] ?? "a plan";
-  return `${offer.discount_pct}% off your first ${where} payment`;
+  if (offer.promo_type === "flat_amount" && (offer.discount_amount ?? 0) > 0) {
+    return `$${offer.discount_amount} off your first ${where} payment`;
+  }
+  if (offer.discount_pct > 0) {
+    return `${offer.discount_pct}% off your first ${where} payment`;
+  }
+  return `automatically applied in Whop checkout for ${where}`;
 }
 
 export async function loadPublicAffiliateProgram(serverSide = false): Promise<PublicAffiliateProgram> {

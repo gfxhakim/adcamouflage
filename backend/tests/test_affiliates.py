@@ -171,7 +171,7 @@ def test_only_active_subscribers_get_a_friend_code():
     assert friend_code(client) == friend["code"]  # stable
 
 
-def test_friend_link_gives_10_percent_on_pro_and_max_but_not_starter():
+def test_friend_link_tracks_referral_without_fake_app_discount():
     referrer_email = address("ref")
     referrer = client_for(referrer_email, device="device-referrer-a")
     subscribe(referrer_email)
@@ -181,22 +181,17 @@ def test_friend_link_gives_10_percent_on_pro_and_max_but_not_starter():
     friend = client_for(friend_email, device="device-friend-a", ref=code.lower())
     row = referral(friend_email)
     assert row.channel == "friend" and row.status == "signed_up" and row.source == "link"
-    offer = friend.get("/api/v1/referrals/me").json()["my_offer"]
-    assert offer["discount_pct"] == 10 and offer["prices"] == {"pro": 80.10, "max": 134.10}
+    # Friend invites do not invent app-side price cuts unless a real Whop promo matches.
+    assert friend.get("/api/v1/referrals/me").json()["my_offer"] is None
 
     starter = checkout(friend, "starter", coupon=code)
     assert starter.status_code == 201 and starter.json()["amount"] == 37.0
-    # Referred via ?ref= link -> Pro automatically carries the 10% discount without typing a code.
     auto_pro = checkout(friend, "pro")
-    assert auto_pro.status_code == 201 and auto_pro.json()["amount"] == 80.10
-    with session() as db:
-        order = db.get(Order, auto_pro.json()["order_id"])
-        assert order.coupon_code == code and order.discount_usd == 8.90
+    assert auto_pro.status_code == 201 and auto_pro.json()["amount"] == 89.0
 
-    # Without an affiliate link, a new user pays full price unless they apply the promo code.
     no_ref = client_for(address("noref"), device="device-friend-noref")
     assert checkout(no_ref, "pro").json()["amount"] == 89.0
-    assert checkout(no_ref, "pro", coupon=code).json()["amount"] == 80.10
+    assert checkout(no_ref, "pro", coupon=code).json()["amount"] == 89.0
 
 
 def test_reward_comes_after_seven_days_and_is_spent_after_subscription_tokens():
@@ -343,13 +338,39 @@ def test_reward_tokens_are_lost_when_the_referrer_cancels():
 # --------------------------------------------------------------------------
 
 
-def test_partner_coupon_and_commission_on_everything_the_customer_pays(admin):
+def _mock_whop_promo(monkeypatch, *, code: str, promo_type: str = "percentage", amount_off: float = 20.0, plans=None):
+    from app import whop
+
+    target_code = code.strip().upper()
+    target_plans = list(plans or ["starter", "pro", "max"])
+
+    def _fake_lookup(raw_code: str, *, plan_variants=None, bypass_cache=False):
+        if raw_code.strip().upper() != target_code:
+            return {"verified": True, "valid": False, "permission_error": False, "code": raw_code.strip().upper(), "plans": [], "reason": "not_active"}
+        return {
+            "verified": True,
+            "valid": True,
+            "permission_error": False,
+            "id": "promo_mock_1",
+            "code": target_code,
+            "promo_type": promo_type,
+            "amount_off": amount_off,
+            "currency": "usd",
+            "new_users_only": False,
+            "plans": target_plans,
+        }
+
+    monkeypatch.setattr(whop, "lookup_promo_code", _fake_lookup)
+
+
+def test_partner_coupon_and_commission_on_everything_the_customer_pays(admin, monkeypatch):
     code = f"MAYA{RUN_ID[:4].upper()}"
+    _mock_whop_promo(monkeypatch, code=code, promo_type="percentage", amount_off=20.0)
     creator, creator_email = make_partner(admin, code)
     buyer_email = address("fan")
     buyer = client_for(buyer_email, device="device-g1")
     first = checkout(buyer, "pro", coupon=code)
-    assert first.status_code == 201 and first.json()["amount"] == 75.65
+    assert first.status_code == 201 and first.json()["amount"] == 71.20
     pay(buyer_email, first.json()["order_id"])
     renewal = checkout(buyer, "pro")
     assert renewal.json()["amount"] == 89.0  # the coupon is for the first payment only
@@ -361,22 +382,24 @@ def test_partner_coupon_and_commission_on_everything_the_customer_pays(admin):
     assert partner["status"] == "approved" and partner["code"] == code
     assert partner["stats"]["paying"] == 1 and partner["month"]["rate_pct"] == 25
     amounts = sorted(row["commission"] for row in partner["commissions"])
-    assert amounts == [18.91, 20.0, 22.25]
-    assert partner["totals"] == {"pending": 61.16, "payable": 0.0, "paid": 0.0, "reserved": 0.0, "available": 0.0}
+    assert amounts == [17.80, 20.0, 22.25]
+    assert partner["totals"] == {"pending": 60.05, "payable": 0.0, "paid": 0.0, "reserved": 0.0, "available": 0.0}
 
 
-def test_starter_takes_the_partner_coupon(admin):
+def test_starter_takes_the_partner_coupon(admin, monkeypatch):
     code = f"STAR{RUN_ID[:4].upper()}"
+    _mock_whop_promo(monkeypatch, code=code, promo_type="percentage", amount_off=20.0)
     make_partner(admin, code)
-    # Visitor via ?ref=CODE gets discounted Starter and Max automatically at checkout.
+    # Visitor via ?ref=CODE gets discounted Starter ($37 -> $29.60) and Max ($149 -> $119.20) automatically.
     buyer = client_for(address("fan"), device="device-g2", ref=code)
-    assert checkout(buyer, "starter").json()["amount"] == 31.45
-    assert checkout(buyer, "max").json()["amount"] == 126.65
+    starter_co = checkout(buyer, "starter").json()
+    assert starter_co["amount"] == 29.60 and starter_co["whop_promo_to_prefill"] == code
+    assert checkout(buyer, "max").json()["amount"] == 119.20
 
     # Visitor without ?ref= pays $37 unless they enter the promo code manually.
     direct = client_for(address("direct"), device="device-g2-direct")
     assert checkout(direct, "starter").json()["amount"] == 37.0
-    assert checkout(direct, "starter", coupon=code).json()["amount"] == 31.45
+    assert checkout(direct, "starter", coupon=code).json()["amount"] == 29.60
 
 
 def test_tier_follows_paying_customers_in_the_month():
@@ -425,17 +448,17 @@ def test_payout_needs_the_minimum_then_marks_commissions_paid(admin):
             row.payable_at = datetime.now(timezone.utc) - timedelta(minutes=1)
         db.commit()
     under = admin.post(url, json={"method": "USDT"})
-    assert under.status_code == 409 and "minimum" in under.json()["detail"]  # 126.65 x 25% = 31.66
+    assert under.status_code == 409 and "minimum" in under.json()["detail"]  # 149.00 x 25% = 37.25
     paid = admin.post(url, json={"method": "USDT", "reference": "tx123", "force": True})
-    assert paid.status_code == 200 and paid.json()["amount"] == 31.66
+    assert paid.status_code == 200 and paid.json()["amount"] == 37.25
     partner = creator.get("/api/v1/referrals/me").json()["partner"]
-    assert partner["totals"] == {"pending": 0.0, "payable": 0.0, "paid": 31.66, "reserved": 0.0, "available": 0.0}
+    assert partner["totals"] == {"pending": 0.0, "payable": 0.0, "paid": 37.25, "reserved": 0.0, "available": 0.0}
     assert partner["payouts"][0]["reference"] == "tx123"
 
     # A refund after the payout comes off the next one.
-    assert "31.66" in admin.post(f"/api/v1/admin/affiliates/orders/{order_id}/refund", json={}).json()["reversed"]
+    assert "37.25" in admin.post(f"/api/v1/admin/affiliates/orders/{order_id}/refund", json={}).json()["reversed"]
     partner = creator.get("/api/v1/referrals/me").json()["partner"]
-    assert partner["totals"]["payable"] == -31.66
+    assert partner["totals"]["payable"] == -37.25
 
 
 def test_suspending_a_partner_cancels_pending_commissions_and_the_code(admin):
@@ -491,7 +514,8 @@ def test_admin_can_change_every_number_and_customers_cannot_see_the_panel(admin)
     program["partner"]["tiers"] = [{"min": 0, "pct": 10}, {"min": 5, "pct": 40}]
     program["link_days"] = 14
     saved = admin.put("/api/v1/admin/affiliates/settings", json=program).json()
-    assert saved["friend"]["discount_pct"] == 20 and saved["link_days"] == 14
+    # App-level discount_pct is forced to 0; real promo reductions are validated in Whop only.
+    assert saved["friend"]["discount_pct"] == 0.0 and saved["link_days"] == 14 and saved["friend"]["hold_days"] == 3
     assert affiliates.tier_pct(saved, 5) == 40
 
     referrer_email = address("ref")
@@ -499,7 +523,7 @@ def test_admin_can_change_every_number_and_customers_cannot_see_the_panel(admin)
     subscribe(referrer_email)
     fcode = friend_code(referrer)
     friend = client_for(address("friend"), device="device-j2", ref=fcode)
-    assert checkout(friend, "starter", coupon=fcode).json()["amount"] == 29.6
+    assert checkout(friend, "starter", coupon=fcode).json()["amount"] == 37.0
 
     program["friend"]["enabled"] = False
     admin.put("/api/v1/admin/affiliates/settings", json=program)
@@ -632,7 +656,7 @@ def test_public_program_and_affiliate_only_account_isolation():
     pub = TestClient(app).get("/api/v1/referrals/public-program")
     assert pub.status_code == 200
     data = pub.json()
-    assert data["partner"]["discount_pct"] == 15.0
+    assert data["partner"]["discount_pct"] == 0.0
     assert [t["pct"] for t in data["partner"]["tiers"]] == [25.0, 30.0, 35.0]
     assert data["partner"]["hold_days"] == 30 and data["partner"]["min_payout"] == 100.0
 
@@ -679,8 +703,12 @@ def test_public_program_and_affiliate_only_account_isolation():
     assert client.get("/api/v1/admin/settings").status_code == 404
 
 
-def test_visitor_offer_and_landing_discount_preview():
+def test_visitor_offer_and_landing_discount_preview(monkeypatch):
+    from app import whop
     from app.db import AffiliatePartner, ReferralCode, get_session_factory
+
+    code = f"VISIT{RUN_ID[:4].upper()}"
+    _mock_whop_promo(monkeypatch, code=code, promo_type="percentage", amount_off=20.0)
 
     # Approved affiliate creates a partner code.
     aff_email = address("visaff")
@@ -690,7 +718,6 @@ def test_visitor_offer_and_landing_discount_preview():
         json={"email": aff_email, "password": PASSWORD, "display_name": "Partner Maya", "account_role": "affiliate"},
     )
     assert reg.status_code == 201, reg.text
-    code = f"VISIT{RUN_ID[:4].upper()}"
     applied = aff_client.post(
         "/api/v1/referrals/partner/apply",
         json={
@@ -713,30 +740,55 @@ def test_visitor_offer_and_landing_discount_preview():
     before = visitor.get("/api/v1/referrals/visitor-offer")
     assert before.status_code == 200 and before.json()["offer"] is None
 
-    # Visitor arrives via ?ref=CODE or enters promo code on landing page -> reduced prices immediately.
+    # Visitor arrives via ?ref=CODE or enters promo code on landing page -> Whop 20% off real base prices ($37/$89/$149).
     click = visitor.post("/api/v1/referrals/click", json={"code": code.lower(), "landing_path": "/"})
     assert click.status_code == 200, click.text
     offer = click.json()["offer"]
     assert offer is not None
     assert offer["code"] == code
     assert offer["channel"] == "partner"
-    assert offer["discount_pct"] == 15.0
-    assert offer["prices"]["starter"] == 31.45
-    assert offer["prices"]["pro"] == 75.65
-    assert offer["prices"]["max"] == 126.65
+    assert offer["discount_pct"] == 20.0
+    assert offer["prices"]["starter"] == 29.60
+    assert offer["prices"]["pro"] == 71.20
+    assert offer["prices"]["max"] == 119.20
 
     after = visitor.get("/api/v1/referrals/visitor-offer")
     assert after.status_code == 200
-    assert after.json()["offer"]["prices"]["pro"] == 75.65
+    assert after.json()["offer"]["prices"]["pro"] == 71.20
 
-    # After registering with email while keeping the pf_ref cookie, the new customer retains their reduced pricing.
+    # After registering with email while keeping the pf_ref cookie, the new customer retains their Whop promo pricing.
     buyer_email = address("visbuyer")
     buyer_reg = visitor.post("/api/v1/auth/register", json={"email": buyer_email, "password": PASSWORD})
     assert buyer_reg.status_code == 201, buyer_reg.text
     me_offer = visitor.get("/api/v1/referrals/visitor-offer")
     assert me_offer.status_code == 200 and me_offer.json()["offer"]["code"] == code
     me_prog = visitor.get("/api/v1/referrals/me")
-    assert me_prog.status_code == 200 and me_prog.json()["my_offer"]["prices"]["pro"] == 75.65
+    assert me_prog.status_code == 200 and me_prog.json()["my_offer"]["prices"]["starter"] == 29.60
+
+    # Flat-amount Whop promo ($10 off) works cleanly without stacking any launch compare-at.
+    monkeypatch.setattr(
+        whop,
+        "lookup_promo_code",
+        lambda raw, **kw: {
+            "verified": True,
+            "valid": True,
+            "permission_error": False,
+            "id": "promo_flat_1",
+            "code": code,
+            "promo_type": "flat_amount",
+            "amount_off": 10.0,
+            "currency": "usd",
+            "plans": ["starter", "pro", "max"],
+        },
+    )
+    flat_offer = visitor.get("/api/v1/referrals/visitor-offer").json()["offer"]
+    assert flat_offer["promo_type"] == "flat_amount" and flat_offer["discount_amount"] == 10.0
+    assert flat_offer["prices"] == {"starter": 27.00, "pro": 79.00, "max": 139.00}
+
+    # If the promo code is not active in Whop, ProteusFlow shows no reduction and /apply rejects it.
+    _mock_whop_promo(monkeypatch, code="NONE_ACTIVE")
+    assert visitor.get("/api/v1/referrals/visitor-offer").json()["offer"] is None
+    assert visitor.post("/api/v1/referrals/apply", json={"code": code}).status_code == 422
 
 
 def test_partner_dashboard_tracks_subscribers_name_only_and_100_min_withdrawals(admin):
