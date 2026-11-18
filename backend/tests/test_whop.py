@@ -817,7 +817,7 @@ def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkou
         "/api/v1/referrals/partner/apply",
         json={
             "full_name": "Alex Media",
-            "email": "alex@media.test",
+            "email": "alexmedia@gmail.com",
             "social_links": ["https://youtube.com/@alexmedia", "https://tiktok.com/@alexmedia"],
             "audience": "YouTube channel with 35k media buyers running paid social ads looking for ad creative tools.",
         },
@@ -826,7 +826,7 @@ def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkou
     body = req.json()
     assert body["status"] == "pending"
     assert body["full_name"] == "Alex Media"
-    assert body["email"] == "alex@media.test"
+    assert body["email"] == "alexmedia@gmail.com"
     assert body["social_links"] == ["https://youtube.com/@alexmedia", "https://tiktok.com/@alexmedia"]
 
     # While pending, the code is not active yet.
@@ -884,7 +884,7 @@ def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkou
     admin_list = admin_client.get("/api/v1/admin/affiliates").json()["partners"]
     listed = next(item for item in admin_list if item["user_id"] == partner_user_id)
     assert listed["full_name"] == "Alex Media"
-    assert listed["contact_email"] == "alex@media.test"
+    assert listed["contact_email"] == "alexmedia@gmail.com"
     assert listed["social_links"] == ["https://youtube.com/@alexmedia", "https://tiktok.com/@alexmedia"]
 
     approved = admin_client.post(

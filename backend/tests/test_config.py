@@ -123,3 +123,9 @@ def test_database_url_defaults_to_sqlite_in_the_storage_root(env, monkeypatch, t
     settings = env(ADCAM_STORAGE_ROOT=str(tmp_path))
     assert settings.resolved_database_url.startswith("sqlite:///")
     assert "adcamouflage.db" in settings.resolved_database_url
+
+
+def test_trusted_email_domains_parses_comma_env_var(env):
+    settings = env(ADCAM_TRUSTED_EMAIL_DOMAINS="Gmail.com, @HOTMAIL.COM , outlook.com")
+    assert settings.trusted_email_domains == ["gmail.com", "hotmail.com", "outlook.com"]
+

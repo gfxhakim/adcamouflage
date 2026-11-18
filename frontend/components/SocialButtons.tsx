@@ -38,28 +38,38 @@ export default function SocialButtons({
   next,
   mode,
   role,
+  providers: initialProviders,
 }: {
   next: string | null;
   mode: "signin" | "signup";
   role?: "customer" | "affiliate";
+  providers?: AuthProviders | null;
 }) {
-  const [providers, setProviders] = useState<AuthProviders | null>(null);
+  const [fetchedProviders, setFetchedProviders] = useState<AuthProviders | null>(null);
+  const providers = initialProviders ?? fetchedProviders;
 
   useEffect(() => {
+    if (initialProviders !== undefined) return;
     let cancelled = false;
     fetchProviders().then((p) => {
-      if (!cancelled) setProviders(p);
+      if (!cancelled) setFetchedProviders(p);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialProviders]);
 
   if (!providers || !providers.google) return null;
   const verb = mode === "signup" ? "Sign up with" : "Continue with";
+  const registrationClosed = mode === "signup" && providers.registration_open === false;
 
   return (
     <div className="mb-5">
+      {registrationClosed ? (
+        <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          New account sign-ups are paused right now. Existing accounts can still log in.
+        </p>
+      ) : null}
       <div className="space-y-3">
         {providers.google ? (
           <a href={oauthStartUrl("google", next, role)} className={BUTTON}>

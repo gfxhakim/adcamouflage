@@ -595,7 +595,13 @@ def _handle_payment_succeeded(db: Session, event: dict) -> JSONResponse:
         if whop_promo and not order.coupon_code and order.kind == "subscription":
             owner = db.get(User, order.user_id)
             code_row = affiliates.find_code(db, whop_promo)
-            if owner is not None and code_row is not None and affiliates.referral_of(db, owner.id) is None and not affiliates.has_paid(db, owner):
+            existing_ref = affiliates.referral_of(db, owner.id) if owner is not None else None
+            if (
+                owner is not None
+                and code_row is not None
+                and (existing_ref is None or existing_ref.first_order_id is None)
+                and not affiliates.has_paid(db, owner)
+            ):
                 try:
                     affiliates.attribute(db, owner, code_row, source="coupon")
                 except affiliates.AttributionError:

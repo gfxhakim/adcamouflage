@@ -124,7 +124,7 @@ export function TeamCard({ team, onChanged }: TeamCardProps) {
         <input
           className="field flex-1"
           type="email"
-          placeholder={full ? "All seats are in use" : "teammate@company.com"}
+          placeholder={full ? "All seats are in use" : "teammate@gmail.com"}
           value={email}
           disabled={full || busy !== null}
           onChange={(e) => setEmail(e.target.value)}

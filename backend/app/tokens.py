@@ -79,6 +79,7 @@ class TokenPlan:
     # matching workspace controls are locked and the render API turns them off.
     full_engine: bool = True
     metadata_wipe: bool = True
+    multi_platform: bool = True
     # Limited-time offer (see ``get_price_promo``). ``price`` is always what a
     # checkout bills right now; ``launch_price`` is the price the admin typed,
     # and ``regular_price``/``offer_ends_at`` are set only while the offer runs.
@@ -111,7 +112,11 @@ class TokenPlan:
             "rollover_cap": self.rollover_cap,
             "topup_rate": self.topup_rate,
             "seats": self.seats,
-            "features": {"full_engine": self.full_engine, "metadata_wipe": self.metadata_wipe},
+            "features": {
+                "full_engine": self.full_engine,
+                "metadata_wipe": self.metadata_wipe,
+                "multi_platform": self.multi_platform,
+            },
             "launch_price": self.price if self.launch_price is None else self.launch_price,
             "regular_price": self.regular_price,
             "offer_ends_at": self.offer_ends_at.isoformat() if self.offer_ends_at else None,
@@ -121,7 +126,18 @@ class TokenPlan:
 DEFAULT_PLANS: dict[str, TokenPlan] = {
     plan.id: plan
     for plan in (
-        TokenPlan("starter", "Starter", 37.0, 1500, 100, 0, 40, full_engine=False, metadata_wipe=False),
+        TokenPlan(
+            "starter",
+            "Starter",
+            37.0,
+            1500,
+            100,
+            0,
+            40,
+            full_engine=False,
+            metadata_wipe=True,
+            multi_platform=False,
+        ),
         TokenPlan("pro", "Pro", 89.0, 4500, 90, 1, 50),
         TokenPlan("max", "Max", 149.0, 9600, 80, 2, 65, seats=5),
     )
@@ -232,6 +248,7 @@ def get_token_plans(db: Session, now: datetime | None = None) -> dict[str, Token
             seats=max(1, int(edit.get("seats", base.seats))),
             full_engine=bool((edit.get("features") or {}).get("full_engine", base.full_engine)),
             metadata_wipe=bool((edit.get("features") or {}).get("metadata_wipe", base.metadata_wipe)),
+            multi_platform=bool((edit.get("features") or {}).get("multi_platform", base.multi_platform)),
         )
         plan = plans[plan_id]
         regular = promo["regular"].get(plan_id) or 0
@@ -250,6 +267,24 @@ def save_token_plans(db: Session, plans: dict[str, dict[str, Any]]) -> None:
     for plan_id, data in plans.items():
         overrides[plan_id] = {**(overrides.get(plan_id) or {}), **data}
     set_setting(db, PLAN_SETTING, overrides)
+
+
+def ensure_starter_metadata_wipe(db: Session) -> None:
+    """One-time backfill enabling Clean Container export in any stored Starter override."""
+
+    key = "migration.starter_metadata_wipe_v1"
+    if get_setting(db, key, False):
+        return
+    overrides = dict(get_setting(db, PLAN_SETTING, {}) or {})
+    starter = dict(overrides.get("starter") or {})
+    features = dict(starter.get("features") or {})
+    if "metadata_wipe" in features and not features["metadata_wipe"]:
+        features["metadata_wipe"] = True
+        starter["features"] = features
+        overrides["starter"] = starter
+        set_setting(db, PLAN_SETTING, overrides)
+    set_setting(db, key, True)
+    db.commit()
 
 
 def get_topups(db: Session) -> dict[str, Any]:

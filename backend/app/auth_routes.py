@@ -215,6 +215,8 @@ class Providers(BaseModel):
     google: bool
     # True when new sign-ups must enter an emailed code.
     email_codes: bool
+    registration_open: bool = True
+    trusted_email_domains: list[str] = []
 
 
 WRONG_CODE = "That code is wrong or has expired. Check the latest email, or ask for a new code."
@@ -254,8 +256,15 @@ def _welcome_new_account(db: Session, user: User, request: Request) -> None:
 
 
 @router.get("/providers", response_model=Providers)
-def providers() -> Providers:
-    return Providers(google=settings.google_ready, email_codes=verification_on())
+def providers(db: Session = Depends(get_db)) -> Providers:
+    return Providers(
+        google=settings.google_ready,
+        email_codes=verification_on(),
+        registration_open=registration_open(db),
+        trusted_email_domains=[
+            d.strip().lower() for d in settings.trusted_email_domains if d.strip()
+        ],
+    )
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -269,7 +278,7 @@ def register(
         )
 
     email = validate_email(payload.email)
-    password = validate_password(payload.password)
+    password = validate_password(payload.password, email=email)
     name = (payload.display_name or "").strip() or None
     role = "affiliate" if payload.account_role == "affiliate" and email not in settings.admin_emails else "customer"
     needs_code = verification_on()

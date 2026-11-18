@@ -9,11 +9,13 @@ import StatTile from "@/components/StatTile";
 import {
   actOnReferral,
   decidePartner,
+  decidePayoutRequest,
   getAffiliateReferrals,
   getAffiliates,
   getPartnerDetail,
   recordPartnerPayout,
   saveAffiliateProgram,
+  type AdminPayoutRequest,
   type AffiliateOverview,
   type AffiliatePartnerDetail,
   type AffiliatePartnerRow,
@@ -204,7 +206,7 @@ function SettingsCard({ overview, currency, onSaved }: { overview: AffiliateOver
           <div className="grid gap-3 sm:grid-cols-3">
             <Num label="Audience discount" suffix="%" value={program.partner.discount_pct} step="0.5" onChange={(discount_pct) => partner({ discount_pct })} />
             <Num label="Commission ready after" suffix="days" value={program.partner.hold_days} onChange={(hold_days) => partner({ hold_days })} />
-            <Num label="Minimum payout" suffix={currency} value={program.partner.min_payout} step="5" onChange={(min_payout) => partner({ min_payout })} />
+            <Num label="Minimum payout (min $100)" suffix={currency} value={program.partner.min_payout} step="5" onChange={(min_payout) => partner({ min_payout })} />
           </div>
           <PlanChecks plans={overview.plans} value={program.partner.plans} onChange={(plans) => partner({ plans })} />
           <p className={clsx("text-[11px]", faint)}>First payment with the coupon: {price(program.partner.discount_pct, program.partner.plans) || "no plan selected"}</p>
@@ -718,6 +720,105 @@ function ReferralsCard({ refreshKey, onChanged, onSelectUser }: { refreshKey: nu
 // tab
 // --------------------------------------------------------------------------
 
+function PayoutRequestsCard({
+  requests,
+  currency,
+  onChanged,
+  onSelectUser,
+}: {
+  requests: AdminPayoutRequest[];
+  currency: string;
+  onChanged: () => void;
+  onSelectUser: (id: number) => void;
+}) {
+  const [refs, setRefs] = useState<Record<number, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (requests.length === 0) return null;
+
+  const act = async (req: AdminPayoutRequest, action: "pay" | "reject") => {
+    const reference = (refs[req.id] ?? "").trim();
+    if (action === "pay") {
+      if (
+        !window.confirm(
+          `Mark withdrawal #${req.id} (${formatMoney(req.amount, currency)} to ${req.partner_name || req.partner_email} via ${req.method}) as PAID?\n\nSend the payment externally first — this records the payout and closes the request.`,
+        )
+      ) {
+        return;
+      }
+    } else if (!window.confirm(`Reject withdrawal request #${req.id} for ${formatMoney(req.amount, currency)}?`)) {
+      return;
+    }
+    setBusy(`${action}-${req.id}`);
+    setError(null);
+    try {
+      await decidePayoutRequest(req.id, { action, ...(action === "pay" ? { reference } : {}) });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update withdrawal request.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card
+      title="Withdrawal requests ($100+ min)"
+      icon={<Wallet className="h-4 w-4 text-meta-500" aria-hidden />}
+      hint="Partners request withdrawals once available earnings reach $100. Send funds manually, paste TX ID, then click Mark paid."
+    >
+      {error ? <p className="mb-3 text-xs text-red-600 dark:text-red-300">{error}</p> : null}
+      <ul className={clsx("rounded-xl border", line, rows)}>
+        {requests.map((req) => (
+          <li key={req.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-meta-600 hover:underline dark:text-meta-300"
+                  onClick={() => onSelectUser(req.partner_id)}
+                >
+                  {req.partner_name || req.partner_email}
+                </button>
+                <span className={clsx("text-xs font-bold tabular-nums", text)}>{formatMoney(req.amount, currency)}</span>
+                <Chip status={req.status === "rejected" ? "blocked" : req.status === "cancelled" ? "suspended" : req.status} label={req.status} />
+                {req.code ? <span className="font-mono text-[11px] text-meta-500">{req.code}</span> : null}
+              </div>
+              <p className={clsx("text-[11px]", text)}>
+                {req.method}: <span className="font-mono">{req.address}</span>
+              </p>
+              <p className={clsx("text-[11px]", faint)}>
+                Requested {timeAgo(req.created_at)}
+                {req.note ? ` · "${req.note}"` : ""}
+                {req.reference ? ` · Ref: ${req.reference}` : ""}
+              </p>
+            </div>
+            {req.status === "pending" ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  className="field !w-44 !py-1.5 !text-xs"
+                  placeholder="TX hash / reference"
+                  value={refs[req.id] ?? ""}
+                  maxLength={300}
+                  aria-label="Payment reference"
+                  onChange={(e) => setRefs((prev) => ({ ...prev, [req.id]: e.target.value }))}
+                />
+                <button type="button" className="btn-primary !py-1.5 !text-xs" disabled={busy !== null} onClick={() => void act(req, "pay")}>
+                  Mark paid
+                </button>
+                <button type="button" className="btn-ghost !py-1.5 !text-xs" disabled={busy !== null} onClick={() => void act(req, "reject")}>
+                  Reject
+                </button>
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 export function AffiliatesTab({ refreshKey, currency, onSelectUser }: AffiliatesTabProps) {
   const [overview, setOverview] = useState<AffiliateOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -764,13 +865,14 @@ export function AffiliatesTab({ refreshKey, currency, onSelectUser }: Affiliates
         <StatTile
           icon={Flag}
           label="Needs a look"
-          value={String(summary.applications + summary.flagged)}
-          hint={`${summary.applications} ${summary.applications === 1 ? "application" : "applications"} · ${summary.flagged} flagged`}
+          value={String(summary.applications + summary.flagged + (summary.withdrawal_requests ?? 0))}
+          hint={`${summary.applications} ${summary.applications === 1 ? "application" : "applications"} · ${summary.withdrawal_requests ?? 0} withdrawals · ${summary.flagged} flagged`}
           tone="slow"
         />
       </section>
       <p className={clsx("-mt-3 text-xs", faint)}>{formatTokens(summary.friend_reward_tokens)} reward tokens given to referrers so far.</p>
 
+      <PayoutRequestsCard requests={overview.payout_requests ?? []} currency={currency} onChanged={changed} onSelectUser={onSelectUser} />
       <PartnersCard partners={overview.partners} currency={currency} onChanged={changed} onSelectUser={onSelectUser} />
       <ReferralsCard refreshKey={refreshKey + bump} onChanged={changed} onSelectUser={onSelectUser} />
       <SettingsCard overview={overview} currency={currency} onSaved={changed} />

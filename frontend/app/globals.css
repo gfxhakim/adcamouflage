@@ -786,6 +786,65 @@ html[data-deck-theme="light"] .deck:not(.deck-fixed) {
   }
 }
 
+/* Frosted glassy Pro plan card sheen -------------------------------------- */
+.pro-glass {
+  background:
+    radial-gradient(120% 70% at 50% -15%, rgb(153 194 255 / 0.28), transparent 58%),
+    radial-gradient(80% 60% at 15% 110%, rgb(8 102 255 / 0.28), transparent 62%),
+    linear-gradient(165deg, rgb(12 46 112 / 0.72) 0%, rgb(7 24 61 / 0.68) 46%, rgb(5 10 22 / 0.86) 100%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  backdrop-filter: blur(22px) saturate(165%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.34),
+    inset 0 -1px 0 rgb(102 163 255 / 0.2),
+    0 0 0 1px rgb(102 163 255 / 0.42),
+    0 24px 80px -22px rgb(8 102 255 / 0.85),
+    0 0 42px -12px rgb(102 163 255 / 0.55);
+}
+
+.pro-shine {
+  background: linear-gradient(
+    112deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.05) 38%,
+    rgb(255 255 255 / 0.22) 48%,
+    rgb(153 194 255 / 0.14) 54%,
+    transparent 70%
+  );
+  animation: pro-glass-sweep 5.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.pro-shine-subtle {
+  background: linear-gradient(
+    112deg,
+    transparent 24%,
+    rgb(8 102 255 / 0.04) 40%,
+    rgb(255 255 255 / 0.45) 50%,
+    rgb(153 194 255 / 0.12) 56%,
+    transparent 72%
+  );
+  animation: pro-glass-sweep 6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes pro-glass-sweep {
+  0% {
+    transform: translateX(-140%) skewX(-16deg);
+  }
+  45%,
+  100% {
+    transform: translateX(220%) skewX(-16deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pro-shine,
+  .pro-shine-subtle {
+    animation: none;
+    opacity: 0.35;
+    transform: none;
+  }
+}
+
 /* Phones: fixed page backgrounds repaint on every scroll frame and judder on
    iOS/Android, so they scroll with the page there. */
 @media (max-width: 1023px), (hover: none) {

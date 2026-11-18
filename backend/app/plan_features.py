@@ -11,10 +11,11 @@ This only restricts settings that already exist; it adds nothing to the engine.
 
 from __future__ import annotations
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from .db import User
-from .schemas import MutationOptions
+from .schemas import MutationOptions, Platform
 from .teams import billing_account
 from .tokens import get_token_plans, uses_tokens
 
@@ -36,7 +37,8 @@ FEATURE_FIELDS: dict[str, tuple[str, ...]] = {
     # "Complete Metadata & Hash Wipe" = the Strip metadata switch.
     "metadata_wipe": ("strip_metadata",),
 }
-FEATURE_IDS = tuple(FEATURE_FIELDS)
+# All plan-level feature flags: render option groups plus multi-platform delivery.
+FEATURE_IDS = (*FEATURE_FIELDS, "multi_platform")
 
 
 def locked_features(db: Session, user: User) -> list[str]:
@@ -57,6 +59,16 @@ def locked_features(db: Session, user: User) -> list[str]:
     return [feature for feature in FEATURE_IDS if not getattr(plan, feature)]
 
 
+def validate_plan_platform(options: MutationOptions, locked: list[str]) -> None:
+    """Reject TikTok Ads or YouTube Ads batch requests when the paying plan only allows Meta Ads."""
+
+    if "multi_platform" in locked and options.platform is not Platform.META:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="TikTok Ads and YouTube Ads are only available on Pro and Max plans. Select Meta Ads or upgrade your plan.",
+        )
+
+
 def enforce_plan_features(options: MutationOptions, locked: list[str]) -> list[str]:
     """Switch off every option a locked feature covers; return the ones that were on."""
 
@@ -66,4 +78,7 @@ def enforce_plan_features(options: MutationOptions, locked: list[str]) -> list[s
             if getattr(options, field, False):
                 setattr(options, field, False)
                 dropped.append(field)
+    if "multi_platform" in locked and options.platform is not Platform.META:
+        options.platform = Platform.META
+        dropped.append("platform")
     return dropped

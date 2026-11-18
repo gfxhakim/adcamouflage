@@ -39,18 +39,159 @@ class AuthError(HTTPException):
 # --------------------------------------------------------------------------
 
 
+DISPOSABLE_EMAIL_DOMAINS: frozenset[str] = frozenset(
+    {
+        "mailinator.com",
+        "guerrillamail.com",
+        "guerrillamail.net",
+        "guerrillamail.org",
+        "sharklasers.com",
+        "grr.la",
+        "tempmail.com",
+        "temp-mail.org",
+        "temp-mail.io",
+        "10minutemail.com",
+        "10minutemail.net",
+        "yopmail.com",
+        "yopmail.fr",
+        "yopmail.net",
+        "throwawaymail.com",
+        "trashmail.com",
+        "trashmail.net",
+        "getnada.com",
+        "nada.email",
+        "dispostable.com",
+        "fakeinbox.com",
+        "maildrop.cc",
+        "mintemail.com",
+        "mohmal.com",
+        "emailondeck.com",
+        "getairmail.com",
+        "harakirimail.com",
+        "mailnesia.com",
+        "burnermail.io",
+        "tempr.email",
+        "discard.email",
+        "inboxkitten.com",
+        "moakt.com",
+        "mytemp.email",
+        "tempail.com",
+    }
+)
+
+_WEAK_PASSWORDS: frozenset[str] = frozenset(
+    {
+        "password",
+        "password1",
+        "password123",
+        "passw0rd",
+        "qwerty",
+        "qwertyui",
+        "qwertyuiop",
+        "qwerty123",
+        "admin",
+        "admin123",
+        "admin1234",
+        "letmein",
+        "welcome",
+        "welcome1",
+        "welcome123",
+        "iloveyou",
+        "sunshine",
+        "football",
+        "princess",
+        "dragon12",
+        "monkey12",
+        "trustno1",
+        "proteusflow",
+        "camo1234",
+        "12345678",
+        "123456789",
+        "1234567890",
+        "00000000",
+        "11111111",
+        "aaaaaaaa",
+    }
+)
+
+_WEAK_BASE_WORDS: frozenset[str] = frozenset(
+    {
+        "password",
+        "passw0rd",
+        "qwerty",
+        "qwertyuiop",
+        "admin",
+        "letmein",
+        "welcome",
+        "iloveyou",
+        "abcdef",
+        "abcdefg",
+        "abcdefgh",
+        "proteusflow",
+    }
+)
+
+_WEAK_SEQUENCES: tuple[str, ...] = (
+    "01234",
+    "12345",
+    "23456",
+    "34567",
+    "45678",
+    "56789",
+    "98765",
+    "87654",
+    "76543",
+    "65432",
+    "54321",
+    "43210",
+    "abcdef",
+    "fedcba",
+    "qwerty",
+    "asdfgh",
+    "zxcvbn",
+)
+
+
 def normalise_email(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def validate_email(email: str) -> str:
+def email_domain(email: str) -> str:
+    cleaned = normalise_email(email)
+    return cleaned.rsplit("@", 1)[-1] if "@" in cleaned else ""
+
+
+def is_disposable_email(email: str) -> bool:
+    return email_domain(email) in DISPOSABLE_EMAIL_DOMAINS
+
+
+def is_trusted_email_domain(domain: str) -> bool:
+    cleaned = domain.strip().lower().lstrip("@")
+    if not cleaned or cleaned in DISPOSABLE_EMAIL_DOMAINS:
+        return False
+    allowed = {entry.strip().lower().lstrip("@") for entry in settings.trusted_email_domains if entry.strip()}
+    return not allowed or cleaned in allowed
+
+
+def validate_email(email: str, *, require_trusted: bool = True) -> str:
     cleaned = normalise_email(email)
     if not cleaned or len(cleaned) > 320 or not _EMAIL_PATTERN.match(cleaned):
         raise AuthError("Enter a valid email address.", status.HTTP_422_UNPROCESSABLE_ENTITY)
+    domain = email_domain(cleaned)
+    if domain in DISPOSABLE_EMAIL_DOMAINS:
+        raise AuthError(
+            "Temporary or disposable email addresses are not allowed. Use a trusted provider like Gmail, Hotmail, Outlook, iCloud, Yahoo, or Proton.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    if require_trusted and not is_trusted_email_domain(domain):
+        raise AuthError(
+            "Use a trusted email provider like Gmail, Hotmail, Outlook, iCloud, Yahoo, or Proton.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
     return cleaned
 
 
-def validate_password(password: str) -> str:
+def validate_password(password: str, *, email: str = "") -> str:
     if not password:
         raise AuthError("A password is required.", status.HTTP_422_UNPROCESSABLE_ENTITY)
     if len(password) < settings.min_password_length:
@@ -58,9 +199,61 @@ def validate_password(password: str) -> str:
             f"Use at least {settings.min_password_length} characters.",
             status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
+    if not password.strip():
+        raise AuthError("Password cannot be spaces only.", status.HTTP_422_UNPROCESSABLE_ENTITY)
     if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
         raise AuthError(
             "That password is too long; use 72 bytes or fewer.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    lower = password.lower()
+    if lower in _WEAK_PASSWORDS:
+        raise AuthError(
+            "That password is too common. Pick a personal phrase or mix letters, numbers, and symbols.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    alpha_only = re.sub(r"[^a-z]+", "", lower)
+    if alpha_only in _WEAK_BASE_WORDS and len(password) < 12:
+        raise AuthError(
+            "That password is too easy to guess. Pick a stronger phrase or word combination.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    if re.search(r"(.)\1\1\1", password):
+        raise AuthError(
+            "Avoid repeating the same character 4+ times in a row.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    if any(seq in lower for seq in _WEAK_SEQUENCES) and len(password) < 12:
+        raise AuthError(
+            "Avoid obvious keyboard or number sequences like 12345 or qwerty.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    if len(set(password)) < 5:
+        raise AuthError(
+            "Use more varied characters so your password is harder to guess.",
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    if email:
+        cleaned_email = normalise_email(email)
+        local_part = cleaned_email.split("@", 1)[0]
+        if lower == cleaned_email or (len(local_part) >= 4 and local_part in lower and len(lower) <= len(local_part) + 3):
+            raise AuthError(
+                "Do not use your email address as your password.",
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+    classes = sum(
+        (
+            any(c.islower() for c in password),
+            any(c.isupper() for c in password),
+            any(c.isdigit() for c in password),
+            any(not c.isalnum() and not c.isspace() for c in password),
+        )
+    )
+    strong_passphrase = len(password) >= 12 and classes >= 2 and len(set(password)) >= 6
+    strong_mixed = classes >= 3
+    if not (strong_passphrase or strong_mixed):
+        raise AuthError(
+            "Make it stronger: mix 3 of uppercase, lowercase, numbers, or symbols — or use a 12+ character passphrase.",
             status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
     return password
@@ -221,8 +414,8 @@ def ensure_admin_account(db: Session) -> None:
     if not secret or not settings.admin_emails:
         return
     try:
-        email = validate_email(settings.admin_emails[0])
-        password = validate_password(secret)
+        email = validate_email(settings.admin_emails[0], require_trusted=False)
+        password = validate_password(secret, email=email)
     except AuthError as exc:
         logger.error("ADCAM_ADMIN_PASSWORD was not applied: %s", exc.detail)
         return

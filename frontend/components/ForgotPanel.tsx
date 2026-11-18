@@ -9,8 +9,8 @@ import { forgotPassword, resetPassword } from "@/lib/auth";
 import { CodeField, ResendButton } from "./CodeInput";
 import NeonCard from "./NeonCard";
 
-/** Must match ADCAM_MIN_PASSWORD_LENGTH on the API. */
-const MIN_PASSWORD_LENGTH = 10;
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { assessPassword, MIN_PASSWORD_LENGTH } from "@/lib/authValidation";
 
 async function isAdmin(): Promise<boolean> {
   try {
@@ -65,8 +65,9 @@ export default function ForgotPanel() {
       setError("Enter the 6-digit code from the email.");
       return;
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Use at least ${MIN_PASSWORD_LENGTH} characters for your new password.`);
+    const assessment = assessPassword(password, sentTo ?? email);
+    if (!assessment.valid && assessment.error) {
+      setError(assessment.error);
       return;
     }
     setBusy(true);
@@ -133,6 +134,7 @@ export default function ForgotPanel() {
               onChange={(e) => setPassword(e.target.value)}
               disabled={busy}
             />
+            <PasswordStrengthMeter password={password} email={sentTo ?? email} />
           </div>
           {alert}
           <button type="submit" className="btn-primary w-full !py-3" disabled={busy}>
@@ -172,7 +174,7 @@ export default function ForgotPanel() {
               type="email"
               autoComplete="email"
               className="field"
-              placeholder="you@company.com"
+              placeholder="you@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={busy}

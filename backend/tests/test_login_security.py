@@ -440,3 +440,42 @@ def test_receipts_and_failed_payment_emails(outbox):
         assert void_order(db, order, "invalid")  # rejected: email
     failed = _to(outbox, email, "did not go through")
     assert len(failed) == 1 and "$40" in failed[0]["text"]
+
+
+def test_oauth_start_bounces_apex_to_canonical_public_url(monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+    from app import oauth
+    from app.config import settings as app_settings
+    from pydantic import SecretStr
+
+    monkeypatch.setattr(app_settings, "public_url", "https://www.proteusflow.com")
+    monkeypatch.setattr(app_settings, "google_client_id", "gid-test")
+    monkeypatch.setattr(app_settings, "google_client_secret", SecretStr("gsec-test"))
+
+    anon = TestClient(app)
+    anon.cookies.set(oauth.affiliates.COOKIE, "ALI20")
+    res = anon.get(
+        "/api/v1/auth/oauth/google/start?next=%2Fapp%2Fplan",
+        headers={"x-forwarded-host": "proteusflow.com", "x-forwarded-proto": "https"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 307
+    loc = res.headers["location"]
+    assert loc.startswith("https://www.proteusflow.com/api/v1/auth/oauth/google/start?")
+    qs = parse_qs(urlparse(loc).query)
+    assert qs["_c"] == ["1"]
+    assert qs["next"] == ["/app/plan"]
+    assert qs["ref"] == ["ALI20"]
+    assert oauth.STATE_COOKIE not in res.cookies
+
+    # Once on canonical host, it sets adcam_oauth state cookie and sends to Google with www callback.
+    canonical_res = anon.get(
+        "/api/v1/auth/oauth/google/start?_c=1&next=%2Fapp%2Fplan&ref=ALI20",
+        headers={"x-forwarded-host": "www.proteusflow.com", "x-forwarded-proto": "https"},
+        follow_redirects=False,
+    )
+    assert canonical_res.status_code == 303
+    assert oauth.STATE_COOKIE in canonical_res.cookies
+    g_qs = parse_qs(urlparse(canonical_res.headers["location"]).query)
+    assert g_qs["redirect_uri"] == ["https://www.proteusflow.com/api/v1/auth/oauth/google/callback"]
+

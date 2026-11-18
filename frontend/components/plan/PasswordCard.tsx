@@ -4,7 +4,9 @@ import { CheckCircle2, KeyRound, Loader2, Mail, Send } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { CodeField } from "@/components/CodeInput";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { changePassword, requestPasswordCode } from "@/lib/auth";
+import { assessPassword, MIN_PASSWORD_LENGTH } from "@/lib/authValidation";
 
 /**
  * Change the account password. The server emails a 6-digit code that must be
@@ -24,6 +26,11 @@ export function PasswordCard({ socialOnly = false }: { socialOnly?: boolean }) {
 
   const askCode = async (event: FormEvent) => {
     event.preventDefault();
+    const check = assessPassword(next);
+    if (!check.valid && check.error) {
+      setError(check.error);
+      return;
+    }
     setSaving(true);
     setError(null);
     setDone(false);
@@ -39,6 +46,11 @@ export function PasswordCard({ socialOnly = false }: { socialOnly?: boolean }) {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const check = assessPassword(next);
+    if (!check.valid && check.error) {
+      setError(check.error);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -79,11 +91,14 @@ export function PasswordCard({ socialOnly = false }: { socialOnly?: boolean }) {
         <input
           type="password"
           autoComplete="new-password"
+          minLength={MIN_PASSWORD_LENGTH}
+          placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
           className="field mt-1"
           value={next}
           onChange={(e) => setNext(e.target.value)}
           required
         />
+        <PasswordStrengthMeter password={next} />
       </label>
       {codeStep ? (
         <label className="block">

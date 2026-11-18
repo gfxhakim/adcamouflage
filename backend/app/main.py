@@ -44,13 +44,14 @@ from .site_content import public_router as site_content_router
 from .ffmpeg import ffmpeg_available, ffmpeg_version
 from .mutator import IMAGE_CONTAINERS, VIDEO_CONTAINERS
 from .app_settings import currency
-from .plan_features import enforce_plan_features, locked_features
+from .plan_features import enforce_plan_features, locked_features, validate_plan_platform
 from .teams import billing_account
 from .teams import router as team_router
 from .tokens import (
     InsufficientTokens,
     check_billing,
     consume,
+    ensure_starter_metadata_wipe,
     get_billing_rules,
     get_token_plans,
     get_topups,
@@ -92,6 +93,7 @@ async def lifespan(app: FastAPI):
     init_db()
     with get_session_factory()() as db:
         ensure_admin_account(db)
+        ensure_starter_metadata_wipe(db)
     store = get_store()
     if not ffmpeg_available():
         logger.error(
@@ -323,8 +325,10 @@ async def create_batch(
     resolved = parsed.resolved()
 
     # Settings the paying plan does not include (Admin > Token plans) are
-    # switched off here, so a direct API call cannot turn them back on.
-    dropped = enforce_plan_features(resolved, locked_features(db, user))
+    # enforced here, so a direct API call cannot bypass plan restrictions.
+    locked = locked_features(db, user)
+    validate_plan_platform(resolved, locked)
+    dropped = enforce_plan_features(resolved, locked)
     if dropped:
         logger.info("Batch for user %s: plan-locked options turned off: %s", user.id, ", ".join(dropped))
 

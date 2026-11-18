@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Check, Loader2, RefreshCw, ShoppingCart, 
 import NeonCard from "@/components/NeonCard";
 import type { TokenSubscription } from "@/lib/auth";
 import { formatMoney, formatTokens } from "@/lib/format";
-import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes } from "@/lib/plan-features";
+import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
 import type { ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type TokenPlanCard } from "@/lib/types";
 
@@ -80,8 +80,24 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
               padding="md"
               radius="lg"
               className="h-full"
-              innerClassName="flex h-full flex-col"
+              innerClassName={clsx(
+                "relative flex h-full flex-col overflow-hidden",
+                plan.id === "pro" &&
+                  "bg-gradient-to-b from-meta-50/80 via-white/85 to-white/95 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:from-[#0c2e70]/75 dark:via-[#07183d]/70 dark:to-[#050a16]/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]",
+              )}
             >
+              {plan.id === "pro" ? (
+                <>
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent"
+                  />
+                  <span
+                    aria-hidden
+                    className="pro-shine-subtle pointer-events-none absolute inset-y-0 -left-1/3 w-2/3"
+                  />
+                </>
+              ) : null}
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-black">{plan.label}</p>
                 {isCurrent ? (
@@ -137,7 +153,11 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                     <span className="font-semibold text-black">{formatTokens(plan.generations)}</span> generations
                   </span>
                 </li>
-                {PLAN_FEATURE_IDS.filter((feature) => planIncludes(plan, feature)).map((feature) => (
+                <li className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                  <span className="font-semibold text-black">{platformLineForPlan(plan)}</span>
+                </li>
+                {PLAN_FEATURE_IDS.filter((feature) => feature !== "multi_platform" && planIncludes(plan, feature)).map((feature) => (
                   <li key={feature} className="flex items-center gap-1.5">
                     <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                     {PLAN_FEATURES[feature].label}

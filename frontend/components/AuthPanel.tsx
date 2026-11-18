@@ -5,8 +5,20 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useState } from "react";
 
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { ApiError } from "@/lib/api";
-import { fetchMe, isPending, resendVerification, signIn, signUp, verifyEmail, type UserProfile } from "@/lib/auth";
+import {
+  fetchMe,
+  fetchProviders,
+  isPending,
+  resendVerification,
+  signIn,
+  signUp,
+  verifyEmail,
+  type AuthProviders,
+  type UserProfile,
+} from "@/lib/auth";
+import { assessPassword, MIN_PASSWORD_LENGTH, trustedEmailError } from "@/lib/authValidation";
 import { trackRegistration } from "@/lib/meta";
 import { CodeField, ResendButton } from "./CodeInput";
 import NeonCard from "./NeonCard";
@@ -17,16 +29,14 @@ type Mode = "signin" | "signup";
 /** Messages for ?oauth_error= after Google sends someone back. */
 const OAUTH_ERRORS: Record<string, string> = {
   cancelled: "Sign-in was cancelled. Try again, or use your email below.",
-  expired: "That sign-in took too long or was opened in another browser. Please try again.",
+  expired: "That sign-in took too long or crossed domains. Please try the Google button again.",
   no_email: "We could not get a confirmed email from that account. Use another account or sign up with email.",
+  untrusted_email: "Use a trusted email provider like Gmail or Google Workspace to sign in.",
   disabled: "This account is turned off. Contact support if you think this is a mistake.",
   closed: "New accounts are closed right now.",
   unavailable: "That sign-in option is not available right now.",
   failed: "Sign-in did not work this time. Please try again, or use your email below.",
 };
-
-/** Must match ADCAM_MIN_PASSWORD_LENGTH on the API. */
-const MIN_PASSWORD_LENGTH = 10;
 
 /** Only same-site paths, so a crafted ?next= cannot send someone off-site. */
 function safeDestination(next: string | null): string {
@@ -68,7 +78,25 @@ export function AuthPanel({ mode }: { mode: Mode }) {
   const next = params.get("next");
   const isAffiliateFlow =
     params.get("role") === "affiliate" || (next?.startsWith("/affiliates/dashboard") ?? false);
+  const [providers, setProviders] = useState<AuthProviders | null>(null);
   const refundSubmitted = mode === "signin" && params.get("refund") === "requested";
+  const oauthErrorCode = params.get("oauth_error");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProviders().then((p) => {
+      if (!cancelled) setProviders(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (oauthErrorCode) {
+      setError(OAUTH_ERRORS[oauthErrorCode] ?? OAUTH_ERRORS.failed);
+    }
+  }, [oauthErrorCode]);
   const destination = isAffiliateFlow && !next ? "/affiliates/dashboard" : safeDestination(next);
   const otherParams = new URLSearchParams();
   if (next) otherParams.set("next", next);
@@ -120,9 +148,17 @@ export function AuthPanel({ mode }: { mode: Mode }) {
 
       setError(null);
 
-      if (mode === "signup" && password.length < MIN_PASSWORD_LENGTH) {
-        setError(`Use at least ${MIN_PASSWORD_LENGTH} characters for your password.`);
-        return;
+      if (mode === "signup") {
+        const emailProblem = trustedEmailError(email.trim(), providers?.trusted_email_domains);
+        if (emailProblem) {
+          setError(emailProblem);
+          return;
+        }
+        const pwCheck = assessPassword(password, email.trim());
+        if (!pwCheck.valid && pwCheck.error) {
+          setError(pwCheck.error);
+          return;
+        }
       }
 
       setBusy(true);
@@ -160,7 +196,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         setBusy(false);
       }
     },
-    [busy, displayName, email, enter, isAffiliateFlow, mode, password],
+    [busy, displayName, email, enter, isAffiliateFlow, mode, password, providers?.trusted_email_domains],
   );
 
   const confirm = useCallback(
@@ -285,6 +321,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         next={isAffiliateFlow && !next ? "/affiliates/dashboard" : next}
         mode={mode}
         role={isAffiliateFlow ? "affiliate" : undefined}
+        providers={providers}
       />
 
       {refundSubmitted ? (
@@ -328,11 +365,16 @@ export function AuthPanel({ mode }: { mode: Mode }) {
             required
             autoComplete="email"
             className="field"
-            placeholder="you@company.com"
+            placeholder="you@gmail.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             disabled={busy}
           />
+          {mode === "signup" ? (
+            <p className="mt-1.5 text-[11px] text-ink-faint">
+              Trusted emails only (Gmail, Hotmail, Outlook, iCloud, Yahoo, Proton).
+            </p>
+          ) : null}
         </div>
 
         <div>
@@ -361,15 +403,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
             onChange={(event) => setPassword(event.target.value)}
             disabled={busy}
           />
-          {mode === "signup" ? (
-            <p className="mt-1.5 text-[11px] text-ink-faint">
-              {password.length === 0
-                ? `${MIN_PASSWORD_LENGTH} characters minimum.`
-                : password.length < MIN_PASSWORD_LENGTH
-                  ? `${MIN_PASSWORD_LENGTH - password.length} more to go.`
-                  : "Long enough."}
-            </p>
-          ) : null}
+          {mode === "signup" ? <PasswordStrengthMeter password={password} email={email} /> : null}
         </div>
 
         {error ? (

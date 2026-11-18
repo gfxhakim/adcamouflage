@@ -44,6 +44,8 @@ export interface AuthProviders {
   google: boolean;
   /** New sign-ups must enter an emailed code. */
   email_codes: boolean;
+  registration_open?: boolean;
+  trusted_email_domains?: string[];
 }
 
 /** Which sign-in buttons the server has keys for. */
@@ -54,7 +56,7 @@ export async function fetchProviders(): Promise<AuthProviders> {
   } catch {
     /* fall through */
   }
-  return { google: false, email_codes: false };
+  return { google: false, email_codes: false, registration_open: true };
 }
 
 /** Where the "Continue with Google" button goes; the API redirects to Google. */

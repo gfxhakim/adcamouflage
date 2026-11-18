@@ -49,6 +49,14 @@ class Preset(str, Enum):
     CUSTOM = "custom"
 
 
+class Platform(str, Enum):
+    """Target publishing platform selected for the batch."""
+
+    META = "meta"
+    TIKTOK = "tiktok"
+    YOUTUBE = "youtube"
+
+
 class QualityTier(str, Enum):
     """User-facing output fidelity.
 
@@ -191,6 +199,7 @@ class PosterSettings(BaseModel):
 class MutationOptions(BaseModel):
     """User-facing knobs for a single batch."""
 
+    platform: Platform = Platform.META
     preset: Preset = Preset.BALANCED
 
     # Intensity is a 0..100 dial; presets seed it but the user can override.

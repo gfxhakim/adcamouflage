@@ -26,7 +26,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 import jwt
@@ -38,7 +38,14 @@ from sqlalchemy.orm import Session
 
 from . import account_security as security
 from . import affiliates, mailer, meta_capi
-from .accounts import create_session_token, is_admin, is_affiliate_only, normalise_email, set_session_cookie
+from .accounts import (
+    create_session_token,
+    is_admin,
+    is_affiliate_only,
+    is_disposable_email,
+    normalise_email,
+    set_session_cookie,
+)
 from .activity import log_activity
 from .app_settings import registration_open
 from .config import settings
@@ -195,6 +202,8 @@ def find_or_create_user(
     email = normalise_email(email or "")
     if not email or not email_verified:
         raise OAuthFailure("no_email", f"{provider} gave no verified email")
+    if is_disposable_email(email):
+        raise OAuthFailure("untrusted_email", f"{provider} rejected disposable domain")
 
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is not None:
@@ -290,10 +299,77 @@ def _fail(request: Request, code: str) -> HTMLResponse:
 # --------------------------------------------------------------------------
 
 
+def _canonical_start_redirect(
+    request: Request,
+    provider: str,
+    next_path: str | None,
+    role: str | None,
+    ref_code: str | None,
+) -> RedirectResponse | None:
+    """Bounce alternate-host/scheme requests (e.g. apex vs www) to ADCAM_PUBLIC_URL before setting OAuth cookies."""
+
+    configured = settings.public_url.strip().rstrip("/")
+    if not configured or request.query_params.get("_c") == "1":
+        return None
+    parsed = urlparse(configured)
+    canonical_scheme = parsed.scheme.lower()
+    canonical_host = parsed.netloc.lower()
+    if not canonical_scheme or not canonical_host:
+        return None
+    canonical_bare = canonical_host.removeprefix("www.")
+
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip().lower()
+    raw_host = request.headers.get("host", "").split(",", 1)[0].strip().lower()
+    external_host = forwarded_host or raw_host
+    if external_host.endswith(".internal") or external_host in ("", "testserver"):
+        referer = request.headers.get("referer") or ""
+        ref_host = urlparse(referer).netloc.lower() if referer else ""
+        if ref_host:
+            external_host = ref_host
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+    external_bare = external_host.removeprefix("www.")
+    same_site = bool(
+        external_host
+        and canonical_bare
+        and (
+            external_bare == canonical_bare
+            or external_host.endswith(f".{canonical_bare}")
+            or canonical_host.endswith(f".{external_host}")
+        )
+    )
+    proto_mismatch = bool(forwarded_proto and forwarded_proto != canonical_scheme)
+    if not same_site or (external_host == canonical_host and not proto_mismatch):
+        return None
+
+    params: dict[str, str] = {"_c": "1"}
+    safe = _safe_next(next_path)
+    if safe:
+        params["next"] = safe
+    if role == "affiliate":
+        params["role"] = "affiliate"
+    carried_ref = (request.cookies.get(affiliates.COOKIE) or ref_code or "").strip()[:80]
+    if carried_ref:
+        params["ref"] = carried_ref
+    return RedirectResponse(
+        f"{configured}/api/v1/auth/oauth/{quote(provider)}/start?{urlencode(params)}",
+        status_code=307,
+    )
+
+
 @router.get("/{provider}/start")
-def start(provider: str, request: Request, next: str | None = None, role: str | None = None) -> RedirectResponse:
+def start(
+    provider: str,
+    request: Request,
+    next: str | None = None,
+    role: str | None = None,
+    ref: str | None = None,
+) -> RedirectResponse:
     if provider not in LABELS or not _ready(provider):
         return RedirectResponse("/login?oauth_error=unavailable", status_code=303)
+    bounce = _canonical_start_redirect(request, provider, next, role, ref)
+    if bounce is not None:
+        return bounce
     state = secrets.token_urlsafe(24)
     nonce = secrets.token_urlsafe(24)
     params = {
@@ -317,7 +393,7 @@ def start(provider: str, request: Request, next: str | None = None, role: str | 
                 "n": nonce,
                 "next": _safe_next(next),
                 "r": "affiliate" if role == "affiliate" else "customer",
-                "ref": (request.cookies.get(affiliates.COOKIE) or "")[:80],
+                "ref": (request.cookies.get(affiliates.COOKIE) or ref or "").strip()[:80],
             }
         ),
         max_age=STATE_TTL,

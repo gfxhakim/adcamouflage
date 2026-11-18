@@ -25,6 +25,9 @@ os.environ.setdefault("ADCAM_INLINE_WORKER_CONCURRENCY", "2")
 os.environ.setdefault("ADCAM_DEFAULT_PLAN", "unlimited")
 
 from app.config import settings  # noqa: E402
+
+if isinstance(settings.trusted_email_domains, list) and "example.com" not in settings.trusted_email_domains:
+    settings.trusted_email_domains = [*settings.trusted_email_domains, "example.com"]
 from app.ffmpeg import ffmpeg_available  # noqa: E402
 
 # The shipped launch offer ends on a calendar date; keep it off by default so

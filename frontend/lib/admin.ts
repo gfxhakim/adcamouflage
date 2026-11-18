@@ -298,7 +298,7 @@ export interface TokenPlanEdit {
   /** Users who share the plan, owner included. */
   seats?: number;
   /** Render-setting groups the plan includes. */
-  features?: Record<"full_engine" | "metadata_wipe", boolean>;
+  features?: Partial<Record<import("@/lib/types").PlanFeatureId, boolean>>;
 }
 
 /** Only the parts that are sent are changed. */
@@ -679,6 +679,24 @@ export interface AffiliatePartnerRow {
   month_rate_pct: number;
 }
 
+export interface AdminPayoutRequest {
+  id: number;
+  partner_id: number;
+  partner_name: string;
+  partner_email: string;
+  code: string | null;
+  amount: number;
+  method: string;
+  address: string;
+  note: string;
+  status: "pending" | "paid" | "rejected" | "cancelled";
+  payout_id: number | null;
+  reference: string;
+  admin_note: string;
+  created_at: string;
+  decided_at: string | null;
+}
+
 export interface AffiliateOverview {
   program: AffiliateProgram;
   plans: { id: string; label: string; price: number }[];
@@ -691,9 +709,11 @@ export interface AffiliateOverview {
     partner_paying: number;
     flagged: number;
     applications: number;
+    withdrawal_requests?: number;
     commission: AffiliateTotals;
   };
   partners: AffiliatePartnerRow[];
+  payout_requests?: AdminPayoutRequest[];
 }
 
 export interface AffiliateReferral {
@@ -752,6 +772,10 @@ export const recordPartnerPayout = (
   userId: number,
   body: { method: string; reference: string; note: string; force: boolean },
 ) => call<{ id: number; amount: number }>(`/affiliates/partners/${userId}/payout`, json("POST", body));
+export const decidePayoutRequest = (
+  requestId: number,
+  body: { action: "pay" | "reject"; reference?: string; note?: string },
+) => call<AdminPayoutRequest>(`/affiliates/payout-requests/${requestId}`, json("POST", body));
 export const getAffiliateReferrals = (channel?: "friend" | "partner", flagged = false) =>
   call<AffiliateReferral[]>(
     `/affiliates/referrals?${new URLSearchParams({ ...(channel ? { channel } : {}), ...(flagged ? { flagged: "true" } : {}) })}`,

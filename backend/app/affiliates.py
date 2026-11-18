@@ -38,6 +38,7 @@ from .db import (
     AffiliateCommission,
     AffiliatePartner,
     AffiliatePayout,
+    AffiliatePayoutRequest,
     Order,
     Referral,
     ReferralClick,
@@ -55,6 +56,7 @@ PARTNER = "partner"
 SETTING = "affiliate_program"
 COOKIE = "pf_ref"
 CODE_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{2,23}$")
+MIN_WITHDRAWAL_USD = 100.0
 
 DEFAULTS: dict[str, Any] = {
     # Days a clicked link keeps counting.
@@ -75,7 +77,7 @@ DEFAULTS: dict[str, Any] = {
         # Share of collected revenue by paying customers in the month.
         "tiers": [{"min": 0, "pct": 25.0}, {"min": 20, "pct": 30.0}, {"min": 50, "pct": 35.0}],
         "hold_days": 30,
-        "min_payout": 50.0,
+        "min_payout": MIN_WITHDRAWAL_USD,
     },
 }
 
@@ -98,6 +100,7 @@ def get_program(db: Session) -> dict[str, Any]:
         program[channel] = merged
     tiers = sorted(program[PARTNER]["tiers"], key=lambda tier: tier["min"])
     program[PARTNER]["tiers"] = tiers or DEFAULTS[PARTNER]["tiers"]
+    program[PARTNER]["min_payout"] = max(MIN_WITHDRAWAL_USD, float(program[PARTNER].get("min_payout") or MIN_WITHDRAWAL_USD))
     return program
 
 
@@ -740,6 +743,329 @@ class PayoutError(Exception):
     pass
 
 
+def subscriber_name(user: User | None, referral_id: int) -> str:
+    """Privacy-safe subscriber display name (never exposes emails or contact PII)."""
+
+    raw = (user.display_name or "").strip() if user is not None else ""
+    return raw if raw else f"Customer #{referral_id}"
+
+
+def partner_customers(
+    db: Session, partner_id: int, commissions: list[dict[str, Any]], now: datetime | None = None
+) -> list[dict[str, Any]]:
+    """Every customer attributed to this partner's code or link, with subscription/payment totals and name only."""
+
+    from .tokens import get_token_plans, subscription_active
+
+    now = now or _now()
+    referrals = db.execute(
+        select(Referral)
+        .where(Referral.referrer_id == partner_id, Referral.channel == PARTNER)
+        .order_by(Referral.created_at.desc(), Referral.id.desc())
+        .limit(200)
+    ).scalars().all()
+    if not referrals:
+        return []
+
+    user_ids = list({r.referred_user_id for r in referrals})
+    users = {
+        u.id: u for u in db.execute(select(User).where(User.id.in_(user_ids))).scalars().all()
+    }
+    orders = db.execute(
+        select(Order)
+        .where(Order.user_id.in_(user_ids), Order.status.in_(("paid", "refunded")))
+        .order_by(Order.created_at.desc(), Order.paid_at.desc())
+    ).scalars().all()
+    orders_by_user: dict[int, list[Order]] = {}
+    for order in orders:
+        orders_by_user.setdefault(order.user_id, []).append(order)
+
+    comms_by_user: dict[int, list[dict[str, Any]]] = {}
+    for row in commissions:
+        comms_by_user.setdefault(int(row["customer_id"]), []).append(row)
+
+    plans = get_token_plans(db)
+    out: list[dict[str, Any]] = []
+    for ref in referrals:
+        cust = users.get(ref.referred_user_id)
+        cust_orders = orders_by_user.get(ref.referred_user_id, [])
+        paid_orders = [o for o in cust_orders if o.status == "paid" and float(o.amount_usd or 0) > 0]
+        refunded_orders = [o for o in cust_orders if o.status == "refunded"]
+        cust_comms = comms_by_user.get(ref.referred_user_id, [])
+
+        latest_paid = paid_orders[0] if paid_orders else (cust_orders[0] if cust_orders else None)
+        plan_id = (cust.sub_plan if cust and cust.sub_plan else None) or (latest_paid.plan_id if latest_paid else "") or ""
+        plan_obj = plans.get(plan_id) if plan_id else None
+        plan_label = plan_obj.label if plan_obj else (plan_id.replace("_", " ").title() if plan_id else "—")
+
+        is_active = bool(cust is not None and subscription_active(cust, now))
+        if ref.status in ("blocked", "void"):
+            status_label = "refunded" if (refunded_orders and not paid_orders) else ref.status
+        elif ref.status == "ended":
+            status_label = "ended"
+        elif is_active:
+            status_label = "cancelling" if (cust and cust.sub_cancelled_at is not None) else "active"
+        elif paid_orders:
+            status_label = "ended"
+        elif refunded_orders:
+            status_label = "refunded"
+        else:
+            status_label = "signed_up"
+
+        used_promo = ref.source == "coupon" or any(bool(o.coupon_code) for o in paid_orders)
+        source_kind = "promo_code" if used_promo else "link"
+        last_paid = (paid_orders[0].paid_at or paid_orders[0].created_at) if paid_orders else None
+
+        out.append(
+            {
+                "id": ref.id,
+                "name": subscriber_name(cust, ref.id),
+                "source": source_kind,
+                "code": ref.code,
+                "status": status_label,
+                "plan_id": plan_id,
+                "plan_label": plan_label,
+                "subscription_active": is_active,
+                "current_period_end": aware(cust.sub_period_end) if cust and cust.sub_period_end else None,
+                "payments_count": len(paid_orders),
+                "total_paid": round(sum(float(o.amount_usd or 0.0) for o in paid_orders), 2),
+                "commission_earned": round(sum(float(c["commission"]) for c in cust_comms if c["status"] != "void"), 2),
+                "commission_pending": round(sum(float(c["commission"]) for c in cust_comms if c["status"] == "pending"), 2),
+                "commission_payable": round(sum(float(c["commission"]) for c in cust_comms if c["status"] == "payable"), 2),
+                "commission_paid": round(sum(float(c["commission"]) for c in cust_comms if c["status"] == "paid"), 2),
+                "joined_at": aware(ref.created_at),
+                "first_paid_at": aware(ref.first_paid_at),
+                "last_paid_at": aware(last_paid) if last_paid else None,
+            }
+        )
+    return out
+
+
+def pending_withdrawal_reserved(db: Session, partner_id: int) -> float:
+    total = db.execute(
+        select(func.coalesce(func.sum(AffiliatePayoutRequest.amount_usd), 0.0)).where(
+            AffiliatePayoutRequest.partner_id == partner_id,
+            AffiliatePayoutRequest.status == "pending",
+        )
+    ).scalar_one()
+    return round(float(total or 0.0), 2)
+
+
+def list_payout_requests(
+    db: Session, partner_id: int | None = None, *, limit: int = 100
+) -> list[AffiliatePayoutRequest]:
+    query = select(AffiliatePayoutRequest).order_by(AffiliatePayoutRequest.created_at.desc(), AffiliatePayoutRequest.id.desc())
+    if partner_id is not None:
+        query = query.where(AffiliatePayoutRequest.partner_id == partner_id)
+    return list(db.execute(query.limit(limit)).scalars().all())
+
+
+def create_payout_request(
+    db: Session,
+    partner_id: int,
+    *,
+    amount: float | None,
+    method: str,
+    address: str,
+    note: str = "",
+) -> AffiliatePayoutRequest:
+    partner = db.get(AffiliatePartner, partner_id)
+    if partner is None or partner.status != "approved":
+        raise PayoutError("Only approved active affiliates can request a withdrawal.")
+    clean_method = method.strip()[:40]
+    clean_address = address.strip()[:300]
+    if len(clean_method) < 2 or len(clean_address) < 3:
+        raise PayoutError("Enter your payout method and wallet or account details.")
+
+    program = get_program(db)
+    minimum = max(MIN_WITHDRAWAL_USD, float(program[PARTNER]["min_payout"]))
+    totals = commission_totals(commission_rows(db, partner_id))
+    reserved = pending_withdrawal_reserved(db, partner_id)
+    available = round(max(0.0, totals["payable"] - reserved), 2)
+    if available < minimum:
+        raise PayoutError(
+            f"You need at least ${minimum:g} available to request a withdrawal (currently ${available:.2f} available)."
+        )
+
+    requested = round(float(amount), 2) if amount is not None else available
+    if requested < minimum:
+        raise PayoutError(f"Minimum withdrawal amount is ${minimum:g}.")
+    if requested > available + 0.01:
+        raise PayoutError(f"You can withdraw up to ${available:.2f} right now.")
+    requested = round(min(requested, available), 2)
+
+    partner.payout_method = clean_method
+    partner.payout_address = clean_address
+    req = AffiliatePayoutRequest(
+        partner_id=partner_id,
+        amount_usd=requested,
+        method=clean_method,
+        address=clean_address,
+        note=note.strip()[:500],
+        status="pending",
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+def cancel_payout_request(db: Session, partner_id: int, request_id: int) -> AffiliatePayoutRequest:
+    req = db.get(AffiliatePayoutRequest, request_id)
+    if req is None or req.partner_id != partner_id:
+        raise PayoutError("Withdrawal request not found.")
+    if req.status != "pending":
+        raise PayoutError("Only pending withdrawal requests can be cancelled.")
+    req.status = "cancelled"
+    req.decided_at = _now()
+    db.commit()
+    db.refresh(req)
+    return req
+
+
+def _claim_payout_rows(
+    db: Session, partner_id: int, payout: AffiliatePayout, rows: list[dict[str, Any]], target_amount: float | None
+) -> float:
+    total_payable = round(sum(float(r["commission"]) for r in rows), 2)
+    if target_amount is None or abs(target_amount - total_payable) <= 0.02:
+        paid = 0.0
+        for live in rows:
+            claimed = db.execute(
+                update(AffiliateCommission)
+                .where(
+                    AffiliateCommission.id == live["id"],
+                    AffiliateCommission.status == "pending",
+                    AffiliateCommission.payout_id.is_(None),
+                )
+                .values(status="paid", rate_pct=live["rate_pct"], commission_usd=live["commission"], payout_id=payout.id)
+                .execution_options(synchronize_session=False)
+            ).rowcount
+            if claimed == 1:
+                paid += float(live["commission"])
+        return round(paid, 2)
+
+    # Partial payout: claim clawbacks first, then oldest matured sales up to target_amount (splitting the boundary row if needed).
+    ordered = sorted(rows, key=lambda r: (0 if r["kind"] == "clawback" else 1, r["created_at"], r["id"]))
+    paid = 0.0
+    for live in ordered:
+        comm = float(live["commission"])
+        if live["kind"] != "clawback" and paid >= target_amount - 0.005:
+            break
+        remaining = round(target_amount - paid, 2)
+        if live["kind"] == "clawback" or comm <= remaining + 0.005:
+            claimed = db.execute(
+                update(AffiliateCommission)
+                .where(
+                    AffiliateCommission.id == live["id"],
+                    AffiliateCommission.status == "pending",
+                    AffiliateCommission.payout_id.is_(None),
+                )
+                .values(status="paid", rate_pct=live["rate_pct"], commission_usd=comm, payout_id=payout.id)
+                .execution_options(synchronize_session=False)
+            ).rowcount
+            if claimed == 1:
+                paid = round(paid + comm, 2)
+        elif remaining >= 0.01:
+            row_obj = db.get(AffiliateCommission, live["id"])
+            if row_obj is None or row_obj.status != "pending" or row_obj.payout_id is not None:
+                continue
+            orig_amount = float(row_obj.amount_usd)
+            take = round(remaining, 2)
+            leftover_comm = round(comm - take, 2)
+            paid_portion_usd = round(orig_amount * (take / comm), 2) if comm > 0 else orig_amount
+            leftover_usd = round(orig_amount - paid_portion_usd, 2)
+            claimed = db.execute(
+                update(AffiliateCommission)
+                .where(
+                    AffiliateCommission.id == row_obj.id,
+                    AffiliateCommission.status == "pending",
+                    AffiliateCommission.payout_id.is_(None),
+                )
+                .values(
+                    status="paid",
+                    amount_usd=paid_portion_usd,
+                    rate_pct=live["rate_pct"],
+                    commission_usd=take,
+                    payout_id=payout.id,
+                )
+                .execution_options(synchronize_session=False)
+            ).rowcount
+            if claimed == 1:
+                if leftover_comm >= 0.01:
+                    db.add(
+                        AffiliateCommission(
+                            partner_id=row_obj.partner_id,
+                            referral_id=row_obj.referral_id,
+                            customer_id=row_obj.customer_id,
+                            order_id=row_obj.order_id,
+                            kind=row_obj.kind,
+                            amount_usd=leftover_usd,
+                            month=row_obj.month,
+                            rate_pct=live["rate_pct"],
+                            commission_usd=leftover_comm,
+                            status="pending",
+                            payable_at=row_obj.payable_at,
+                        )
+                    )
+                paid = round(paid + take, 2)
+                break
+    return round(paid, 2)
+
+
+def decide_payout_request(
+    db: Session,
+    request_id: int,
+    admin_email: str,
+    *,
+    action: str,
+    reference: str = "",
+    admin_note: str = "",
+) -> AffiliatePayoutRequest:
+    req = db.get(AffiliatePayoutRequest, request_id)
+    if req is None:
+        raise PayoutError("Withdrawal request not found.")
+    if req.status != "pending":
+        raise PayoutError(f"This withdrawal request is already {req.status}.")
+    if action == "reject":
+        req.status = "rejected"
+        req.admin_note = admin_note.strip()[:2000]
+        req.decided_at = _now()
+        db.commit()
+        db.refresh(req)
+        return req
+
+    rows = [row for row in commission_rows(db, req.partner_id) if row["status"] == "payable"]
+    total_payable = round(sum(float(r["commission"]) for r in rows), 2)
+    if total_payable < req.amount_usd - 0.02:
+        raise PayoutError(
+            f"Only ${total_payable:.2f} is currently payable (under requested ${req.amount_usd:.2f})."
+        )
+    payout = AffiliatePayout(
+        partner_id=req.partner_id,
+        amount_usd=req.amount_usd,
+        method=req.method[:40],
+        reference=reference.strip()[:300],
+        note=admin_note.strip() or req.note,
+        admin_email=admin_email,
+    )
+    db.add(payout)
+    db.flush()
+    paid = _claim_payout_rows(db, req.partner_id, payout, rows, req.amount_usd)
+    if paid <= 0:
+        db.rollback()
+        raise PayoutError("Nothing is payable for this partner yet.")
+    payout.amount_usd = paid
+    req.amount_usd = paid
+    req.status = "paid"
+    req.payout_id = payout.id
+    req.reference = reference.strip()[:300]
+    req.admin_note = admin_note.strip()[:2000]
+    req.decided_at = _now()
+    db.commit()
+    db.refresh(req)
+    return req
+
+
 def record_payout(
     db: Session, partner_id: int, admin_email: str, *, method: str, reference: str, note: str, force: bool = False
 ) -> AffiliatePayout:
@@ -750,7 +1076,7 @@ def record_payout(
     amount = round(sum(row["commission"] for row in rows), 2)
     if amount <= 0:
         raise PayoutError("Nothing is payable for this partner yet.")
-    minimum = float(program[PARTNER]["min_payout"])
+    minimum = max(MIN_WITHDRAWAL_USD, float(program[PARTNER]["min_payout"]))
     if amount < minimum and not force:
         raise PayoutError(f"${amount:.2f} is under the ${minimum:g} minimum payout.")
     payout = AffiliatePayout(
@@ -763,23 +1089,7 @@ def record_payout(
     )
     db.add(payout)
     db.flush()
-    # Each line is claimed on its own (still unpaid -> paid), so a payout
-    # recorded twice at the same moment cannot pay a commission twice.
-    paid = 0.0
-    for live in rows:
-        claimed = db.execute(
-            update(AffiliateCommission)
-            .where(
-                AffiliateCommission.id == live["id"],
-                AffiliateCommission.status == "pending",
-                AffiliateCommission.payout_id.is_(None),
-            )
-            .values(status="paid", rate_pct=live["rate_pct"], commission_usd=live["commission"], payout_id=payout.id)
-            .execution_options(synchronize_session=False)
-        ).rowcount
-        if claimed == 1:
-            paid += live["commission"]
-    paid = round(paid, 2)
+    paid = _claim_payout_rows(db, partner_id, payout, rows, None)
     if paid <= 0:
         db.rollback()
         raise PayoutError("Nothing is payable for this partner yet.")
