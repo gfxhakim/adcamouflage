@@ -23,9 +23,9 @@ def _render(client: TestClient, image, options: dict):
 
 def test_plan_cards_carry_their_features():
     plans = {p["id"]: p for p in TestClient(app).get("/api/v1/plans").json()["plans"]}
-    assert plans["starter"]["features"] == {"full_engine": False, "metadata_wipe": False}
-    assert plans["pro"]["features"] == {"full_engine": True, "metadata_wipe": True}
-    assert plans["max"]["features"] == {"full_engine": True, "metadata_wipe": True}
+    assert plans["starter"]["features"] == {"full_engine": False, "metadata_wipe": False, "multi_platform": False}
+    assert plans["pro"]["features"] == {"full_engine": True, "metadata_wipe": True, "multi_platform": True}
+    assert plans["max"]["features"] == {"full_engine": True, "metadata_wipe": True, "multi_platform": True}
 
 
 def test_starter_render_api_switches_the_locked_options_off(sample_image):
@@ -33,12 +33,17 @@ def test_starter_render_api_switches_the_locked_options_off(sample_image):
     client = _signed_in(email)
     _grant(email, "starter")
 
-    assert sorted(client.get("/api/v1/auth/subscription").json()["locked_features"]) == ["full_engine", "metadata_wipe"]
+    assert sorted(client.get("/api/v1/auth/subscription").json()["locked_features"]) == [
+        "full_engine",
+        "metadata_wipe",
+        "multi_platform",
+    ]
 
-    # Called directly with everything on, custom profile.
+    # Called directly with everything on, custom profile (default platform=meta).
     response = _render(client, sample_image, {"preset": "custom", **ALL_ON})
     assert response.status_code == 202, response.text
     options = response.json()["options"]
+    assert options["platform"] == "meta"
     assert not any(options[field] for field in GEN4)
     assert options["strip_metadata"] is False
     # Untouched classic layers keep the caller's choice.
@@ -47,6 +52,16 @@ def test_starter_render_api_switches_the_locked_options_off(sample_image):
     # A preset that turns Gen-4 layers on is clamped too.
     stealth = _render(client, sample_image, {"preset": "stealth"}).json()["options"]
     assert not any(stealth[field] for field in GEN4) and stealth["strip_metadata"] is False
+
+    # Starter cannot use TikTok or YouTube directly on the API — only Meta.
+    for blocked_platform in ("tiktok", "youtube"):
+        blocked = _render(client, sample_image, {"preset": "balanced", "platform": blocked_platform})
+        assert blocked.status_code == 403, f"{blocked_platform} should be rejected on Starter: {blocked.text}"
+        assert "Meta" in blocked.json()["detail"]
+
+    meta_ok = _render(client, sample_image, {"preset": "balanced", "platform": "meta"})
+    assert meta_ok.status_code == 202
+    assert meta_ok.json()["options"]["platform"] == "meta"
 
 
 @pytest.mark.parametrize("plan_id", ["pro", "max"])
@@ -58,6 +73,10 @@ def test_pro_and_max_keep_every_option(sample_image, plan_id):
     assert client.get("/api/v1/auth/subscription").json()["locked_features"] == []
     options = _render(client, sample_image, {"preset": "custom", **ALL_ON}).json()["options"]
     assert all(options[field] for field in ALL_ON)
+    for plat in ("meta", "tiktok", "youtube"):
+        res = _render(client, sample_image, {"preset": "balanced", "platform": plat})
+        assert res.status_code == 202
+        assert res.json()["options"]["platform"] == plat
 
 
 def test_admin_can_unlock_starter(admin, sample_image):
@@ -70,17 +89,22 @@ def test_admin_can_unlock_starter(admin, sample_image):
 
         saved = admin.put(
             "/api/v1/admin/billing/config",
-            json={"plans": {"starter": {**starter, "features": {"full_engine": False, "metadata_wipe": True}}}},
+            json={"plans": {"starter": {**starter, "features": {"full_engine": False, "metadata_wipe": True, "multi_platform": True}}}},
         )
         assert saved.status_code == 200, saved.text
-        assert saved.json()["plans"]["starter"]["features"] == {"full_engine": False, "metadata_wipe": True}
+        assert saved.json()["plans"]["starter"]["features"] == {
+            "full_engine": False,
+            "metadata_wipe": True,
+            "multi_platform": True,
+        }
 
         email = address("starter-partly-unlocked")
         client = _signed_in(email)
         _grant(email, "starter")
         assert client.get("/api/v1/auth/subscription").json()["locked_features"] == ["full_engine"]
-        options = _render(client, sample_image, {"preset": "custom", **ALL_ON}).json()["options"]
+        options = _render(client, sample_image, {"preset": "custom", "platform": "tiktok", **ALL_ON}).json()["options"]
         assert options["strip_metadata"] is True
+        assert options["platform"] == "tiktok"
         assert not any(options[field] for field in GEN4)
 
         # Saving a plan without "features" keeps what is stored.

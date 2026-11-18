@@ -298,7 +298,7 @@ export interface TokenPlanEdit {
   /** Users who share the plan, owner included. */
   seats?: number;
   /** Render-setting groups the plan includes. */
-  features?: Record<"full_engine" | "metadata_wipe", boolean>;
+  features?: Partial<Record<import("@/lib/types").PlanFeatureId, boolean>>;
 }
 
 /** Only the parts that are sent are changed. */

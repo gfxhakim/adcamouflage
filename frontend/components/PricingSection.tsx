@@ -9,7 +9,7 @@ import OfferCountdown, { useTimeLeft } from "@/components/landing/OfferCountdown
 import { CmsHeadline } from "@/components/landing/primitives";
 import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { reportPlanClick } from "@/lib/notify";
-import { featureForLine, planIncludes } from "@/lib/plan-features";
+import { featureForLine, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
 import { cn } from "@/lib/utils";
 
 interface PricingSectionProps {
@@ -66,8 +66,9 @@ function seatsText(plan: TokenPlanCard): string {
   return seats > 1 ? `Up to ${number(seats)} users` : "Single user";
 }
 
-/** Seats are printed per plan, so a "single user" line in the shared list would contradict Max. */
+/** Seats and platform access are printed per plan, so static duplicates in CMS are skipped. */
 const SEAT_LINE = /single[\s-]*user/i;
+const PLATFORM_LINE = /meta\s*(approved|,)|tiktok|youtube/i;
 
 /** Whole-percent saving of the launch price on the regular price. */
 function savePercent(launch: number, regular: number): number {
@@ -95,7 +96,7 @@ export function PricingSection({
   const popularId = cms.text("pricing.popularPlan", POPULAR, "text", "Highlighted plan id (starter, pro, max)").trim();
   const included = cms
     .list("pricing.studioIncluded", INCLUDED, "Included in every plan", INCLUDED)
-    .filter(({ item }) => !SEAT_LINE.test(item));
+    .filter(({ item }) => !SEAT_LINE.test(item) && !PLATFORM_LINE.test(item));
   const chooseHref = ctaHref;
 
   return (
@@ -217,6 +218,23 @@ export function PricingSection({
                   </span>
                   <span className={cn((plan.seats ?? 1) > 1 && "font-semibold text-white")}>{seatsText(plan)}</span>
                 </li>
+                <li className="flex items-start gap-2.5 text-sm text-white/75">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
+                    <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                  </span>
+                  <span className="font-medium text-white">{platformLineForPlan(plan)}</span>
+                </li>
+                {!planIncludes(plan, "multi_platform") ? (
+                  <li className="order-last flex items-start gap-2.5 text-sm text-white/35">
+                    <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/10 text-white/45">
+                      <X className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                    </span>
+                    <span className="line-through decoration-white/40">
+                      {PLAN_FEATURES.multi_platform.label}
+                      <span className="sr-only"> (not included in {plan.label})</span>
+                    </span>
+                  </li>
+                ) : null}
               </ul>
 
               <CmsLink

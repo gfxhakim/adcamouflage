@@ -65,6 +65,7 @@ function isVideoFile(file: File): boolean {
 }
 
 const DEFAULT_OPTIONS: MutationOptions = {
+  platform: "meta",
   preset: "balanced",
   intensity: 65,
   micro_crop: true,
@@ -849,7 +850,12 @@ export default function WorkspacePage() {
                 {step === 1 ? (
                   <div className="space-y-6">
                     <div data-tour="settings.platform">
-                      <PlatformPicker disabled={uploading} />
+                      <PlatformPicker
+                        value={options.platform ?? "meta"}
+                        onChange={(platform) => setOptions((current) => ({ ...current, platform }))}
+                        disabled={uploading}
+                        lockedFeatures={billing?.locked_features ?? []}
+                      />
                     </div>
                     <OptionsPanel
                       options={options}

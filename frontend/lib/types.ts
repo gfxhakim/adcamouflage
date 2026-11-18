@@ -4,6 +4,10 @@ export type JobStatus = "queued" | "processing" | "completed" | "failed" | "canc
 
 export type PresetId = "stealth" | "balanced" | "aggressive" | "nuclear" | "custom";
 
+export type PlatformId = "meta" | "tiktok" | "youtube";
+
+export type PlanFeatureId = "full_engine" | "metadata_wipe" | "multi_platform";
+
 export type OverlayMode = "always" | "intro" | "ranges" | "flash_5" | "flash_3" | "flash_custom";
 
 export type OverlayPosition =
@@ -58,6 +62,7 @@ export interface OverlayLayer {
 }
 
 export interface MutationOptions {
+  platform?: PlatformId;
   preset: PresetId;
   intensity: number;
   micro_crop: boolean;
@@ -225,7 +230,7 @@ export interface TokenPlanCard {
   /** People who share the plan's tokens, owner included. Older APIs leave it out (= 1). */
   seats?: number;
   /** Render-setting groups the plan includes. Older APIs leave it out (= all included). */
-  features?: Partial<Record<"full_engine" | "metadata_wipe", boolean>>;
+  features?: Partial<Record<PlanFeatureId, boolean>>;
   /** The price the admin typed: the launch price while a limited-time offer runs. */
   launch_price?: number;
   /** Set only while a limited-time offer runs: the price checkouts bill once it ends. */

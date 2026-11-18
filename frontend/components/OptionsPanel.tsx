@@ -20,7 +20,7 @@ interface OptionsPanelProps {
 }
 
 /** The small "Upgrade to Pro" hint shown beside a locked control. */
-function UpgradeHint({ href }: { href: string }) {
+export function UpgradeHint({ href }: { href: string }) {
   return (
     <Link
       href={href}

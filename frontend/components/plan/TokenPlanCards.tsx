@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Check, Loader2, RefreshCw, ShoppingCart, 
 import NeonCard from "@/components/NeonCard";
 import type { TokenSubscription } from "@/lib/auth";
 import { formatMoney, formatTokens } from "@/lib/format";
-import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes } from "@/lib/plan-features";
+import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
 import type { ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type TokenPlanCard } from "@/lib/types";
 
@@ -137,7 +137,11 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                     <span className="font-semibold text-black">{formatTokens(plan.generations)}</span> generations
                   </span>
                 </li>
-                {PLAN_FEATURE_IDS.filter((feature) => planIncludes(plan, feature)).map((feature) => (
+                <li className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                  <span className="font-semibold text-black">{platformLineForPlan(plan)}</span>
+                </li>
+                {PLAN_FEATURE_IDS.filter((feature) => feature !== "multi_platform" && planIncludes(plan, feature)).map((feature) => (
                   <li key={feature} className="flex items-center gap-1.5">
                     <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                     {PLAN_FEATURES[feature].label}
