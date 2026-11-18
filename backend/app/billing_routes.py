@@ -246,7 +246,9 @@ def checkout(
         else:
             if affiliates.referral_of(db, user.id) is None and not affiliates.has_paid(db, user):
                 affiliates.attribute_signup(db, user, request.cookies.get(affiliates.COOKIE), device, ip)
-            coupon = None
+            coupon = affiliates.checkout_discount(db, user, plan.id, plan.price)
+            if coupon is not None:
+                amount = coupon["amount"]
     else:
         if not subscription_active(user) or user.sub_plan not in plans:
             raise HTTPException(

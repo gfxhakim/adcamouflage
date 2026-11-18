@@ -2,11 +2,13 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Sparkles, Users, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import OfferCountdown, { useTimeLeft } from "@/components/landing/OfferCountdown";
 import { CmsHeadline } from "@/components/landing/primitives";
+import { fetchVisitorOffer, subscribeVisitorOffer, type ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { reportPlanClick } from "@/lib/notify";
 import { featureForLine, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
@@ -82,6 +84,21 @@ export function PricingSection({
   promo,
 }: PricingSectionProps) {
   const cms = useCms();
+  const [referralOffer, setReferralOffer] = useState<ReferralOffer | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchVisitorOffer()
+      .then((res) => {
+        if (!cancelled) setReferralOffer(res.offer ?? null);
+      })
+      .catch(() => undefined);
+    const unsub = subscribeVisitorOffer(setReferralOffer);
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
 
   // The offer ends at the same instant for every plan; the server sends it per plan.
   const endsAt = promo?.active ? promo.ends_at : listed.find((plan) => plan.offer_ends_at)?.offer_ends_at;
@@ -122,6 +139,12 @@ export function PricingSection({
         {plans.map((plan, index) => {
           const popular = plan.id === popularId;
           const regular = !ended && plan.regular_price && plan.regular_price > plan.price ? plan.regular_price : null;
+          const couponPrice = referralOffer?.prices?.[plan.id];
+          const hasReferralDiscount = Boolean(
+            referralOffer && couponPrice !== undefined && couponPrice < plan.price,
+          );
+          const activePrice = hasReferralDiscount && couponPrice !== undefined ? couponPrice : plan.price;
+          const strikePrice = hasReferralDiscount ? plan.price : regular;
 
           return (
             <motion.div
@@ -176,7 +199,17 @@ export function PricingSection({
                 {BLURBS[plan.id] ?? ""}
               </T>
 
-              {regular ? (
+              {hasReferralDiscount && referralOffer ? (
+                <p className="relative z-10 mt-6 flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-medium text-white/45 line-through decoration-red-400/80 decoration-2">
+                    <span className="sr-only">Regular price </span>
+                    {price(plan.price, currency)}
+                  </span>
+                  <span className="rounded-full bg-emerald-400 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-black">
+                    −{referralOffer.discount_pct}% · {referralOffer.code}
+                  </span>
+                </p>
+              ) : regular ? (
                 <p className="relative z-10 mt-6 flex flex-wrap items-center gap-2">
                   <span className="text-lg font-medium text-white/45 line-through decoration-red-400/80 decoration-2">
                     <span className="sr-only">Regular price </span>
@@ -187,13 +220,19 @@ export function PricingSection({
                   </span>
                 </p>
               ) : null}
-              <p className={cn("relative z-10 flex items-baseline gap-1.5", regular ? "mt-1" : "mt-6")}>
-                {regular ? <span className="sr-only">Launch price </span> : null}
+              <p className={cn("relative z-10 flex items-baseline gap-1.5", strikePrice ? "mt-1" : "mt-6")}>
+                {strikePrice ? <span className="sr-only">Discounted price </span> : null}
                 <span className="text-5xl font-semibold tracking-[-0.05em] text-white">
-                  {price(plan.price, currency)}
+                  {price(activePrice, currency)}
                 </span>
                 <T k="pricing.perMonth" className="text-sm text-white/45">/mo</T>
               </p>
+              {hasReferralDiscount && referralOffer ? (
+                <p className="relative z-10 mt-1 text-[11px] font-medium text-emerald-300">
+                  First payment with <span className="font-semibold">{referralOffer.code}</span>, then{" "}
+                  {price(plan.price, currency)}/mo
+                </p>
+              ) : null}
               <p className="relative z-10 mt-2 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-meta-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-meta-400" aria-hidden />
                 {number(plan.tokens)} <T k="pricing.tokensWord">tokens</T> · {number(plan.generations)} <T k="pricing.generationsWord">generations</T>

@@ -186,14 +186,17 @@ def test_friend_link_gives_10_percent_on_pro_and_max_but_not_starter():
 
     starter = checkout(friend, "starter", coupon=code)
     assert starter.status_code == 201 and starter.json()["amount"] == 37.0
-    # Without an explicit coupon parameter, normal Subscribe checkout uses the base Whop plan amount.
-    default_pro = checkout(friend, "pro")
-    assert default_pro.status_code == 201 and default_pro.json()["amount"] == 89.0
-    pro = checkout(friend, "pro", coupon=code)
-    assert pro.json()["amount"] == 80.10
+    # Referred via ?ref= link -> Pro automatically carries the 10% discount without typing a code.
+    auto_pro = checkout(friend, "pro")
+    assert auto_pro.status_code == 201 and auto_pro.json()["amount"] == 80.10
     with session() as db:
-        order = db.get(Order, pro.json()["order_id"])
+        order = db.get(Order, auto_pro.json()["order_id"])
         assert order.coupon_code == code and order.discount_usd == 8.90
+
+    # Without an affiliate link, a new user pays full price unless they apply the promo code.
+    no_ref = client_for(address("noref"), device="device-friend-noref")
+    assert checkout(no_ref, "pro").json()["amount"] == 89.0
+    assert checkout(no_ref, "pro", coupon=code).json()["amount"] == 80.10
 
 
 def test_reward_comes_after_seven_days_and_is_spent_after_subscription_tokens():
@@ -365,10 +368,15 @@ def test_partner_coupon_and_commission_on_everything_the_customer_pays(admin):
 def test_starter_takes_the_partner_coupon(admin):
     code = f"STAR{RUN_ID[:4].upper()}"
     make_partner(admin, code)
+    # Visitor via ?ref=CODE gets discounted Starter and Max automatically at checkout.
     buyer = client_for(address("fan"), device="device-g2", ref=code)
-    assert checkout(buyer, "starter").json()["amount"] == 37.0
-    assert checkout(buyer, "starter", coupon=code).json()["amount"] == 31.45
-    assert checkout(buyer, "max", coupon=code).json()["amount"] == 126.65
+    assert checkout(buyer, "starter").json()["amount"] == 31.45
+    assert checkout(buyer, "max").json()["amount"] == 126.65
+
+    # Visitor without ?ref= pays $37 unless they enter the promo code manually.
+    direct = client_for(address("direct"), device="device-g2-direct")
+    assert checkout(direct, "starter").json()["amount"] == 37.0
+    assert checkout(direct, "starter", coupon=code).json()["amount"] == 31.45
 
 
 def test_tier_follows_paying_customers_in_the_month():

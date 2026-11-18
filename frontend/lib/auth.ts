@@ -409,10 +409,14 @@ export interface SubscriptionState {
  */
 export function startCheckout(
   kind: OrderKind,
-  choice: { plan_id?: string; amount?: number },
+  choice: { plan_id?: string; amount?: number; coupon?: string | null },
   provider?: PaymentProviderId,
 ) {
-  return post<Checkout>("/api/v1/billing/checkout", { kind, ...choice, ...(provider ? { provider } : {}) });
+  const body: Record<string, unknown> = { kind, ...(provider ? { provider } : {}) };
+  if (choice.plan_id) body.plan_id = choice.plan_id;
+  if (choice.amount !== undefined) body.amount = choice.amount;
+  if (choice.coupon?.trim()) body.coupon = choice.coupon.trim();
+  return post<Checkout>("/api/v1/billing/checkout", body);
 }
 
 async function get<T>(path: string): Promise<T> {

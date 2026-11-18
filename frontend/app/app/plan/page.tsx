@@ -26,6 +26,7 @@ import WorkspaceShell from "@/components/WorkspaceShell";
 import NeonCard from "@/components/NeonCard";
 import BillingAlerts from "@/components/plan/BillingAlerts";
 import CancelRefundCard from "@/components/plan/CancelRefundCard";
+import CouponBox from "@/components/plan/CouponBox";
 import LegacyHero from "@/components/plan/LegacyHero";
 import MonthlyBars from "@/components/plan/MonthlyBars";
 import OrderHistory from "@/components/plan/OrderHistory";
@@ -57,6 +58,7 @@ import {
 } from "@/lib/auth";
 import { formatDate, formatMoney, formatTokens, timeAgo } from "@/lib/format";
 import { trackCheckout, trackPurchase } from "@/lib/meta";
+import { dispatchVisitorOffer, fetchVisitorOffer, subscribeVisitorOffer, type ReferralOffer } from "@/lib/referrals";
 import type { TokenPlanCard } from "@/lib/types";
 
 /** How often we check order status while checkout is open or validating. */
@@ -95,6 +97,7 @@ export default function PlanPage() {
   const [sub, setSub] = useState<Subscription | null>(null);
   const [batches, setBatches] = useState<BatchSummary[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [offer, setOffer] = useState<ReferralOffer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   /** The plan id or "topup" whose checkout is being created. */
@@ -129,10 +132,11 @@ export default function PlanPage() {
         window.location.assign("/affiliates/dashboard");
         return;
       }
-      const [subscription, history, orderList] = await Promise.all([
+      const [subscription, history, orderList, visitor] = await Promise.all([
         fetchSubscription(),
         fetchMyBatches(),
         fetchOrders().catch(() => [] as Order[]),
+        fetchVisitorOffer().catch(() => ({ offer: null })),
       ]);
       // Same recovery as the workspace: a cookie the API rejects is cleared first.
       if (!subscription) {
@@ -144,6 +148,7 @@ export default function PlanPage() {
       setSub(subscription);
       setBatches(history.slice(0, 8));
       setOrders(orderList);
+      setOffer(visitor.offer ?? null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load your plan.");
@@ -152,6 +157,7 @@ export default function PlanPage() {
 
   useEffect(() => {
     void load();
+    return subscribeVisitorOffer(setOffer);
   }, [load]);
 
   const paidToastText = useCallback((order: Order) => {
@@ -303,7 +309,7 @@ export default function PlanPage() {
 
   // --- checkout ------------------------------------------------------------
   const buy = useCallback(
-    async (kind: OrderKind, choice: { plan_id?: string; amount?: number }, key: string) => {
+    async (kind: OrderKind, choice: { plan_id?: string; amount?: number; coupon?: string | null }, key: string) => {
       setCheckoutBusy(key);
       setToast(null);
       try {
@@ -351,7 +357,11 @@ export default function PlanPage() {
     [provider],
   );
 
-  const buyPlan = useCallback((plan: TokenPlanCard) => void buy("subscription", { plan_id: plan.id }, plan.id), [buy]);
+  const buyPlan = useCallback(
+    (plan: TokenPlanCard) =>
+      void buy("subscription", { plan_id: plan.id, ...(offer?.code ? { coupon: offer.code } : {}) }, plan.id),
+    [buy, offer?.code],
+  );
   const buyTopup = useCallback((amount: number) => void buy("topup", { amount }, "topup"), [buy]);
   const resumeOrder = useCallback(
     (order: Order) => {
@@ -464,6 +474,17 @@ export default function PlanPage() {
                     <span className="text-[11px] text-ink-faint">Applies to plans and top-ups.</span>
                   </div>
                 ) : null}
+                {!sub.subscription && (offer !== null || !orders.some((o) => o.status === "paid" && o.amount > 0)) ? (
+                  <CouponBox
+                    offer={offer}
+                    planLabels={planLabels}
+                    onApplied={(next) => {
+                      setOffer(next);
+                      dispatchVisitorOffer(next);
+                      void load();
+                    }}
+                  />
+                ) : null}
                 <TokenPlanCards
                   plans={sub.token_plans}
                   current={isTokens ? sub.subscription : null}
@@ -471,6 +492,7 @@ export default function PlanPage() {
                   paymentsEnabled={sub.payments_enabled}
                   busy={checkoutBusy}
                   onBuy={buyPlan}
+                  offer={offer}
                 />
               </section>
 

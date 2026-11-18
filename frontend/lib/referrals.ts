@@ -237,6 +237,15 @@ export function dispatchVisitorOffer(offer: ReferralOffer | null): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<ReferralOffer | null>(VISITOR_OFFER_EVENT, { detail: offer }));
 }
+
+export function subscribeVisitorOffer(listener: (offer: ReferralOffer | null) => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const handler = (event: Event) => {
+    listener((event as CustomEvent<ReferralOffer | null>).detail ?? null);
+  };
+  window.addEventListener(VISITOR_OFFER_EVENT, handler);
+  return () => window.removeEventListener(VISITOR_OFFER_EVENT, handler);
+}
 export const applyAsPartner = (body: {
   full_name: string;
   email: string;

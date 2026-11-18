@@ -812,7 +812,7 @@ def partner_customers(
         else:
             status_label = "signed_up"
 
-        used_promo = ref.source == "coupon" or any(bool(o.coupon_code) for o in paid_orders)
+        used_promo = ref.source == "coupon" or (ref.source != "link" and any(bool(o.coupon_code) for o in paid_orders))
         source_kind = "promo_code" if used_promo else "link"
         last_paid = (paid_orders[0].paid_at or paid_orders[0].created_at) if paid_orders else None
 
