@@ -302,3 +302,52 @@ def test_batch_history_lists_only_your_own(sample_image):
 
     theirs = stranger.get("/api/v1/auth/batches").json()
     assert all(row["id"] != batch_id for row in theirs)
+
+
+def test_trusted_email_allowlist_and_strong_memorable_password(monkeypatch):
+    from app import accounts
+    from app.config import Settings, settings as app_settings
+
+    prod_defaults = Settings(_env_file=None)
+    assert prod_defaults.min_password_length == 8
+    assert "gmail.com" in prod_defaults.trusted_email_domains
+    assert "hotmail.com" in prod_defaults.trusted_email_domains
+    assert "example.com" not in prod_defaults.trusted_email_domains
+
+    # Enforce strict production allowlist (no example.com bypass).
+    monkeypatch.setattr(app_settings, "trusted_email_domains", list(prod_defaults.trusted_email_domains))
+
+    anon = TestClient(app)
+    for bad_email in ("user@tempmail.com", "user@yopmail.com", "user@example.com", "user@randomagency.xyz"):
+        res = anon.post("/api/v1/auth/register", json={"email": bad_email, "password": "Summer26!"})
+        assert res.status_code == 422, f"{bad_email} should be rejected: {res.text}"
+
+    # Weak or predictable 8+ character passwords must fail.
+    for weak_pw in ("Summer2", "12345678", "Password1", "aaaaaaaa", "summer26", "alexgood1"):
+        res = anon.post(
+            "/api/v1/auth/register",
+            json={"email": "alexgood@gmail.com", "password": weak_pw},
+        )
+        assert res.status_code == 422, f"weak password {weak_pw!r} should fail"
+
+    # Strong memorable 8-char and 12+ passphrase passwords on trusted providers succeed.
+    for idx, (domain, pw) in enumerate(
+        [
+            ("gmail.com", "Summer26"),
+            ("hotmail.com", "BlueSky!9"),
+            ("outlook.com", "correct-horse-battery"),
+            ("icloud.com", "RiverStone26"),
+            ("yahoo.com", "GreenTea88!"),
+            ("proton.me", "OceanBreeze26"),
+        ]
+    ):
+        email = f"trusted-{idx}-{id(pw)}@{domain}"
+        res = anon.post("/api/v1/auth/register", json={"email": email, "password": pw})
+        assert res.status_code == 201, f"{email} with {pw!r} failed: {res.text}"
+        assert accounts.is_trusted_email_domain(domain)
+
+    prov = anon.get("/api/v1/auth/providers")
+    assert prov.status_code == 200
+    assert prov.json()["registration_open"] is True
+    assert "gmail.com" in prov.json()["trusted_email_domains"]
+

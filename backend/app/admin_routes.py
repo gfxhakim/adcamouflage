@@ -1503,7 +1503,7 @@ def create_user(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> CreatedUser:
-    email = validate_email(payload.email)
+    email = validate_email(payload.email, require_trusted=False)
     generated = None
     if payload.password:
         password = validate_password(payload.password)

@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { CodeField } from "@/components/CodeInput";
 import { confirmEmailChange, requestEmailChange, type UserProfile } from "@/lib/auth";
+import { trustedEmailError } from "@/lib/authValidation";
 
 /** Change the sign-in email: a code goes to the new address, and the old one gets a notice. */
 export function EmailChangeCard({ socialOnly = false, onChanged }: { socialOnly?: boolean; onChanged?: (p: UserProfile) => void }) {
@@ -27,6 +28,11 @@ export function EmailChangeCard({ socialOnly = false, onChanged }: { socialOnly?
 
   const start = async (event: FormEvent) => {
     event.preventDefault();
+    const emailProblem = trustedEmailError(email.trim());
+    if (emailProblem) {
+      setError(emailProblem);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -80,6 +86,7 @@ export function EmailChangeCard({ socialOnly = false, onChanged }: { socialOnly?
             <input
               type="email"
               autoComplete="email"
+              placeholder="you@gmail.com"
               className="field mt-1"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

@@ -28,6 +28,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import NeonCard from "@/components/NeonCard";
 import CopyField from "@/components/referrals/CopyField";
 import StatTile from "@/components/StatTile";
+import { trustedEmailError } from "@/lib/authValidation";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
   applyAsPartner,
@@ -125,6 +126,11 @@ function ApplyForm({ partner, defaultName, defaultEmail, onChanged }: PartnerCar
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const emailProblem = trustedEmailError(email.trim());
+    if (emailProblem) {
+      setError(emailProblem);
+      return;
+    }
     const cleanedLinks = socialLinks.map((item) => item.trim()).filter(Boolean);
     if (cleanedLinks.length === 0) {
       setError("Add at least one social media profile link.");
@@ -178,7 +184,7 @@ function ApplyForm({ partner, defaultName, defaultEmail, onChanged }: PartnerCar
             value={email}
             maxLength={254}
             required
-            placeholder="you@example.com"
+            placeholder="you@gmail.com"
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>

@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import affiliates, audit, costs, meta_capi
-from .accounts import current_user, is_affiliate_only, optional_user, require_admin, require_studio_user
+from .accounts import current_user, is_affiliate_only, optional_user, require_admin, require_studio_user, validate_email
 from .activity import log_activity
 from .app_settings import currency
 from .config import settings
@@ -393,9 +393,7 @@ def partner_apply(
     full_name = payload.full_name.strip()
     if len(full_name) < 2:
         raise HTTPException(status_code=422, detail="Enter your full name.")
-    contact_email = payload.email.strip().lower()
-    if "@" not in contact_email or "." not in contact_email.split("@", 1)[-1]:
-        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+    contact_email = validate_email(payload.email)
     social_links = _clean_social_links(payload.social_links)
     if not social_links:
         raise HTTPException(status_code=422, detail="Add at least one social media profile link.")

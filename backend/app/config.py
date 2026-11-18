@@ -74,7 +74,68 @@ class Settings(BaseSettings):
     db_connect_timeout: int = 10
     db_connect_max_attempts: int = 12
     allow_registration: bool = True
-    min_password_length: int = 10
+    min_password_length: int = 8
+    trusted_email_domains: list[str] | str = [
+        "gmail.com",
+        "googlemail.com",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "hotmail.fr",
+        "hotmail.de",
+        "hotmail.es",
+        "hotmail.it",
+        "outlook.com",
+        "outlook.co.uk",
+        "outlook.fr",
+        "outlook.de",
+        "live.com",
+        "live.co.uk",
+        "live.fr",
+        "msn.com",
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        "yahoo.com",
+        "yahoo.co.uk",
+        "yahoo.fr",
+        "yahoo.de",
+        "yahoo.es",
+        "yahoo.it",
+        "yahoo.ca",
+        "ymail.com",
+        "rocketmail.com",
+        "proton.me",
+        "protonmail.com",
+        "protonmail.ch",
+        "pm.me",
+        "tuta.com",
+        "tuta.io",
+        "tutanota.com",
+        "tutanota.de",
+        "fastmail.com",
+        "fastmail.fm",
+        "hey.com",
+        "aol.com",
+        "zoho.com",
+        "zohomail.com",
+        "gmx.com",
+        "gmx.de",
+        "gmx.net",
+        "gmx.fr",
+        "mail.com",
+        "laposte.net",
+        "orange.fr",
+        "wanadoo.fr",
+        "free.fr",
+        "sfr.fr",
+        "web.de",
+        "t-online.de",
+        "comcast.net",
+        "verizon.net",
+        "att.net",
+        "btinternet.com",
+        "sky.com",
+    ]
     session_ttl_hours: int = 24 * 14
 
     # Comma-separated sign-in emails that are always admins. This is how the
@@ -210,6 +271,17 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return [str(entry).strip() for entry in value if str(entry).strip()]
         return value
+
+    @field_validator("trusted_email_domains", mode="before")
+    @classmethod
+    def _split_domains(cls, value: object) -> list[str]:
+        if isinstance(value, str):
+            items = [entry.strip().lower().lstrip("@") for entry in value.split(",") if entry.strip()]
+            return list(dict.fromkeys(items))
+        if isinstance(value, list):
+            items = [str(entry).strip().lower().lstrip("@") for entry in value if str(entry).strip()]
+            return list(dict.fromkeys(items))
+        return []
 
     @field_validator("whop_plan_subscription", "whop_plan_topup", mode="before")
     @classmethod
