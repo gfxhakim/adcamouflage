@@ -70,6 +70,8 @@ export const ADMIN_SEARCH_INDEX: AdminSearchEntry[] = [
   e("affiliates", "Commission tiers, by paying customers in the month", "percent partners"),
   e("affiliates", "Reward tokens for the referrer, by the friend's plan", "referral bonus invite"),
   e("affiliates", "Plans the coupon works on", "discount code"),
+  // The card is only on the page while there is a request. Its title goes on with the minimum in brackets.
+  e("affiliates", "Withdrawal requests", "partner payouts pay out cash commission mark paid reject"),
   e("affiliates", "Affiliate applications & partners", "creator influencers promo code link commissions payouts earnings"),
   e("affiliates", "All referrals", "invites friends"),
 
