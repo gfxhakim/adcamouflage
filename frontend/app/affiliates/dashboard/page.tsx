@@ -100,7 +100,7 @@ export default function AffiliateDashboardPage() {
               Affiliate Dashboard
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-ink-muted">
-              Access your Whop affiliate link and promo code, or check the status of your application.
+              Follow subscribers from your promo code or link, track commissions, build campaign links, and request withdrawals from $100.
             </p>
           </div>
           <span className="chip !border-meta-500/30 !bg-meta-50 !text-meta-700">
@@ -123,6 +123,7 @@ export default function AffiliateDashboardPage() {
             {data.partner.enabled || data.partner.status ? (
               <PartnerCard
                 partner={data.partner}
+                currency="USD"
                 defaultName={user.display_name ?? ""}
                 defaultEmail={user.email ?? ""}
                 onChanged={(partner) => setData({ ...data, partner })}

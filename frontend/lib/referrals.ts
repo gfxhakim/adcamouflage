@@ -37,6 +37,8 @@ export interface CommissionTotals {
   pending: number;
   payable: number;
   paid: number;
+  reserved?: number;
+  available?: number;
 }
 
 export interface CommissionLine {
@@ -49,6 +51,43 @@ export interface CommissionLine {
   status: "pending" | "payable" | "paid" | "void";
   payable_at: string;
   created_at: string;
+  note?: string;
+}
+
+export interface PartnerCustomer {
+  id: number;
+  name: string;
+  source: "promo_code" | "link";
+  code: string;
+  status: "active" | "cancelling" | "signed_up" | "ended" | "refunded" | "void" | "blocked";
+  plan_id: string;
+  plan_label: string;
+  subscription_active: boolean;
+  current_period_end: string | null;
+  payments_count: number;
+  total_paid: number;
+  commission_earned: number;
+  commission_pending: number;
+  commission_payable: number;
+  commission_paid: number;
+  joined_at: string;
+  first_paid_at: string | null;
+  last_paid_at: string | null;
+}
+
+export interface WithdrawalRequest {
+  id: number;
+  partner_id: number;
+  amount: number;
+  method: string;
+  address: string;
+  note: string;
+  status: "pending" | "paid" | "rejected" | "cancelled";
+  payout_id: number | null;
+  reference: string;
+  admin_note: string;
+  created_at: string;
+  decided_at: string | null;
 }
 
 export interface StatementMonth {
@@ -77,10 +116,13 @@ export interface PartnerProgram {
   payout_address?: string;
   code?: string | null;
   stats?: CodeStats;
+  active_subscribers?: number;
   totals?: CommissionTotals;
   month?: { month: string; customers: number; rate_pct: number };
   statement?: StatementMonth[];
+  customers?: PartnerCustomer[];
   commissions?: CommissionLine[];
+  withdrawal_requests?: WithdrawalRequest[];
   payouts?: { id: number; amount: number; method: string; reference: string; created_at: string }[];
 }
 
@@ -125,7 +167,7 @@ export const FALLBACK_PUBLIC_AFFILIATE_PROGRAM: PublicAffiliateProgram = {
       { min: 50, pct: 35 },
     ],
     hold_days: 30,
-    min_payout: 50,
+    min_payout: 100,
   },
 };
 
@@ -206,6 +248,10 @@ export const applyAsPartner = (body: {
 }) => call<PartnerProgram>("/partner/apply", send("POST", body));
 export const savePayoutDetails = (body: { payout_method: string; payout_address: string }) =>
   call<PartnerProgram>("/partner/payout", send("PUT", body));
+export const requestWithdrawal = (body: { amount?: number; method: string; address: string; note?: string }) =>
+  call<PartnerProgram>("/partner/withdraw", send("POST", body));
+export const cancelWithdrawal = (requestId: number) =>
+  call<PartnerProgram>(`/partner/withdraw/${requestId}/cancel`, send("POST", {}));
 
 /** The link a friend or a creator's audience opens. */
 export function referralLink(code: string): string {

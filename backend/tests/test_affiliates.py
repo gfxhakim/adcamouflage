@@ -7,6 +7,7 @@ audience and 25/30/35% of collected revenue by paying customers a month.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -358,7 +359,7 @@ def test_partner_coupon_and_commission_on_everything_the_customer_pays(admin):
     assert partner["stats"]["paying"] == 1 and partner["month"]["rate_pct"] == 25
     amounts = sorted(row["commission"] for row in partner["commissions"])
     assert amounts == [18.91, 20.0, 22.25]
-    assert partner["totals"] == {"pending": 61.16, "payable": 0.0, "paid": 0.0}
+    assert partner["totals"] == {"pending": 61.16, "payable": 0.0, "paid": 0.0, "reserved": 0.0, "available": 0.0}
 
 
 def test_starter_takes_the_partner_coupon(admin):
@@ -420,7 +421,7 @@ def test_payout_needs_the_minimum_then_marks_commissions_paid(admin):
     paid = admin.post(url, json={"method": "USDT", "reference": "tx123", "force": True})
     assert paid.status_code == 200 and paid.json()["amount"] == 31.66
     partner = creator.get("/api/v1/referrals/me").json()["partner"]
-    assert partner["totals"] == {"pending": 0.0, "payable": 0.0, "paid": 31.66}
+    assert partner["totals"] == {"pending": 0.0, "payable": 0.0, "paid": 31.66, "reserved": 0.0, "available": 0.0}
     assert partner["payouts"][0]["reference"] == "tx123"
 
     # A refund after the payout comes off the next one.
@@ -625,7 +626,7 @@ def test_public_program_and_affiliate_only_account_isolation():
     data = pub.json()
     assert data["partner"]["discount_pct"] == 15.0
     assert [t["pct"] for t in data["partner"]["tiers"]] == [25.0, 30.0, 35.0]
-    assert data["partner"]["hold_days"] == 30 and data["partner"]["min_payout"] == 50.0
+    assert data["partner"]["hold_days"] == 30 and data["partner"]["min_payout"] == 100.0
 
     # Sign up from the affiliate join flow using email + password.
     aff_email = address("affonly")
@@ -728,4 +729,122 @@ def test_visitor_offer_and_landing_discount_preview():
     assert me_offer.status_code == 200 and me_offer.json()["offer"]["code"] == code
     me_prog = visitor.get("/api/v1/referrals/me")
     assert me_prog.status_code == 200 and me_prog.json()["my_offer"]["prices"]["pro"] == 75.65
+
+
+def test_partner_dashboard_tracks_subscribers_name_only_and_100_min_withdrawals(admin):
+    code = f"DASH{RUN_ID[:4].upper()}"
+    creator, _creator_email = make_partner(admin, code)
+
+    # Two buyers join via link vs promo code, both with display names (name only on affiliate dashboard).
+    buyer1_email = address("dash1")
+    buyer1 = TestClient(app, headers={"x-device-id": f"device-d1-{RUN_ID}"})
+    assert buyer1.post(
+        "/api/v1/auth/register",
+        json={"email": buyer1_email, "password": PASSWORD, "display_name": "Alice Buyer"},
+    ).status_code == 201
+    o1 = checkout(buyer1, "max", coupon=code).json()["order_id"]  # $126.65
+    pay(buyer1_email, o1)
+
+    buyer2_email = address("dash2")
+    buyer2 = TestClient(app, headers={"x-device-id": f"device-d2-{RUN_ID}"})
+    assert buyer2.post("/api/v1/referrals/click", json={"code": code}).json()["valid"] is True
+    assert buyer2.post(
+        "/api/v1/auth/register",
+        json={"email": buyer2_email, "password": PASSWORD, "display_name": "Bob Marketer"},
+    ).status_code == 201
+    for _ in range(3):
+        o2 = checkout(buyer2, "max").json()["order_id"]  # $149 x 3 -> clears $100+ commission
+        pay(buyer2_email, o2)
+
+    # Privacy & tracking verification: subscriber list exposes name ONLY (no emails), plus plan, source, status, totals.
+    dash = creator.get("/api/v1/referrals/me").json()["partner"]
+    assert dash["min_payout"] == 100.0
+    assert dash["active_subscribers"] == 2
+    customers = {c["name"]: c for c in dash["customers"]}
+    assert set(customers.keys()) == {"Alice Buyer", "Bob Marketer"}
+    assert "@" not in json.dumps(dash["customers"])
+    assert "email" not in json.dumps(dash["customers"])
+    assert customers["Alice Buyer"]["source"] == "promo_code"
+    assert customers["Alice Buyer"]["plan_label"] == "Max"
+    assert customers["Alice Buyer"]["status"] == "active"
+    assert customers["Alice Buyer"]["payments_count"] == 1
+    assert customers["Bob Marketer"]["source"] == "link"
+    assert customers["Bob Marketer"]["payments_count"] == 3
+
+    # Commissions still on hold -> withdrawal fails (< $100 available).
+    under = creator.post(
+        "/api/v1/referrals/partner/withdraw",
+        json={"amount": 100.0, "method": "USDT (TRC-20)", "address": "Twithdraw123"},
+    )
+    assert under.status_code == 422 and "100" in under.json()["detail"]
+
+    # Mature all commissions past the hold window.
+    with session() as db:
+        partner_id = user_of(db, _creator_email).id
+        past = datetime.now(timezone.utc) - timedelta(minutes=1)
+        for row in db.execute(select(AffiliateCommission).where(AffiliateCommission.partner_id == partner_id)).scalars():
+            row.payable_at = past
+        db.commit()
+
+    ready = creator.get("/api/v1/referrals/me").json()["partner"]
+    total_avail = ready["totals"]["available"]
+    assert total_avail > 100.0  # 25% of (126.65 + 447) = 143.41
+
+    # Below $100 withdrawal amount is rejected.
+    too_low = creator.post(
+        "/api/v1/referrals/partner/withdraw",
+        json={"amount": 90.0, "method": "USDT (TRC-20)", "address": "Twithdraw123"},
+    )
+    assert too_low.status_code == 422 and "100" in too_low.json()["detail"]
+
+    # Partial withdrawal at exact $100 minimum reserves $100 cleanly.
+    req1 = creator.post(
+        "/api/v1/referrals/partner/withdraw",
+        json={"amount": 100.0, "method": "USDT (TRC-20)", "address": "Twithdraw123", "note": "First $100 payout"},
+    )
+    assert req1.status_code == 200, req1.text
+    p1 = req1.json()
+    assert p1["totals"]["reserved"] == 100.0
+    assert p1["totals"]["available"] == round(total_avail - 100.0, 2)
+    req_id = p1["withdrawal_requests"][0]["id"]
+
+    # Duplicate request exceeding remaining available balance fails.
+    over = creator.post(
+        "/api/v1/referrals/partner/withdraw",
+        json={"amount": 100.0, "method": "USDT (TRC-20)", "address": "Twithdraw123"},
+    )
+    assert over.status_code == 422
+
+    # Partner cancels and re-submits cleanly.
+    cancelled = creator.post(f"/api/v1/referrals/partner/withdraw/{req_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["totals"]["reserved"] == 0.0
+    assert cancelled.json()["totals"]["available"] == total_avail
+
+    req2 = creator.post(
+        "/api/v1/referrals/partner/withdraw",
+        json={"amount": 100.0, "method": "USDT (TRC-20)", "address": "Twithdraw123"},
+    )
+    assert req2.status_code == 200
+    req2_id = req2.json()["withdrawal_requests"][0]["id"]
+
+    # Admin sees the withdrawal request and marks it paid with TX reference.
+    overview = admin.get("/api/v1/admin/affiliates").json()
+    assert overview["summary"]["withdrawal_requests"] >= 1
+    assert any(r["id"] == req2_id and r["status"] == "pending" for r in overview["payout_requests"])
+
+    paid = admin.post(
+        f"/api/v1/admin/affiliates/payout-requests/{req2_id}",
+        json={"action": "pay", "reference": "TX-DASH-100"},
+    )
+    assert paid.status_code == 200, paid.text
+    assert paid.json()["status"] == "paid" and paid.json()["reference"] == "TX-DASH-100"
+
+    after = creator.get("/api/v1/referrals/me").json()["partner"]
+    assert after["totals"]["paid"] == 100.0
+    assert after["totals"]["reserved"] == 0.0
+    assert after["totals"]["available"] == round(total_avail - 100.0, 2)
+    assert after["withdrawal_requests"][0]["status"] == "paid"
+    assert after["payouts"][0]["amount"] == 100.0
+
 

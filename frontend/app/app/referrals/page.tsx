@@ -4,18 +4,21 @@ import { useCallback, useEffect, useState } from "react";
 
 import WorkspaceShell from "@/components/WorkspaceShell";
 import PartnerCard from "@/components/referrals/PartnerCard";
+import { fetchSubscription } from "@/lib/auth";
 import { fetchMyReferrals, type MyReferrals } from "@/lib/referrals";
 import { useRequireUser } from "@/lib/useRequireUser";
 
 export default function ReferralsPage() {
   const user = useRequireUser();
   const [data, setData] = useState<MyReferrals | null>(null);
+  const [currency, setCurrency] = useState("USD");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const program = await fetchMyReferrals();
+      const [program, sub] = await Promise.all([fetchMyReferrals(), fetchSubscription().catch(() => null)]);
       setData(program);
+      if (sub?.currency) setCurrency(sub.currency);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the affiliate program.");
@@ -37,11 +40,11 @@ export default function ReferralsPage() {
           <section className="mb-6 flex flex-col gap-1 sm:mb-8">
             <p className="label">Affiliate program</p>
             <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">
-              {approved ? "Your Affiliate Portal" : "Join our Affiliate Program"}
+              {approved ? "Affiliate Partner Dashboard" : "Join our Affiliate Program"}
             </h1>
             <p className="max-w-2xl text-sm text-ink-muted">
               {approved && partner
-                ? "Share your affiliate link and promo code with your audience so they can enter it at Whop checkout when subscribing."
+                ? "Follow subscribers from your promo code or link, build tracking URLs, inspect monthly commissions, and request withdrawals from $100."
                 : "Share your full name, email, social media profiles, and audience background. After review, we assign your promo code and affiliate link."}
             </p>
           </section>
@@ -59,6 +62,7 @@ export default function ReferralsPage() {
           ) : (
             <PartnerCard
               partner={data.partner}
+              currency={currency}
               defaultName={user?.display_name ?? ""}
               defaultEmail={user?.email ?? ""}
               onChanged={(next) => setData({ ...data, partner: next })}

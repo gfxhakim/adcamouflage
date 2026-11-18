@@ -20,6 +20,7 @@ from .db import (
     AffiliateCommission,
     AffiliatePartner,
     AffiliatePayout,
+    AffiliatePayoutRequest,
     Order,
     Referral,
     ReferralCode,
@@ -220,6 +221,34 @@ def _friend_block(db: Session, user: User, program: dict[str, Any]) -> dict[str,
     return block
 
 
+def _payout_request_row(
+    req: AffiliatePayoutRequest,
+    *,
+    partner: AffiliatePartner | None = None,
+    user: User | None = None,
+    code: str | None = None,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "id": req.id,
+        "partner_id": req.partner_id,
+        "amount": req.amount_usd,
+        "method": req.method,
+        "address": req.address,
+        "note": req.note,
+        "status": req.status,
+        "payout_id": req.payout_id,
+        "reference": req.reference,
+        "admin_note": req.admin_note,
+        "created_at": aware(req.created_at),
+        "decided_at": aware(req.decided_at),
+    }
+    if partner is not None or user is not None:
+        row["partner_name"] = (partner.full_name if partner else "") or (user.display_name if user else "") or ""
+        row["partner_email"] = (partner.contact_email if partner else "") or (user.email if user else "")
+        row["code"] = code
+    return row
+
+
 def _partner_block(db: Session, user: User, program: dict[str, Any]) -> dict[str, Any]:
     settings_ = program[PARTNER]
     partner = db.get(AffiliatePartner, user.id)
@@ -229,7 +258,7 @@ def _partner_block(db: Session, user: User, program: dict[str, Any]) -> dict[str
         "discount_pct": settings_["discount_pct"],
         "tiers": settings_["tiers"],
         "hold_days": settings_["hold_days"],
-        "min_payout": settings_["min_payout"],
+        "min_payout": max(affiliates.MIN_WITHDRAWAL_USD, float(settings_["min_payout"])),
         "status": partner.status if partner else None,
     }
     if partner is None:
@@ -249,17 +278,26 @@ def _partner_block(db: Session, user: User, program: dict[str, Any]) -> dict[str
     code = affiliates.partner_code(db, user.id)
     rows = affiliates.commission_rows(db, user.id)
     month = f"{datetime.now(timezone.utc):%Y-%m}"
-    customers = affiliates.paying_customers(db, user.id, month)
+    paying_month = affiliates.paying_customers(db, user.id, month)
+    totals = affiliates.commission_totals(rows)
+    reserved = affiliates.pending_withdrawal_reserved(db, user.id)
+    totals["reserved"] = reserved
+    totals["available"] = round(max(0.0, totals["payable"] - reserved), 2)
+    customers = affiliates.partner_customers(db, user.id, rows)
+    requests = affiliates.list_payout_requests(db, user.id)
     payouts = db.execute(
         select(AffiliatePayout).where(AffiliatePayout.partner_id == user.id).order_by(AffiliatePayout.created_at.desc())
     ).scalars().all()
     block.update(
         code=code.code if code else None,
         stats=affiliates.code_stats(db, code) if code else {"clicks": 0, "signups": 0, "paying": 0},
-        totals=affiliates.commission_totals(rows),
-        month={"month": month, "customers": customers, "rate_pct": affiliates.tier_pct(program, customers)},
+        active_subscribers=sum(1 for c in customers if c["subscription_active"]),
+        totals=totals,
+        month={"month": month, "customers": paying_month, "rate_pct": affiliates.tier_pct(program, paying_month)},
         statement=affiliates.monthly_statement(rows),
-        commissions=[{key: row[key] for key in ("id", "kind", "amount", "month", "rate_pct", "commission", "status", "payable_at", "created_at")} for row in rows[:100]],
+        customers=customers,
+        commissions=[{key: row[key] for key in ("id", "kind", "amount", "month", "rate_pct", "commission", "status", "payable_at", "created_at", "note")} for row in rows[:100]],
+        withdrawal_requests=[_payout_request_row(req) for req in requests],
         payouts=[
             {"id": p.id, "amount": p.amount_usd, "method": p.method, "reference": p.reference, "created_at": aware(p.created_at)}
             for p in payouts
@@ -410,6 +448,54 @@ def partner_payout_details(
     return _partner_block(db, user, affiliates.get_program(db))
 
 
+class WithdrawRequestIn(BaseModel):
+    amount: float | None = Field(default=None, gt=0, le=1_000_000)
+    method: str = Field(min_length=2, max_length=40)
+    address: str = Field(min_length=3, max_length=300)
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/partner/withdraw")
+def partner_request_withdrawal(
+    payload: WithdrawRequestIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    try:
+        req = affiliates.create_payout_request(
+            db,
+            user.id,
+            amount=payload.amount,
+            method=payload.method,
+            address=payload.address,
+            note=payload.note,
+        )
+    except affiliates.PayoutError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    log_activity(db, user.id, "partner", f"Requested ${req.amount_usd:.2f} affiliate withdrawal ({req.method})")
+    try:
+        from . import notify
+
+        notify.alert(
+            "review",
+            "New affiliate withdrawal request",
+            [f"{user.email} requested ${req.amount_usd:.2f} via {req.method}."],
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return _partner_block(db, user, affiliates.get_program(db))
+
+
+@router.post("/partner/withdraw/{request_id}/cancel")
+def partner_cancel_withdrawal(
+    request_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    try:
+        affiliates.cancel_payout_request(db, user.id, request_id)
+    except affiliates.PayoutError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    log_activity(db, user.id, "partner", f"Cancelled withdrawal request #{request_id}")
+    return _partner_block(db, user, affiliates.get_program(db))
+
+
 @router.get("/code/{code}")
 def code_info(code: str, db: Session = Depends(get_db), _user: User | None = Depends(optional_user)) -> dict[str, Any]:
     program = affiliates.get_program(db)
@@ -445,7 +531,7 @@ class PartnerSettingsIn(BaseModel):
     plans: list[str]
     tiers: list[TierIn] = Field(min_length=1, max_length=10)
     hold_days: int = Field(ge=0, le=365)
-    min_payout: float = Field(ge=0, le=1_000_000)
+    min_payout: float = Field(ge=100, le=1_000_000)
 
 
 class ProgramIn(BaseModel):
@@ -508,6 +594,25 @@ def admin_overview(db: Session = Depends(get_db)) -> dict[str, Any]:
         for key in totals:
             totals[key] = round(totals[key] + row["totals"][key], 2)
     plans = get_token_plans(db)
+    raw_requests = affiliates.list_payout_requests(db, limit=200)
+    partners_map = {p.user_id: p for p in partners}
+    missing_user_ids = {r.partner_id for r in raw_requests} - set(users)
+    if missing_user_ids:
+        for u in db.execute(select(User).where(User.id.in_(missing_user_ids))).scalars():
+            users[u.id] = u
+    codes_map = {r["user_id"]: r["code"] for r in partner_rows}
+    payout_requests = sorted(
+        [
+            _payout_request_row(
+                req,
+                partner=partners_map.get(req.partner_id),
+                user=users.get(req.partner_id),
+                code=codes_map.get(req.partner_id),
+            )
+            for req in raw_requests
+        ],
+        key=lambda item: (0 if item["status"] == "pending" else 1, -(item["id"])),
+    )
     return {
         "program": program,
         "plans": [{"id": p.id, "label": p.label, "price": p.price} for p in plans.values()],
@@ -520,9 +625,11 @@ def admin_overview(db: Session = Depends(get_db)) -> dict[str, Any]:
             "partner_paying": count(Referral.channel == PARTNER, Referral.first_order_id.is_not(None)),
             "flagged": count(Referral.flags != ""),
             "applications": sum(1 for p in partners if p.status == "pending"),
+            "withdrawal_requests": sum(1 for r in raw_requests if r.status == "pending"),
             "commission": totals,
         },
         "partners": partner_rows,
+        "payout_requests": payout_requests,
     }
 
 
@@ -662,6 +769,37 @@ def admin_record_payout(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     audit.record(db, admin, user, "partner_payout", f"Recorded a ${payout.amount_usd:.2f} partner payout ({payload.method})")
     return {"id": payout.id, "amount": payout.amount_usd}
+
+
+class PayoutRequestDecisionIn(BaseModel):
+    action: str = Field(pattern="^(pay|reject)$")
+    reference: str = Field(default="", max_length=300)
+    note: str = Field(default="", max_length=2000)
+
+
+@admin_router.post("/payout-requests/{request_id}")
+def admin_decide_payout_request(
+    request_id: int, payload: PayoutRequestDecisionIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    try:
+        req = affiliates.decide_payout_request(
+            db,
+            request_id,
+            admin.email,
+            action=payload.action,
+            reference=payload.reference,
+            admin_note=payload.note,
+        )
+    except affiliates.PayoutError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    partner = db.get(AffiliatePartner, req.partner_id)
+    user = db.get(User, req.partner_id)
+    code = affiliates.partner_code(db, req.partner_id)
+    action_label = "Paid" if payload.action == "pay" else "Rejected"
+    audit.record(db, admin, user, f"payout_request_{payload.action}", f"{action_label} ${req.amount_usd:.2f} withdrawal request #{req.id}")
+    if user is not None:
+        log_activity(db, user.id, "partner", f"Withdrawal request #{req.id} ({req.status}: ${req.amount_usd:.2f})")
+    return _payout_request_row(req, partner=partner, user=user, code=code.code if code else None)
 
 
 @admin_router.get("/referrals")

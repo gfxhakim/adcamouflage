@@ -472,6 +472,26 @@ class AffiliatePayout(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class AffiliatePayoutRequest(Base):
+    """A partner's withdrawal request once payable earnings reach the minimum threshold."""
+
+    __tablename__ = "affiliate_payout_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    partner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    amount_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    method: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+    address: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # pending | paid | rejected | cancelled
+    status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
+    payout_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    reference: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+    admin_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class UserDevice(Base):
     """A browser (random id kept in local storage) and network an account used, hashed. For the self-referral check."""
 
