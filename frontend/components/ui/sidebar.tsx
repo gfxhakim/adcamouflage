@@ -83,6 +83,9 @@ const SidebarProvider = React.forwardRef<
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+        // Not while someone is typing: the keys belong to the field (and folding would hide the search box).
+        const target = event.target as HTMLElement | null;
+        if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
         event.preventDefault();
         toggleSidebar();
       }
@@ -91,6 +94,11 @@ const SidebarProvider = React.forwardRef<
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
+
+  // A drawer left open while the window grows past the breakpoint must not pop back when it shrinks again.
+  React.useEffect(() => {
+    if (!isMobile) setOpenMobile(false);
+  }, [isMobile]);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
@@ -345,7 +353,8 @@ const SidebarContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"di
       ref={ref}
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        // Folded to icons the list still scrolls (a short window cannot show every item); only the bar is hidden.
+        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-x-hidden group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden",
         className,
       )}
       {...props}
@@ -376,7 +385,8 @@ const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<
         data-sidebar="group-label"
         className={cn(
           "flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-          "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
+          // Folded, the label is invisible and slides up over the icon above it: it must not take that icon's clicks.
+          "group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
           className,
         )}
         {...props}
@@ -455,6 +465,16 @@ const SidebarMenuButton = React.forwardRef<
   const Comp = asChild ? Slot : "button";
   const { isMobile, state } = useSidebar();
 
+  // The label only helps when the sidebar is folded to icons. Anywhere else the tooltip stays shut for
+  // real, not just hidden: an open but invisible one swallows the first Escape in the phone drawer.
+  const tipEnabled = state === "collapsed" && !isMobile;
+  const [tipOpen, setTipOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!tipEnabled) setTipOpen(false);
+  }, [tipEnabled]);
+  // Set when the button loses focus because the whole window does (another browser tab or app).
+  const leftWithWindow = React.useRef(false);
+
   const button = (
     <Comp
       ref={ref}
@@ -475,9 +495,23 @@ const SidebarMenuButton = React.forwardRef<
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right" align="center" hidden={state !== "collapsed" || isMobile} {...tooltip} />
+    <Tooltip open={tipEnabled && tipOpen} onOpenChange={(next) => setTipOpen(tipEnabled && next)}>
+      <TooltipTrigger
+        asChild
+        // Only keyboard focus opens the label. Focus that comes back by itself (returning to the browser
+        // tab) would leave a label stuck on screen with the mouse far away.
+        onBlur={(event) => {
+          leftWithWindow.current = document.activeElement === event.currentTarget;
+        }}
+        onFocus={(event) => {
+          const cameBack = leftWithWindow.current;
+          leftWithWindow.current = false;
+          if (cameBack || !event.currentTarget.matches(":focus-visible")) event.preventDefault();
+        }}
+      >
+        {button}
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center" {...tooltip} />
     </Tooltip>
   );
 });

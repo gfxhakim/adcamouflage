@@ -38,6 +38,7 @@ import {
   type UserUpdate,
 } from "@/lib/admin";
 import { formatDate, formatMoney, timeAgo } from "@/lib/format";
+import { swallowSecondClick } from "@/lib/swallowSecondClick";
 
 interface UserPanelProps {
   userId: number;
@@ -94,6 +95,10 @@ export function UserPanel({ userId, plans, selfId, currency, onClose, onChanged,
     setTempPassword(null);
     void load();
   }, [load]);
+
+  // The second click of a double click on a user's row lands here, on the backdrop or on a button
+  // of the panel that just slid in: it is ignored, so the panel does not close (or act) by itself.
+  useEffect(() => swallowSecondClick(), []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

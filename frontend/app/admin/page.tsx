@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { ArrowLeft, Bell, Headset, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import AdminSidebar, { ADMIN_TABS } from "@/components/admin/AdminSidebar";
 import AffiliatesTab from "@/components/admin/AffiliatesTab";
@@ -22,7 +22,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import NotFound from "@/app/not-found";
 import { getOverview, getPlans, type Overview, type PlanInfo } from "@/lib/admin";
 import { fetchMe, signOut, type UserProfile } from "@/lib/auth";
-import { jumpToTitle, type AdminSearchEntry, type AdminTabId } from "@/lib/admin-search";
+import { cancelJump, jumpToTitle, type AdminSearchEntry, type AdminTabId } from "@/lib/admin-search";
 import { ADMIN_SIDEBAR_COOKIE, readSidebarOpen } from "@/lib/sidebarCookie";
 import { getAdminSupportNotifications, type AdminSupportNotifications } from "@/lib/support";
 
@@ -61,12 +61,49 @@ export default function AdminPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // --- who is looking ----------------------------------------------------
-  useEffect(() => {
-    const syncTab = () => setTab(tabFromHash());
-    syncTab();
-    window.addEventListener("hashchange", syncTab);
-    return () => window.removeEventListener("hashchange", syncTab);
+  // A sidebar search result that is still on its way to a title (see jumpTo).
+  const jumpTimer = useRef(0);
+  const dropJump = useCallback(() => {
+    window.clearTimeout(jumpTimer.current);
+    cancelJump();
   }, []);
+
+  // A different page always opens at its top. Left alone, the window keeps the last page's scroll:
+  // a page whose data is already there (the Dashboard) opened as far down as that, and a search
+  // jump that was still gliding carried on down the new page. Back and Forward are the exception
+  // (`keepPlace`): the browser has just put the window back where that page was left.
+  const shownTab = useRef<TabId | null>(null); // null until the first page is on screen
+  const showTab = useCallback((id: TabId, keepPlace = false) => {
+    if (!keepPlace && shownTab.current !== null && shownTab.current !== id) window.scrollTo({ top: 0, behavior: "instant" });
+    shownTab.current = id;
+    setTab(id);
+  }, []);
+
+  useEffect(() => {
+    // Did Back or Forward change the address, or a new one? Only the Navigation API can tell;
+    // a browser without it opens the page at its top after Back and Forward as well.
+    let traversed = false;
+    const navigation = (window as unknown as { navigation?: EventTarget }).navigation;
+    const noteNavigation = (event: Event) => {
+      const { hashChange, navigationType } = event as Event & { hashChange?: boolean; navigationType?: string };
+      // Only the navigation that changes the #page counts: after Back, the router rewrites the
+      // history entry (a "replace") before the hashchange event arrives.
+      if (hashChange) traversed = navigationType === "traverse";
+    };
+    navigation?.addEventListener("navigate", noteNavigation);
+    const syncTab = () => {
+      dropJump();
+      showTab(tabFromHash(), traversed);
+      traversed = false;
+    };
+    showTab(tabFromHash());
+    window.addEventListener("hashchange", syncTab);
+    return () => {
+      window.removeEventListener("hashchange", syncTab);
+      navigation?.removeEventListener("navigate", noteNavigation);
+      dropJump();
+    };
+  }, [dropJump, showTab]);
 
   // Anyone who is not a signed-in admin sees the ordinary "page not found"
   // screen, with no redirect to sign-in, so customers cannot tell this page
@@ -138,11 +175,15 @@ export default function AdminPage() {
     setRefreshKey((k) => k + 1);
   }, [loadShared]);
 
-  const openTab = useCallback((id: TabId) => {
-    setTab(id);
-    setUsersQuery("");
-    window.history.replaceState(null, "", `#${id}`);
-  }, []);
+  const openTab = useCallback(
+    (id: TabId) => {
+      dropJump();
+      showTab(id);
+      setUsersQuery("");
+      window.history.replaceState(null, "", `#${id}`);
+    },
+    [dropJump, showTab],
+  );
 
   // "See all" under the dashboard search: the Users page opens on the same search.
   const openUsersWith = useCallback(
@@ -165,7 +206,10 @@ export default function AdminPage() {
   const jumpTo = useCallback(
     (entry: AdminSearchEntry) => {
       openTab(entry.tab);
-      window.setTimeout(() => jumpToTitle(entry, document.getElementById("admin-main") ?? document), 80);
+      jumpTimer.current = window.setTimeout(
+        () => jumpToTitle(entry, document.getElementById("admin-main") ?? document),
+        80,
+      );
     },
     [openTab],
   );
@@ -219,17 +263,23 @@ export default function AdminPage() {
       <SidebarInset className="min-w-0 bg-transparent">
         <header className="sticky top-0 z-40 border-b border-white/10 bg-[#070b14]/85 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
+            {/* This side takes the room the buttons leave (less with an unread badge). On a phone the
+                brand name is cut short with "…" when it does not fit, and when too little of it
+                would be left the mark stands alone, instead of the name running under the buttons. */}
+            <div className="flex min-w-0 flex-1 items-center gap-3 [container-type:inline-size]">
               <SidebarTrigger
                 className="h-9 w-9 shrink-0 rounded-lg border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white [&>svg]:h-4 [&>svg]:w-4"
                 aria-label="Open or close the menu"
               />
               <Link href="/" className="flex min-w-0 items-center lg:hidden" aria-label="ProteusFlow home">
-                <BrandLogo onDark />
+                <BrandLogo
+                  onDark
+                  className="[&>span:last-child>span:first-child]:truncate [@container_(max-width:11.4rem)]:[&>span:last-child]:hidden"
+                />
               </Link>
               <span className="hidden truncate text-sm font-semibold text-slate-300 lg:block">{activeTab?.label}</span>
             </div>
-            <nav className="flex items-center gap-2">
+            <nav className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => openTab("support")}
@@ -365,7 +415,8 @@ export default function AdminPage() {
               refreshKey={refreshKey}
               initialThreadId={activeSupportThreadId}
               onSelectUser={setSelected}
-              onNotificationsChanged={() => void loadSupportNotifs()}
+              // A stable function: a new one on every render makes the tab reload its ticket in a loop.
+              onNotificationsChanged={loadSupportNotifs}
             />
           ) : tab === "users" ? (
             <UsersTab

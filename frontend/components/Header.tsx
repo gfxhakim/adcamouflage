@@ -61,7 +61,16 @@ export function Header({ health, healthError, user, onDark = false, leading }: H
             className={clsx("flex min-w-0 items-center gap-3", leading ? "lg:hidden" : null)}
             aria-label="ProteusFlow home"
           >
-            <BrandLogo caption="Workspace" captionClassName="hidden sm:block" onDark={onDark} />
+            {/* With a menu button beside it the name can run out of room on a small phone: it is cut
+                short with "…" instead of running under the status chip, and below 360px the mark stands alone. */}
+            <BrandLogo
+              caption="Workspace"
+              captionClassName="hidden sm:block"
+              onDark={onDark}
+              className={
+                leading ? "max-[359px]:[&>span:last-child]:hidden [&>span:last-child>span:first-child]:truncate" : undefined
+              }
+            />
           </Link>
         </div>
 

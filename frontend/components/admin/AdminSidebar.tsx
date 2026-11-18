@@ -37,6 +37,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { searchAdmin, type AdminSearchEntry, type AdminTabId } from "@/lib/admin-search";
+import { swallowSecondClick } from "@/lib/swallowSecondClick";
 
 export interface AdminNavItem {
   id: AdminTabId;
@@ -112,12 +113,16 @@ export default function AdminSidebar({ active, onOpen, onJump, supportBadge, nam
   const closeDrawer = () => {
     if (isMobile) setOpenMobile(false);
   };
+  // Picking a result turns the list back into the menu, and on phones closes the drawer: the
+  // second click of a double click must not open whichever page (or button) comes up underneath.
   const open = (id: AdminTabId) => {
+    if (query || isMobile) swallowSecondClick();
     onOpen(id);
     setQuery("");
     closeDrawer();
   };
   const jump = (entry: AdminSearchEntry) => {
+    swallowSecondClick();
     onJump(entry);
     setQuery("");
     closeDrawer();
@@ -157,9 +162,10 @@ export default function AdminSidebar({ active, onOpen, onJump, supportBadge, nam
               onChange={(ev) => setQuery(ev.target.value)}
               onKeyDown={(ev) => {
                 if (ev.key === "Escape") setQuery("");
+                // Enter opens the first row of the list below, and pages are listed first.
                 if (ev.key === "Enter") {
-                  if (results[0]) jump(results[0]);
-                  else if (pages[0]) open(pages[0].id);
+                  if (pages[0]) open(pages[0].id);
+                  else if (results[0]) jump(results[0]);
                 }
               }}
               placeholder="Search settings..."
@@ -243,7 +249,7 @@ export default function AdminSidebar({ active, onOpen, onJump, supportBadge, nam
                               className="size-5 shrink-0 transition-transform group-hover/item:scale-110"
                               variant={isActive ? "Bulk" : "Linear"}
                             />
-                            <span className="truncate font-medium group-data-[collapsible=icon]:hidden">{item.label}</span>
+                            <span className="truncate font-medium group-data-[collapsible=icon]:sr-only">{item.label}</span>
                           </div>
                           {badge ? (
                             <Badge className="ml-auto h-5 border-transparent bg-amber-400 px-1.5 font-mono text-[10px] text-slate-950 hover:bg-amber-400 group-data-[collapsible=icon]:hidden">
@@ -282,7 +288,7 @@ export default function AdminSidebar({ active, onOpen, onJump, supportBadge, nam
               className="group/item flex h-10 w-full items-center gap-3 rounded-lg px-3 text-rose-300/80 transition-all hover:bg-rose-500/15 hover:text-rose-200 active:bg-rose-500/25 active:text-rose-100 group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0"
             >
               <Logout className="!size-5 shrink-0" variant="Linear" />
-              <span className="truncate font-medium group-data-[collapsible=icon]:hidden">Sign out</span>
+              <span className="truncate font-medium group-data-[collapsible=icon]:sr-only">Sign out</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

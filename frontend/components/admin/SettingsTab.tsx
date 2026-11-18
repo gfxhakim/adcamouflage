@@ -218,7 +218,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
           users you gave a custom number keep it.
         </p>
 
-        <div className="space-y-3">
+        {/* The rows follow the width of this card, not of the window: beside the open sidebar the card is narrow. */}
+        <div className="space-y-3 [container-type:inline-size]">
           {plans.map((plan) => {
             const draft = drafts[plan.id];
             if (!draft) return null;
@@ -231,8 +232,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
                     {plan.users} {plan.users === 1 ? "user" : "users"}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1.2fr_0.8fr_1fr_auto]">
-                  <label className="col-span-2 block sm:col-span-1">
+                <div className="grid grid-cols-2 gap-2 [@container_(min-width:30rem)]:grid-cols-[1.2fr_0.8fr_1fr_auto]">
+                  <label className="col-span-2 block [@container_(min-width:30rem)]:col-span-1">
                     <span className="label">Name</span>
                     <input className="field mt-1" value={draft.label} maxLength={40} onChange={(e) => set({ label: e.target.value })} />
                   </label>
@@ -261,7 +262,7 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
                       onChange={(e) => set({ quota: e.target.value })}
                     />
                   </label>
-                  <div className="col-span-2 flex items-end justify-between gap-2 sm:col-span-1">
+                  <div className="col-span-2 flex items-end justify-between gap-2 [@container_(min-width:30rem)]:col-span-1">
                     <label className="flex items-center gap-1.5 pb-2 text-xs text-black dark:text-slate-100">
                       <input
                         type="checkbox"

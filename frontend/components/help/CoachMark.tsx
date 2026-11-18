@@ -62,10 +62,15 @@ export function CoachMark({ stepId, stepNumber, totalSteps, active, onFinish }: 
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
+    // The target can move to another element after the resize event (the sidebar's help button
+    // becomes the menu button when a tablet is turned): measure again when that happens.
+    const targets = new MutationObserver(measure);
+    targets.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["data-tour"] });
     return () => {
       window.clearTimeout(id);
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
+      targets.disconnect();
     };
   }, [active, currentTip, measure]);
 
