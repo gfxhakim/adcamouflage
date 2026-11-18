@@ -51,6 +51,7 @@ from .tokens import (
     InsufficientTokens,
     check_billing,
     consume,
+    ensure_starter_metadata_wipe,
     get_billing_rules,
     get_token_plans,
     get_topups,
@@ -92,6 +93,7 @@ async def lifespan(app: FastAPI):
     init_db()
     with get_session_factory()() as db:
         ensure_admin_account(db)
+        ensure_starter_metadata_wipe(db)
     store = get_store()
     if not ffmpeg_available():
         logger.error(

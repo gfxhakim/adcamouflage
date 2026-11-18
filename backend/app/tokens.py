@@ -269,6 +269,24 @@ def save_token_plans(db: Session, plans: dict[str, dict[str, Any]]) -> None:
     set_setting(db, PLAN_SETTING, overrides)
 
 
+def ensure_starter_metadata_wipe(db: Session) -> None:
+    """One-time backfill enabling Clean Container export in any stored Starter override."""
+
+    key = "migration.starter_metadata_wipe_v1"
+    if get_setting(db, key, False):
+        return
+    overrides = dict(get_setting(db, PLAN_SETTING, {}) or {})
+    starter = dict(overrides.get("starter") or {})
+    features = dict(starter.get("features") or {})
+    if "metadata_wipe" in features and not features["metadata_wipe"]:
+        features["metadata_wipe"] = True
+        starter["features"] = features
+        overrides["starter"] = starter
+        set_setting(db, PLAN_SETTING, overrides)
+    set_setting(db, key, True)
+    db.commit()
+
+
 def get_topups(db: Session) -> dict[str, Any]:
     """Allowed top-up amounts and the bonus table, as stored (string keys)."""
 

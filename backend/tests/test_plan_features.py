@@ -113,3 +113,34 @@ def test_admin_can_unlock_starter(admin, sample_image):
         assert stored["multi_platform"] is True
     finally:
         _clear_setting("token_plans")
+
+
+def test_one_time_starter_metadata_wipe_backfill():
+    from app.app_settings import set_setting
+    from app.db import get_session_factory
+    from app.tokens import ensure_starter_metadata_wipe, get_token_plans
+
+    try:
+        with get_session_factory()() as db:
+            set_setting(
+                db,
+                "token_plans",
+                {"starter": {"features": {"full_engine": False, "metadata_wipe": False}}},
+            )
+            set_setting(db, "migration.starter_metadata_wipe_v1", False)
+            db.commit()
+            ensure_starter_metadata_wipe(db)
+            assert get_token_plans(db)["starter"].metadata_wipe is True
+
+            # Subsequent admin opt-out stays respected once migration marker is set.
+            set_setting(
+                db,
+                "token_plans",
+                {"starter": {"features": {"full_engine": False, "metadata_wipe": False}}},
+            )
+            db.commit()
+            ensure_starter_metadata_wipe(db)
+            assert get_token_plans(db)["starter"].metadata_wipe is False
+    finally:
+        _clear_setting("token_plans")
+        _clear_setting("migration.starter_metadata_wipe_v1")
