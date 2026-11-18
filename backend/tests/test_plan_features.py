@@ -23,7 +23,7 @@ def _render(client: TestClient, image, options: dict):
 
 def test_plan_cards_carry_their_features():
     plans = {p["id"]: p for p in TestClient(app).get("/api/v1/plans").json()["plans"]}
-    assert plans["starter"]["features"] == {"full_engine": False, "metadata_wipe": False, "multi_platform": False}
+    assert plans["starter"]["features"] == {"full_engine": False, "metadata_wipe": True, "multi_platform": False}
     assert plans["pro"]["features"] == {"full_engine": True, "metadata_wipe": True, "multi_platform": True}
     assert plans["max"]["features"] == {"full_engine": True, "metadata_wipe": True, "multi_platform": True}
 
@@ -35,7 +35,6 @@ def test_starter_render_api_switches_the_locked_options_off(sample_image):
 
     assert sorted(client.get("/api/v1/auth/subscription").json()["locked_features"]) == [
         "full_engine",
-        "metadata_wipe",
         "multi_platform",
     ]
 
@@ -45,13 +44,13 @@ def test_starter_render_api_switches_the_locked_options_off(sample_image):
     options = response.json()["options"]
     assert options["platform"] == "meta"
     assert not any(options[field] for field in GEN4)
-    assert options["strip_metadata"] is False
+    assert options["strip_metadata"] is True
     # Untouched classic layers keep the caller's choice.
     assert options["micro_crop"] is True
 
-    # A preset that turns Gen-4 layers on is clamped too.
+    # A preset that turns Gen-4 layers on is clamped too, while keeping clean container export.
     stealth = _render(client, sample_image, {"preset": "stealth"}).json()["options"]
-    assert not any(stealth[field] for field in GEN4) and stealth["strip_metadata"] is False
+    assert not any(stealth[field] for field in GEN4) and stealth["strip_metadata"] is True
 
     # Starter cannot use TikTok or YouTube directly on the API — only Meta.
     for blocked_platform in ("tiktok", "youtube"):
@@ -109,6 +108,8 @@ def test_admin_can_unlock_starter(admin, sample_image):
 
         # Saving a plan without "features" keeps what is stored.
         admin.put("/api/v1/admin/billing/config", json={"plans": {"starter": starter}})
-        assert admin.get("/api/v1/admin/billing/config").json()["plans"]["starter"]["features"]["metadata_wipe"] is True
+        stored = admin.get("/api/v1/admin/billing/config").json()["plans"]["starter"]["features"]
+        assert stored["metadata_wipe"] is True
+        assert stored["multi_platform"] is True
     finally:
         _clear_setting("token_plans")

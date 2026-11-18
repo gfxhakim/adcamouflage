@@ -63,8 +63,9 @@ export function applyPlanLocks(options: MutationOptions, locked: readonly PlanFe
 
 /**
  * Whether a plan includes a feature. Plans from an older API carry no
- * ``features``; Starter then falls back to the default (not included).
+ * ``features``; Starter falls back to Meta + Clean Container only.
  */
 export function planIncludes(plan: { id: string; features?: Partial<Record<PlanFeatureId, boolean>> }, feature: PlanFeatureId): boolean {
-  return plan.features?.[feature] ?? plan.id !== "starter";
+  if (plan.features?.[feature] !== undefined) return Boolean(plan.features[feature]);
+  return plan.id === "starter" ? feature === "metadata_wipe" : true;
 }

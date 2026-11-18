@@ -135,7 +135,7 @@ DEFAULT_PLANS: dict[str, TokenPlan] = {
             0,
             40,
             full_engine=False,
-            metadata_wipe=False,
+            metadata_wipe=True,
             multi_platform=False,
         ),
         TokenPlan("pro", "Pro", 89.0, 4500, 90, 1, 50),
