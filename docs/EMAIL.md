@@ -41,13 +41,13 @@ payments work exactly as before.
 Any SMTP service works. Easy choices:
 
 - **Brevo** (free tier, ~300 emails/day) or **Mailgun / Amazon SES / Postmark**:
-  add and verify your domain `blucloack.online` there (they give you DNS
+  add and verify your domain `proteusflow.com` there (they give you DNS
   records to add in Cloudflare), then copy the SMTP login they show.
 - **Zoho Mail / Google Workspace** if you already have a mailbox on the domain.
   Gmail needs an *app password*, not your normal password.
 
 Use a From address on your own domain (for example
-`billing@blucloack.online`) and add the SPF/DKIM records the provider gives
+`hello@proteusflow.com`) and add the SPF/DKIM records the provider gives
 you, or the mail will land in spam.
 
 ## 2. Add the variables on Railway
@@ -60,9 +60,9 @@ ADCAM_SMTP_PORT=587
 ADCAM_SMTP_SECURITY=starttls          # or ssl with port 465
 ADCAM_SMTP_USERNAME=<smtp login>
 ADCAM_SMTP_PASSWORD=<smtp password / key>
-ADCAM_EMAIL_FROM="ProteusFlow <billing@blucloack.online>"
-ADCAM_EMAIL_REPLY_TO=<optional: mailbox that should get customer replies>
-ADCAM_PUBLIC_URL=https://blucloack.online   # already set if billing works; used for the links
+ADCAM_EMAIL_FROM="ProteusFlow <hello@proteusflow.com>"
+ADCAM_EMAIL_REPLY_TO=support@proteusflow.com   # where customer replies go
+ADCAM_PUBLIC_URL=https://proteusflow.com       # used for the links
 ```
 
 Never paste these values in a chat or a commit.

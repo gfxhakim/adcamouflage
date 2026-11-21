@@ -126,8 +126,8 @@ admin), so after changing it, redeploy the `web` service.
 When the site has its own domain, add two more variables on `web`:
 
 ```bash
-SITE_URL=https://www.yourdomain.com          # the address customers use, no trailing slash
-LEGAL_CONTACT_EMAIL=support@yourdomain.com   # shown on the Privacy and Terms pages
+SITE_URL=https://proteusflow.com             # the address customers use, no trailing slash
+LEGAL_CONTACT_EMAIL=support@proteusflow.com  # shown on the Privacy and Terms pages
 ```
 
 `SITE_URL` is the address written into link previews (WhatsApp, Facebook, X),

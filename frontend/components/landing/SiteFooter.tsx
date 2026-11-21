@@ -9,6 +9,7 @@ import { openCookieSettings } from "@/components/MetaPixel";
 import { CmsLink, CmsSection, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import { EASE } from "@/components/landing/primitives";
+import { SUPPORT_EMAIL } from "@/lib/site";
 
 const NAME = "ProteusFlow";
 
@@ -108,6 +109,12 @@ export function SiteFooter() {
             <T k="footer.tagline" long as="p" className="mt-4 max-w-xs text-sm leading-relaxed text-white/60">
               Seamless adaptation. Peak efficiency.
             </T>
+            <p className="mt-3 text-sm text-white/60">
+              Email us:{" "}
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-white underline-offset-4 hover:underline">
+                {SUPPORT_EMAIL}
+              </a>
+            </p>
             <CmsLink
               k="footer.cta"
               href="/login"

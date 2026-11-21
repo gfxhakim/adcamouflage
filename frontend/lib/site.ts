@@ -43,7 +43,13 @@ export const SITE_KEYWORDS = [
   "media buyer tools",
 ];
 
-/** Contact address shown on the legal pages. Set LEGAL_CONTACT_EMAIL on the `web` service. */
+/**
+ * The business inbox customers can write to. Cloudflare Email Routing
+ * receives it and forwards it to the owner's mailbox.
+ */
+export const SUPPORT_EMAIL = "support@proteusflow.com";
+
+/** Contact address shown on the legal pages. LEGAL_CONTACT_EMAIL on the `web` service overrides it. */
 export function contactEmail(): string {
-  return (process.env.LEGAL_CONTACT_EMAIL || "support@blucloack.online").trim();
+  return (process.env.LEGAL_CONTACT_EMAIL || SUPPORT_EMAIL).trim();
 }
