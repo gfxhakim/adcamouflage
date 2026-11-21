@@ -33,7 +33,7 @@ export const HELP_STEPS: { id: HelpStepId; label: string; time: string; line: st
 /** The one-line "How this step works" strip on top of each step card. */
 export const HELP_STRIPS: Record<HelpStepId, string> = {
   upload: "Drop the finished creative you want to batch. Several files at once is fine: each one is processed separately.",
-  configure: "Choose the target platform first, then a variation profile. Balanced fits most campaigns; Studio Pro or Dynamic adds deeper variation.",
+  configure: "Choose the target platform first, then a variation profile. Dynamic is recommended for most campaigns; Balanced or Studio Pro offers lighter tuning.",
   overlay: "Both tools here are optional. Skip this step if you don't need a logo watermark or a custom cover frame.",
   run: "Check the token cost, start the render, then download each variation or the whole batch as a zip.",
 };
@@ -65,7 +65,7 @@ export const HELP_TIPS: Record<HelpStepId, HelpTip[]> = {
     {
       anchor: "settings.profile",
       title: "Pick a variation profile",
-      body: "Balanced works for most campaigns. Choose Studio Pro (Gen-4) when your video has burned-in subtitles, or Dynamic for deeper visual & audio variation.",
+      body: "Dynamic is recommended by default for deeper visual & audio variation across campaigns. Choose Balanced for moderate framing, or Studio Pro (Gen-4) when your video has burned-in subtitles.",
     },
   ],
   overlay: [
@@ -112,7 +112,7 @@ export const HELP_GUIDE: HelpGuideSection[] = [
     meta: "Platform · profile · copies",
     points: [
       "Platform: Meta Ads, TikTok Ads or YouTube Ads sets the frame and length rules.",
-      "Profile: Light for subtle polish, Balanced by default, Studio Pro (Gen-4) for subtitle-safe precision, Dynamic or Max Studio for maximum variation.",
+      "Profile: Light for subtle polish, Dynamic (recommended default) for deeper variation, Balanced for moderate framing, Studio Pro (Gen-4) for subtitle-safe precision, or Max Studio for maximum variation.",
       "Copies: how many independent variations you want per upload.",
     ],
     tip: "Testing across multiple campaigns or ad sets? Render a dedicated variation for each placement.",
@@ -142,7 +142,7 @@ export const HELP_GUIDE: HelpGuideSection[] = [
 ];
 
 export const HELP_PRACTICES: string[] = [
-  "Start with Balanced or Studio Pro (Gen-4) for broadcast-ready color, framing, and audio polish.",
+  "Start with Dynamic (recommended) or Studio Pro (Gen-4) for broadcast-ready color, framing, and audio polish.",
   "Generate a dedicated variation for each campaign or ad set to keep your creative testing organized.",
   "Always upload your original clean master rather than re-processing an already exported variation.",
   "Use the built-in Brand Overlay and Poster Frame tools to keep your branding consistent across every batch.",

@@ -32,26 +32,34 @@ export function UpgradeHint({ href }: { href: string }) {
   );
 }
 
-const PRESET_COPY: Record<Exclude<PresetId, "custom">, { title: string; blurb: string; accent: string }> = {
+const PRESET_COPY: Record<
+  Exclude<PresetId, "custom">,
+  { title: string; blurb: string; accent: string; badge?: string }
+> = {
   stealth: {
     title: "Light",
     blurb: "Subtle studio polish. Clean metadata and light color/framing pass.",
-    accent: "from-meta-50 to-white text-meta-700 border-meta-500/50",
+    accent:
+      "from-meta-50 to-white text-meta-700 border-meta-500/50 shadow-meta-sm dark:border-meta-500/50 dark:from-meta-500/20 dark:to-meta-500/10 dark:text-meta-100",
   },
   balanced: {
     title: "Balanced",
-    blurb: "Recommended default. Full color, framing, audio mastering, and clean export.",
-    accent: "from-meta-100 to-meta-50 text-meta-700 border-meta-500/60",
+    blurb: "Full color, framing, audio mastering, and clean export.",
+    accent:
+      "from-meta-100 to-meta-50 text-meta-700 border-meta-500/60 shadow-meta-sm dark:border-meta-500/50 dark:from-meta-500/20 dark:to-meta-500/10 dark:text-meta-100",
   },
   aggressive: {
     title: "Dynamic",
-    blurb: "Adds per-frame film texture and deeper studio variation across copies.",
-    accent: "from-meta-200 to-meta-50 text-meta-800 border-meta-600/70",
+    badge: "Recommended",
+    blurb: "Recommended default. Adds per-frame film texture and deeper studio variation across copies.",
+    accent:
+      "border-emerald-500 from-emerald-100 via-emerald-50 to-white text-emerald-950 shadow-[0_0_16px_-3px_rgba(16,185,129,0.4)] ring-1 ring-emerald-500/35 dark:border-emerald-400/75 dark:from-emerald-500/25 dark:via-emerald-500/15 dark:to-emerald-950/30 dark:text-emerald-100 dark:ring-emerald-400/35",
   },
   nuclear: {
     title: "Max Studio",
     blurb: "All variation layers enabled, including horizontal flip, for maximum contrast.",
-    accent: "from-meta-300 to-meta-100 text-meta-900 border-meta-700/80",
+    accent:
+      "from-meta-300 to-meta-100 text-meta-900 border-meta-700/80 shadow-meta-sm dark:border-meta-500/50 dark:from-meta-500/20 dark:to-meta-500/10 dark:text-meta-100",
   },
 };
 
@@ -148,6 +156,7 @@ export function OptionsPanel({
           {availablePresets.map((preset) => {
             const active = options.preset === preset;
             const copy = PRESET_COPY[preset];
+            const isRecommended = Boolean(copy.badge);
             return (
               <button
                 key={preset}
@@ -157,19 +166,45 @@ export function OptionsPanel({
                 aria-pressed={active}
                 className={clsx(
                   "group relative overflow-hidden rounded-xl border p-3.5 text-left transition-all duration-200",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-meta-500/60",
+                  "focus-visible:outline-none focus-visible:ring-2",
+                  isRecommended ? "focus-visible:ring-emerald-500/60" : "focus-visible:ring-meta-500/60",
                   "disabled:cursor-not-allowed disabled:opacity-50",
                   active
-                    ? clsx(
-                        "bg-gradient-to-br shadow-meta-sm dark:border-meta-500/50 dark:from-meta-500/20 dark:to-meta-500/10 dark:text-meta-100",
-                        copy.accent,
-                      )
-                    : "border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] text-ink-muted dark:text-slate-300 hover:border-black/20 dark:hover:border-white/15 hover:bg-white/[0.05]",
+                    ? clsx("bg-gradient-to-br", copy.accent)
+                    : isRecommended
+                      ? "border-emerald-500/40 bg-emerald-50/40 dark:border-emerald-500/30 dark:bg-emerald-500/[0.06] text-ink-muted dark:text-slate-200 hover:border-emerald-500/70 hover:bg-emerald-50/75 dark:hover:border-emerald-400/55 dark:hover:bg-emerald-500/[0.12]"
+                      : "border-black/[0.08] dark:border-white/[0.08] bg-black/[0.02] dark:bg-white/[0.04] text-ink-muted dark:text-slate-300 hover:border-black/20 dark:hover:border-white/15 hover:bg-white/[0.05]",
                 )}
               >
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  <Zap className={clsx("h-3.5 w-3.5", active ? "" : "text-ink-subtle dark:text-slate-400")} aria-hidden />
-                  {copy.title}
+                <span className="flex items-center justify-between gap-2 text-sm font-semibold">
+                  <span className="flex items-center gap-2">
+                    <Zap
+                      className={clsx(
+                        "h-3.5 w-3.5",
+                        isRecommended
+                          ? active
+                            ? "text-emerald-600 dark:text-emerald-300"
+                            : "text-emerald-600/80 dark:text-emerald-400"
+                          : active
+                            ? ""
+                            : "text-ink-subtle dark:text-slate-400",
+                      )}
+                      aria-hidden
+                    />
+                    {copy.title}
+                  </span>
+                  {copy.badge ? (
+                    <span
+                      className={clsx(
+                        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                        active
+                          ? "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-500 dark:text-slate-950"
+                          : "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:border-emerald-400/35 dark:bg-emerald-500/20 dark:text-emerald-300",
+                      )}
+                    >
+                      {copy.badge}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="mt-1 block text-[11px] leading-relaxed opacity-80">{copy.blurb}</span>
               </button>
