@@ -333,6 +333,10 @@ class RefundRequest(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False, index=True)
     # Tokens from this order the customer had already used when they asked.
     tokens_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Unused tokens remaining on the account from this order when requested,
+    # and the prorated USD refund owed strictly for those remaining tokens.
+    tokens_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    refund_amount_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     # What the owner wrote back (shown to the customer on a rejection).
     admin_note: Mapped[str] = mapped_column(Text, default="", nullable=False)
     tokens_removed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -753,6 +757,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("affiliate_partners", "contact_email", "VARCHAR(254) NOT NULL DEFAULT ''"),
     ("affiliate_partners", "social_links_json", "TEXT NOT NULL DEFAULT '[]'"),
     ("affiliate_partners", "affiliate_link", "VARCHAR(500) NOT NULL DEFAULT ''"),
+    ("refund_requests", "tokens_remaining", "INTEGER"),
+    ("refund_requests", "refund_amount_usd", "FLOAT"),
 ]
 
 

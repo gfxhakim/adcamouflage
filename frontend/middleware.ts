@@ -171,5 +171,5 @@ function canonicalRedirect(request: NextRequest): NextResponse | null {
 
 export const config = {
   // Every page (for the www redirect); not the API, Next's files or static assets.
-  matcher: ["/((?!api/|_next/|brand/|landing/|favicon.ico|icon.png|apple-icon.png).*)"],
+  matcher: ["/((?!api/|_next/|brand/|landing/|media/|favicon.ico|icon.png|apple-icon.png).*)"],
 };

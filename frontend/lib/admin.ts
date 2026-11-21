@@ -871,6 +871,8 @@ export interface AdminRefundRequest {
   decided_at: string | null;
   decided_by: string | null;
   tokens_removed: number;
+  tokens_remaining?: number;
+  refund_amount?: number;
   user_id: number;
   email: string;
   name: string | null;
@@ -883,6 +885,8 @@ export interface AdminRefundRequest {
     amount: number;
     tokens: number;
     tokens_used: number;
+    tokens_remaining?: number;
+    refund_amount?: number;
     provider: string;
     provider_ref: string | null;
     status: string;

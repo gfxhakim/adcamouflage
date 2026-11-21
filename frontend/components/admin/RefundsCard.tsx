@@ -95,8 +95,14 @@ function RequestRow({
           </button>
           {order ? (
             <p className="text-xs text-ink-muted dark:text-slate-300">
-              {formatMoney(order.amount, currency)} · {order.kind === "subscription" ? `${order.plan_label} plan` : `Top-up on ${order.plan_label}`} ·{" "}
-              {order.ref} · {order.tokens_used.toLocaleString()} of {order.tokens.toLocaleString()} tokens used
+              {formatMoney(order.amount, currency)} paid ·{" "}
+              <span className="font-semibold text-black dark:text-white">
+                {formatMoney(row.refund_amount ?? order.refund_amount ?? order.amount, currency)} refundable
+              </span>{" "}
+              ({(row.tokens_remaining ?? order.tokens_remaining ?? Math.max(0, order.tokens - order.tokens_used)).toLocaleString()} of{" "}
+              {order.tokens.toLocaleString()} tokens left) ·{" "}
+              {order.kind === "subscription" ? `${order.plan_label} plan` : `Top-up on ${order.plan_label}`} ·{" "}
+              {order.ref}
             </p>
           ) : null}
           <p className="text-[11px] text-ink-faint dark:text-slate-500">Asked {timeAgo(row.created_at)}</p>
@@ -152,8 +158,8 @@ function RequestRow({
         <div className="mt-3 space-y-2">
           <p className="text-[11px] text-ink-faint dark:text-slate-500">
             {isWhop
-              ? "Approving sends the refund through Whop back to the customer's card/payment method."
-              : "Send the refund to the address above first, then paste the transaction hash and approve."}
+              ? "Approving sends the prorated refund (remaining unused tokens only) through Whop back to the customer's card/payment method."
+              : "Send the prorated refund (remaining tokens only) to the address above first, then paste the transaction hash and approve."}
           </p>
           <div className={clsx("grid gap-2", isWhop ? "sm:grid-cols-1" : "sm:grid-cols-2")}>
             {!isWhop ? (

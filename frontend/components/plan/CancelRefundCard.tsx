@@ -251,6 +251,12 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
       <div>
         <p className="label">Refunds</p>
         {ruleText ? <p className="mt-1 text-xs text-ink-muted">{ruleText}</p> : null}
+        <p className="mt-1 text-xs text-ink-subtle">
+          Refunds apply strictly to the proportional value of unused remaining tokens available in your account.{" "}
+          <a href="/refund-policy" className="font-medium text-meta-600 hover:underline">
+            Read refund policy
+          </a>
+        </p>
         {loadError ? <p className="mt-2 text-xs text-red-700">{loadError}</p> : null}
         {done ? (
           <p className="mt-2 flex items-start gap-1.5 text-xs text-emerald-700">
@@ -275,7 +281,8 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
                       <p className="truncate font-medium text-black">{orderTitle(order, planLabels, currency)}</p>
                       <p className="text-xs text-ink-subtle">
                         {formatMoney(order.amount, currency)} · {formatDate(order.paid_at)} · {formatTokens(order.tokens_used)} of{" "}
-                        {formatTokens(order.tokens)} tokens used
+                        {formatTokens(order.tokens)} tokens used · {formatTokens(order.tokens_remaining)} remaining (
+                        {formatMoney(order.refundable_amount, currency)} refundable)
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -290,7 +297,9 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
 
                   {request?.status === "pending" ? (
                     <div className="mt-2 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-ink-muted">
-                      Sent {formatDate(request.created_at)} · {request.reason_label}
+                      Sent {formatDate(request.created_at)} · {request.reason_label} ·{" "}
+                      {formatMoney(request.refund_amount ?? order.refundable_amount, currency)} for{" "}
+                      {formatTokens(request.tokens_remaining ?? order.tokens_remaining)} remaining tokens
                       {request.network === "whop_card" || !request.address ? (
                         <> · refund back to your card via Whop</>
                       ) : (
@@ -341,10 +350,14 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
                       </label>
                       {isWhopOrder ? (
                         <div className="rounded-lg border border-amber-400/50 bg-amber-50/80 px-3 py-2.5 text-xs text-amber-900">
-                          <p className="font-semibold">Immediate account pause &amp; Whop card refund</p>
+                          <p className="font-semibold">
+                            Prorated refund: {formatMoney(order.refundable_amount, currency)} (remaining tokens only)
+                          </p>
                           <p className="mt-1">
-                            Once approved by our team, Whop refunds this payment directly back to the card or payment
-                            method used at checkout.
+                            You have <b>{formatTokens(order.tokens_remaining)}</b> unused tokens remaining out of{" "}
+                            {formatTokens(order.tokens)}. Once approved by our team, Whop refunds{" "}
+                            <b>{formatMoney(order.refundable_amount, currency)}</b> directly back to the card or
+                            payment method used at checkout.
                           </p>
                           <p className="mt-1 font-medium">
                             Submitting this request immediately stops your plan and pauses your account so you can no
@@ -353,6 +366,15 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
                         </div>
                       ) : (
                         <>
+                          <div className="rounded-lg border border-meta-500/25 bg-meta-50/60 px-3 py-2.5 text-xs text-neutral-800">
+                            <p className="font-semibold text-meta-700">
+                              Refundable amount: {formatMoney(order.refundable_amount, currency)}
+                            </p>
+                            <p className="mt-0.5">
+                              Based strictly on your <b>{formatTokens(order.tokens_remaining)}</b> remaining unused
+                              tokens out of {formatTokens(order.tokens)} paid. Used tokens are non-refundable.
+                            </p>
+                          </div>
                           <div>
                             <span className="label flex items-center gap-1.5">
                               <Wallet className="h-3 w-3" aria-hidden /> Refund to
@@ -402,7 +424,9 @@ export function CancelRefundCard({ sub, planLabels, onChanged }: CancelRefundCar
                           onChange={(e) => setConfirmStop(e.target.checked)}
                         />
                         <span>
-                          I understand my plan and account stop working immediately when I submit this refund request
+                          I understand my refund is calculated strictly for my remaining unused tokens (
+                          {formatMoney(order.refundable_amount, currency)}), and that my plan and account stop working
+                          immediately when I submit this request
                           {order.kind === "subscription" ? " and my Whop subscription will not renew" : ""}.
                         </span>
                       </label>

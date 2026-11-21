@@ -151,6 +151,40 @@ def tokens_used(db: Session, order: Order) -> int:
     return max(0, min(total, used))
 
 
+def tokens_remaining(db: Session, order: Order, used: int | None = None) -> int:
+    """Unused tokens from this order still available in the customer's account."""
+
+    total = int(order.tokens or 0)
+    if total <= 0 or order.status != "paid":
+        return 0
+    used_count = tokens_used(db, order) if used is None else max(0, min(total, int(used)))
+    by_order = max(0, total - used_count)
+    user = db.get(User, order.user_id)
+    if user is None:
+        return 0
+    bucket_key = SUBSCRIPTION if order.kind == "subscription" else TOPUP
+    available_in_account = max(0, int(bucket_totals(db, user).get(bucket_key, 0)))
+    return max(0, min(total, by_order, available_in_account))
+
+
+def refundable_amount(order: Order, remaining_tokens: int) -> float:
+    """Prorated USD amount refundable strictly for the unused remaining tokens."""
+
+    total = int(order.tokens or 0)
+    paid = float(order.amount_usd or 0)
+    if total <= 0 or paid <= 0 or remaining_tokens <= 0:
+        return 0.0
+    rem = min(total, max(0, int(remaining_tokens)))
+    return round(paid * rem / total, 2)
+
+
+def _money_text(amount: float, cur: str) -> str:
+    code = (cur or "USD").upper()
+    if code == "USD":
+        return f"${amount:,.2f}".replace(".00", "")
+    return f"{amount:,.2f} {code}".replace(".00", "")
+
+
 def _label(db: Session, order: Order) -> str:
     plan = get_token_plans(db).get(order.plan_id)
     name = plan.label if plan else order.plan_id
@@ -163,7 +197,14 @@ def _latest_request(db: Session, order_id: str) -> RefundRequest | None:
     ).scalar_one_or_none()
 
 
-def eligibility(db: Session, order: Order, rules: dict[str, Any], now: datetime | None = None) -> tuple[bool, str, int]:
+def eligibility(
+    db: Session,
+    order: Order,
+    rules: dict[str, Any],
+    now: datetime | None = None,
+    *,
+    remaining_override: int | None = None,
+) -> tuple[bool, str, int]:
     """(can the customer ask, why not, tokens used)."""
 
     now = now or _now()
@@ -183,6 +224,9 @@ def eligibility(db: Session, order: Order, rules: dict[str, Any], now: datetime 
         days = int(rules["window_days"])
         return False, f"Refunds are possible within {days} day{'' if days == 1 else 's'} of payment.", used
     total = int(order.tokens or 0)
+    rem = tokens_remaining(db, order, used=used) if remaining_override is None else max(0, int(remaining_override))
+    if total > 0 and (rem <= 0 or refundable_amount(order, rem) <= 0):
+        return False, "No unused tokens remain in your account from this payment.", used
     limit = int(rules["max_used_percent"])
     if total > 0 and limit < 100 and used * 100 > total * limit:
         if limit == 0:
@@ -200,6 +244,8 @@ def _request_out(row: RefundRequest | None) -> dict[str, Any] | None:
         "reason": row.reason,
         "reason_label": REASONS.get(row.reason, row.reason),
         "details": row.details,
+        "tokens_remaining": row.tokens_remaining,
+        "refund_amount": row.refund_amount_usd,
         "network": row.refund_network,
         "network_label": NETWORKS.get(row.refund_network or "", {}).get("label", row.refund_network or ""),
         "address": row.refund_address,
@@ -256,7 +302,18 @@ def my_refunds(user: User = Depends(require_studio_user), db: Session = Depends(
     out = []
     for order in orders:
         request = _latest_request(db, order.id)
-        ok, why, used = eligibility(db, order, rules, now)
+        rem_override = (
+            request.tokens_remaining
+            if request is not None and request.status in ("pending", "approved", "rejected") and request.tokens_remaining is not None
+            else None
+        )
+        ok, why, used = eligibility(db, order, rules, now, remaining_override=rem_override)
+        rem = rem_override if rem_override is not None else tokens_remaining(db, order, used=used)
+        refund_amt = (
+            float(request.refund_amount_usd)
+            if request is not None and request.refund_amount_usd is not None and rem_override is not None
+            else refundable_amount(order, rem)
+        )
         if request is not None and request.status in ("pending", "rejected", "approved"):
             ok = False
         out.append(
@@ -268,6 +325,8 @@ def my_refunds(user: User = Depends(require_studio_user), db: Session = Depends(
                 "amount": order.amount_usd,
                 "tokens": order.tokens,
                 "tokens_used": used,
+                "tokens_remaining": rem,
+                "refundable_amount": refund_amt,
                 "paid_at": aware(order.paid_at) or aware(order.created_at),
                 "provider": order.provider,
                 "status": order.status,
@@ -309,6 +368,10 @@ def request_refund(
     ok, why, used = eligibility(db, order, get_rules(db))
     if not ok:
         raise HTTPException(status_code=409, detail=why)
+    rem = tokens_remaining(db, order, used=used)
+    refund_amt = refundable_amount(order, rem)
+    if rem <= 0 or refund_amt <= 0:
+        raise HTTPException(status_code=409, detail="No unused tokens remain in your account from this payment.")
     details = " ".join(payload.details.split())[:1000]
     net_raw = (payload.network or "").strip()
     addr_raw = (payload.address or "").strip()
@@ -329,6 +392,8 @@ def request_refund(
         reason=payload.reason,
         details=details,
         tokens_used=used,
+        tokens_remaining=rem,
+        refund_amount_usd=refund_amt,
         refund_network=network,
         refund_address=wallet,
     )
@@ -352,18 +417,39 @@ def request_refund(
     db.refresh(row)
     clear_session_cookie(response)
 
+    cur = currency(db)
+    refund_money = _money_text(refund_amt, cur)
     reason_text = REASONS[payload.reason] + (f": {details}" if details else "")
-    log_activity(db, user.id, "refund", f"Asked for a refund of ${order.amount_usd:g} ({reason_text}); account stopped")
+    log_activity(
+        db,
+        user.id,
+        "refund",
+        f"Asked for a refund of {refund_money} for {rem:,} remaining tokens ({reason_text}); account stopped",
+    )
     plan = get_token_plans(db).get(order.plan_id)
     notify.refund_requested(
-        order, user.email, plan.label if plan else order.plan_id, currency(db), reason_text, used,
-        name=user.display_name, refund_to=refund_to,
+        order,
+        user.email,
+        plan.label if plan else order.plan_id,
+        cur,
+        reason_text,
+        used,
+        name=user.display_name,
+        refund_to=refund_to,
+        tokens_remaining=rem,
+        refund_amount=refund_amt,
     )
     mailer.send_kind(
         db,
         user,
         "refund_requested",
-        {"plan": _label(db, order), "reason": reason_text, "refund_to": refund_to, **mailer._order_values(db, order)},
+        {
+            "plan": _label(db, order),
+            "reason": reason_text,
+            "refund_to": refund_to,
+            **mailer._order_values(db, order),
+            "amount": refund_money,
+        },
     )
     out = _request_out(row) or {}
     return {**out, "account_stopped": True}
@@ -473,14 +559,31 @@ def apply_provider_refund(
     return "" if already else affiliates.on_order_refunded(db, order)
 
 
+def _row_remaining_and_amount(db: Session, row: RefundRequest, order: Order | None) -> tuple[int, float]:
+    """Resolve remaining tokens and prorated refundable USD for an existing RefundRequest."""
+
+    if order is None:
+        return int(row.tokens_remaining or 0), float(row.refund_amount_usd or 0.0)
+    if row.tokens_remaining is not None:
+        rem = max(0, int(row.tokens_remaining))
+    elif row.status == "pending" and order.kind == "subscription":
+        # Legacy pending rows created before tokens_remaining existed already had cancel_period write off sub tokens.
+        rem = max(0, int(order.tokens or 0) - int(row.tokens_used or 0))
+    else:
+        rem = tokens_remaining(db, order, used=row.tokens_used)
+    amt = float(row.refund_amount_usd) if row.refund_amount_usd is not None else refundable_amount(order, rem)
+    return rem, amt
+
+
 def _admin_row(db: Session, row: RefundRequest, rules: dict[str, Any]) -> dict[str, Any]:
     order = db.get(Order, row.order_id)
     user = db.get(User, row.user_id)
     plan = get_token_plans(db).get(order.plan_id) if order else None
+    rem, refund_amt = _row_remaining_and_amount(db, row, order)
     in_rules = True
     why = ""
     if order is not None and row.status == "pending":
-        in_rules, why, _used = eligibility(db, order, rules, aware(row.created_at))
+        in_rules, why, _used = eligibility(db, order, rules, aware(row.created_at), remaining_override=rem)
     net_label = (
         "Whop (original card / payment method)"
         if row.refund_network == "whop_card"
@@ -499,6 +602,8 @@ def _admin_row(db: Session, row: RefundRequest, rules: dict[str, Any]) -> dict[s
         "decided_at": aware(row.decided_at),
         "decided_by": row.decided_by,
         "tokens_removed": row.tokens_removed,
+        "tokens_remaining": rem,
+        "refund_amount": refund_amt,
         "user_id": row.user_id,
         "email": user.email if user else "",
         "name": user.display_name if user else None,
@@ -513,6 +618,8 @@ def _admin_row(db: Session, row: RefundRequest, rules: dict[str, Any]) -> dict[s
             "amount": order.amount_usd,
             "tokens": order.tokens,
             "tokens_used": tokens_used(db, order) if order.status == "paid" else row.tokens_used,
+            "tokens_remaining": rem,
+            "refund_amount": refund_amt,
             "provider": order.provider,
             "provider_ref": order.provider_ref,
             "status": order.status,
@@ -564,14 +671,26 @@ def admin_approve(
     if order.status not in ("paid", "refunded"):
         raise HTTPException(status_code=409, detail="Only a paid order can be refunded.")
     already = order.status == "refunded"
+    rem, refund_amt = _row_remaining_and_amount(db, row, order)
+    if not already and (rem <= 0 or refund_amt <= 0):
+        raise HTTPException(status_code=409, detail="No unused tokens remain on this account to refund.")
 
     refund_tx = " ".join(payload.refund_tx.split())
     if not already and order.provider == whop.PROVIDER and order.provider_ref and whop.configured():
+        full_paid = round(float(order.amount_usd or 0), 2)
+        whop_kwargs: dict[str, Any] = {
+            "metadata": {
+                "refund_request_id": str(row.id),
+                "order_id": order.id,
+                "reviewed_by": admin.email,
+                "tokens_remaining": str(rem),
+                "refund_amount_usd": f"{refund_amt:.2f}",
+            }
+        }
+        if refund_amt < full_paid:
+            whop_kwargs["amount"] = refund_amt
         try:
-            res = whop.refund_payment(
-                order.provider_ref,
-                metadata={"refund_request_id": str(row.id), "order_id": order.id, "reviewed_by": admin.email},
-            )
+            res = whop.refund_payment(order.provider_ref, **whop_kwargs)
             refund_tx = res.get("refund_id") or refund_tx or order.provider_ref
         except whop.WhopError as exc:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
@@ -589,12 +708,16 @@ def admin_approve(
     row.admin_note = note
     row.decided_at = now
     row.decided_by = admin.email
+    row.tokens_remaining = rem
+    row.refund_amount_usd = refund_amt
     row.tokens_removed = int(row.tokens_removed or 0) + int(result["removed"])
     row.refund_tx = refund_tx[:200]
     db.commit()
     reversed_ = "" if already else affiliates.on_order_refunded(db, order)
 
-    detail = f"Approved the ${order.amount_usd:g} refund ({notify.order_ref(order)})"
+    cur = currency(db)
+    refund_money = _money_text(refund_amt, cur)
+    detail = f"Approved the {refund_money} refund for {rem:,} remaining tokens ({notify.order_ref(order)})"
     if payload.remove_access:
         detail += f"; {result['removed']} tokens taken back" + ("; plan ended now" if result["ended"] else "")
     if reversed_:
@@ -602,7 +725,7 @@ def admin_approve(
     if note:
         detail += f" ({note})"
     audit.record(db, admin, user, "refund_approved", detail)
-    log_activity(db, user.id, "refund", f"Refund of ${order.amount_usd:g} approved")
+    log_activity(db, user.id, "refund", f"Refund of {refund_money} approved ({rem:,} remaining tokens)")
     refund_to_label = (
         "Original card / payment method via Whop"
         if row.refund_network == "whop_card"
@@ -619,6 +742,7 @@ def admin_approve(
             "refund_to": refund_to_label,
             "refund_tx": row.refund_tx or "-",
             **mailer._order_values(db, order),
+            "amount": refund_money,
         },
     )
     return _admin_row(db, row, get_rules(db))

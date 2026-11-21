@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import LegalPage from "@/components/LegalPage";
 import { contactEmail, SITE_NAME } from "@/lib/site";
@@ -38,8 +39,10 @@ export default function TermsPage() {
           may change for future periods.
         </li>
         <li>
-          If a render fails because of our service, the tokens for it are returned. Other refund requests are handled
-          case by case; contact us.
+          If a render fails because of our service, the tokens for it are automatically returned to your balance.
+          Eligible payment refunds are calculated proportionally and apply <strong>only to the remaining unused tokens
+          available in your account</strong> at the time the request is submitted (tokens already spent on exports are
+          non-refundable). See the full <Link href="/refund-policy">Refund policy &amp; conditions</Link>.
         </li>
       </ul>
 

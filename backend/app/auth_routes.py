@@ -105,6 +105,7 @@ class Credentials(BaseModel):
 class RegisterRequest(Credentials):
     display_name: str | None = Field(default=None, max_length=120)
     account_role: Literal["customer", "affiliate"] = "customer"
+    accepted_policy: bool = True
 
 
 class UserProfile(BaseModel):
@@ -275,6 +276,11 @@ def register(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="New accounts are closed on this instance.",
+        )
+    if not payload.accepted_policy:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Please accept the Terms, Conditions, and Refund Policy before creating an account.",
         )
 
     email = validate_email(payload.email)

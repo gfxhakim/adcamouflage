@@ -365,17 +365,21 @@ def refund_requested(
     tokens_used: int,
     name: str | None = None,
     refund_to: str = "",
+    tokens_remaining: int | None = None,
+    refund_amount: float | None = None,
 ) -> bool:
     what = f"{plan_label} subscription" if order.kind == "subscription" else f"Top-up on {plan_label}"
     link = admin_sales_link()
     buttons = [[{"text": "↩️ Open Admin > Sales", "url": link}]] if link.startswith("https://") else None
+    refundable = float(order.amount_usd or 0) if refund_amount is None else float(refund_amount)
+    remaining = max(0, int(order.tokens or 0) - int(tokens_used or 0)) if tokens_remaining is None else int(tokens_remaining)
     return alert(
         "refund",
-        f"↩️ Refund requested {_money(order.amount_usd, currency)}: {what}",
+        f"↩️ Refund requested {_money(refundable, currency)}: {what}",
         [
             f"Customer: {_customer(email, name)}",
-            f"Order: {order_ref(order)}",
-            f"Tokens used: {tokens_used:,} of {order.tokens:,}",
+            f"Order: {order_ref(order)} ({_money(order.amount_usd, currency)} paid)",
+            f"Tokens remaining: {remaining:,} of {order.tokens:,} ({tokens_used:,} used)",
             f"Why: {_short(reason, 300)}",
             f"Refund to: {refund_to}" if refund_to else "",
         ],

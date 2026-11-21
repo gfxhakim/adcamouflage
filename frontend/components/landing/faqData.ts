@@ -31,8 +31,8 @@ export const FAQS = [
     tag: "Batching",
   },
   {
-    q: "How do plans, render tokens, and team seats work?",
-    a: "Each plan gives you a 30-day allowance of studio render tokens with no long-term contracts. Unused tokens roll over on Pro and Max plans when you renew on time, any failed or canceled render is automatically refunded to your balance, and the Max plan includes up to 5 team seats.",
+    q: "How do plans, render tokens, and refunds work?",
+    a: "Each plan gives you a 30-day allowance of studio render tokens with no long-term contracts. Unused tokens roll over on Pro and Max plans when you renew on time, any failed or canceled render is automatically returned to your balance, and eligible refunds apply strictly to the remaining unused tokens still in your account (Max includes up to 5 team seats).",
     tag: "Billing",
   },
 ];

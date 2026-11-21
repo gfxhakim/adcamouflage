@@ -22,6 +22,7 @@ import { assessPassword, MIN_PASSWORD_LENGTH, trustedEmailError } from "@/lib/au
 import { trackRegistration } from "@/lib/meta";
 import { CodeField, ResendButton } from "./CodeInput";
 import NeonCard from "./NeonCard";
+import SignupPolicyModal from "./SignupPolicyModal";
 import SocialButtons from "./SocialButtons";
 
 type Mode = "signin" | "signup";
@@ -141,26 +142,13 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     await enter(current);
   }, [busy, current, enter]);
 
-  const submit = useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
+  const [policyIntent, setPolicyIntent] = useState<
+    { kind: "email" } | { kind: "google"; href: string } | { kind: "review" } | null
+  >(null);
+
+  const executeAuth = useCallback(
+    async (acceptedPolicy = true) => {
       if (busy) return;
-
-      setError(null);
-
-      if (mode === "signup") {
-        const emailProblem = trustedEmailError(email.trim(), providers?.trusted_email_domains);
-        if (emailProblem) {
-          setError(emailProblem);
-          return;
-        }
-        const pwCheck = assessPassword(password, email.trim());
-        if (!pwCheck.valid && pwCheck.error) {
-          setError(pwCheck.error);
-          return;
-        }
-      }
-
       setBusy(true);
       try {
         let profile: UserProfile | null = null;
@@ -170,6 +158,7 @@ export function AuthPanel({ mode }: { mode: Mode }) {
             password,
             displayName.trim(),
             isAffiliateFlow ? "affiliate" : "customer",
+            acceptedPolicy,
           );
           if (isPending(result)) {
             setPendingEmail(result.email);
@@ -196,7 +185,34 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         setBusy(false);
       }
     },
-    [busy, displayName, email, enter, isAffiliateFlow, mode, password, providers?.trusted_email_domains],
+    [busy, displayName, email, enter, isAffiliateFlow, mode, password],
+  );
+
+  const submit = useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      if (busy) return;
+
+      setError(null);
+
+      if (mode === "signup") {
+        const emailProblem = trustedEmailError(email.trim(), providers?.trusted_email_domains);
+        if (emailProblem) {
+          setError(emailProblem);
+          return;
+        }
+        const pwCheck = assessPassword(password, email.trim());
+        if (!pwCheck.valid && pwCheck.error) {
+          setError(pwCheck.error);
+          return;
+        }
+        setPolicyIntent({ kind: "email" });
+        return;
+      }
+
+      await executeAuth(true);
+    },
+    [busy, email, executeAuth, mode, password, providers?.trusted_email_domains],
   );
 
   const confirm = useCallback(
@@ -317,12 +333,22 @@ export function AuthPanel({ mode }: { mode: Mode }) {
         </div>
       ) : null}
 
-      <SocialButtons
-        next={isAffiliateFlow && !next ? "/affiliates/dashboard" : next}
-        mode={mode}
-        role={isAffiliateFlow ? "affiliate" : undefined}
-        providers={providers}
-      />
+      <div
+        onClickCapture={(e) => {
+          if (mode !== "signup" || busy) return;
+          const anchor = (e.target as HTMLElement | null)?.closest("a");
+          if (!anchor?.href) return;
+          e.preventDefault();
+          setPolicyIntent({ kind: "google", href: anchor.href });
+        }}
+      >
+        <SocialButtons
+          next={isAffiliateFlow && !next ? "/affiliates/dashboard" : next}
+          mode={mode}
+          role={isAffiliateFlow ? "affiliate" : undefined}
+          providers={providers}
+        />
+      </div>
 
       {refundSubmitted ? (
         <div
@@ -432,17 +458,55 @@ export function AuthPanel({ mode }: { mode: Mode }) {
       </form>
 
       {mode === "signup" ? (
-        <p className="mt-4 text-center text-[11px] leading-relaxed text-ink-subtle">
-          By creating an account you agree to the{" "}
-          <Link href="/terms" className="underline">
-            Terms
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" className="underline">
-            Privacy policy
-          </Link>
-          .
-        </p>
+        <div className="mt-4 space-y-1.5 text-center text-[11px] leading-relaxed text-ink-subtle">
+          <p>
+            By creating an account you agree to our{" "}
+            <Link href="/terms" className="underline">
+              Terms
+            </Link>
+            ,{" "}
+            <Link href="/privacy" className="underline">
+              Privacy policy
+            </Link>
+            , and{" "}
+            <Link href="/refund-policy" className="underline">
+              Refund policy
+            </Link>{" "}
+            (remaining unused tokens only).
+          </p>
+          <button
+            type="button"
+            onClick={() => setPolicyIntent({ kind: "review" })}
+            className="font-semibold text-meta-600 hover:underline"
+          >
+            View how ProteusFlow works, Conditions &amp; Refund Policy
+          </button>
+        </div>
+      ) : null}
+
+      {mode === "signup" ? (
+        <SignupPolicyModal
+          open={policyIntent !== null}
+          requireCheck={policyIntent?.kind !== "review"}
+          actionLabel={
+            policyIntent?.kind === "google"
+              ? "Accept & Continue with Google"
+              : policyIntent?.kind === "email"
+                ? "Accept & Create account"
+                : "Got it"
+          }
+          onClose={() => setPolicyIntent(null)}
+          onConfirm={() => {
+            const intent = policyIntent;
+            setPolicyIntent(null);
+            if (!intent) return;
+            if (intent.kind === "google") {
+              window.location.assign(intent.href);
+            } else if (intent.kind === "email") {
+              void executeAuth(true);
+            }
+          }}
+        />
       ) : null}
 
       {mode === "signup" ? (

@@ -138,6 +138,7 @@ export function SiteFooter() {
               <Link href="/guides" className="hover:text-white">Guides</Link>
               <Link href="/privacy" className="hover:text-white">Privacy</Link>
               <Link href="/terms" className="hover:text-white">Terms</Link>
+              <Link href="/refund-policy" className="hover:text-white">Refund policy</Link>
               <button type="button" onClick={openCookieSettings} className="hover:text-white">
                 Cookie settings
               </button>

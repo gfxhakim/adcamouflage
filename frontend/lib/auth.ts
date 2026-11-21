@@ -115,12 +115,14 @@ export function signUp(
   password: string,
   displayName?: string,
   accountRole: "customer" | "affiliate" = "customer",
+  acceptedPolicy = true,
 ) {
   return post<UserProfile | PendingSignup>("/api/v1/auth/register", {
     email,
     password,
     display_name: displayName || null,
     account_role: accountRole,
+    accepted_policy: acceptedPolicy,
   });
 }
 
@@ -454,6 +456,8 @@ export interface RefundRequestInfo {
   reason: string;
   reason_label: string;
   details: string;
+  tokens_remaining?: number | null;
+  refund_amount?: number | null;
   network: string | null;
   network_label: string;
   address: string | null;
@@ -472,6 +476,8 @@ export interface RefundableOrder {
   amount: number;
   tokens: number;
   tokens_used: number;
+  tokens_remaining: number;
+  refundable_amount: number;
   paid_at: string;
   status: "paid" | "refunded";
   can_request: boolean;

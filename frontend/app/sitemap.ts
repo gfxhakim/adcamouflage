@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 // Dates of the last real change to these pages (not "now", which tells Google
 // every page changes on every crawl and makes it trust the dates less).
-const LEGAL_UPDATED = new Date("2026-11-05T00:00:00Z");
+const LEGAL_UPDATED = new Date("2026-11-21T00:00:00Z");
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
@@ -27,5 +27,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
     { url: `${base}/privacy`, lastModified: LEGAL_UPDATED, changeFrequency: "yearly", priority: 0.2 },
     { url: `${base}/terms`, lastModified: LEGAL_UPDATED, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${base}/refund-policy`, lastModified: LEGAL_UPDATED, changeFrequency: "yearly", priority: 0.3 },
   ];
 }
