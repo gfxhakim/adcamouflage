@@ -216,9 +216,11 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: SecretStr | None = None
     resend_api_key: SecretStr | None = None
-    email_from: str = "ProteusFlow <billing@blucloack.online>"
-    # Where customer replies go; empty = back to the From address.
-    email_reply_to: str = ""
+    email_from: str = "ProteusFlow <hello@proteusflow.com>"
+    # Where customer replies go (Cloudflare Email Routing forwards it to the
+    # owner's inbox). Set ADCAM_EMAIL_REPLY_TO to "" to send replies back to
+    # the From address instead.
+    email_reply_to: str = "support@proteusflow.com"
 
     # --- sign-in with Google -------------------------------------------------
     # The button appears on the login and sign-up pages once both are

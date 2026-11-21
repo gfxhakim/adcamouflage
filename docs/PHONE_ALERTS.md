@@ -61,7 +61,7 @@ The 🛒 **Checkout started** and ⚠️ **Payment needs a look** alerts come wi
 **Turn the buttons on (once):**
 
 1. Telegram alerts work (steps 1-6 above) and `ADCAM_PUBLIC_URL` on the api service is your https address
-   (for example `https://blucloack.online`).
+   (for example `https://proteusflow.com`).
 2. **Admin → Settings → Phone alerts → Connect buttons.** The card then says *Approve from Telegram: connected*.
    This tells Telegram to send button presses to `https://<your site>/api/v1/notify/telegram` with a secret
    made from your bot token; nothing else to copy or paste.
@@ -85,7 +85,7 @@ before connecting.
 ## Option B: ntfy (no account needed)
 
 1. Install the **ntfy** app (Android / iPhone) and **subscribe to a topic**. Use a long random name, for example
-   `blucloack-7f3k9q2xw8`: anyone who knows the topic name can read it, and alerts contain customer emails.
+   `proteusflow-7f3k9q2xw8`: anyone who knows the topic name can read it, and alerts contain customer emails.
 2. In Railway → **api** → **Variables**, add `ADCAM_NOTIFY_NTFY_TOPIC` = that topic name. Deploy.
 3. Admin → Settings → Phone alerts → **Send test alert**.
 
