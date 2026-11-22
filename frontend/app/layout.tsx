@@ -2,6 +2,7 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif } from "next/font/google";
+import localFont from "next/font/local";
 
 import MetaPixel from "@/components/MetaPixel";
 import RefCapture from "@/components/RefCapture";
@@ -16,6 +17,12 @@ const display = Instrument_Serif({
   weight: "400",
   style: ["normal", "italic"],
   variable: "--font-display",
+  display: "swap",
+});
+
+const palaceAthene = localFont({
+  src: "./fonts/PalaceAtheneDemo.ttf",
+  variable: "--font-palace",
   display: "swap",
 });
 
@@ -70,7 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${GeistSans.variable} ${GeistMono.variable} ${display.variable}`}
+      className={`${GeistSans.variable} ${GeistMono.variable} ${display.variable} ${palaceAthene.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: DECK_THEME_SCRIPT }} />

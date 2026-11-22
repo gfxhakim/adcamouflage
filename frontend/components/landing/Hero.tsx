@@ -13,7 +13,7 @@ import { HyperText } from "@/components/ui/hyper-text";
 // The hero headline transforms smoothly through these core actions in order.
 const WORDS = ["SCALE IT", "EDIT IT", "RUN IT"];
 const EMPTY_WORDS: string[] = [];
-const WORD_INTERVAL_MS = 2600;
+const WORD_INTERVAL_MS = 4000;
 
 export function Hero({ startHref }: { startHref: string }) {
   const cms = useCms();
@@ -64,8 +64,10 @@ export function Hero({ startHref }: { startHref: string }) {
         <div aria-live="off" className="mb-3 flex w-full justify-center sm:mb-5">
           <HyperText
             text={activeWord}
-            duration={750}
-            className="text-[clamp(2.55rem,11vw,5.75rem)] font-black leading-none tracking-[0.06em] text-[#ebf3ff] [text-shadow:0_0_16px_rgba(8,102,255,0.95),0_0_36px_rgba(51,133,255,0.65)]"
+            duration={1150}
+            holdPerWord
+            style={{ fontFamily: "var(--font-palace), Georgia, serif" }}
+            className="font-palace text-[clamp(2.35rem,9.8vw,6.25rem)] font-bold leading-none tracking-[0.06em] text-[#ebf3ff] [text-shadow:0_0_16px_rgba(8,102,255,0.95),0_0_36px_rgba(51,133,255,0.65)]"
           />
         </div>
 

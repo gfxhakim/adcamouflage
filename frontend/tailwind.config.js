@@ -82,6 +82,7 @@ module.exports = {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["var(--font-display)", "Georgia", "Times New Roman", "serif"],
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
+        palace: ["var(--font-palace)", "Georgia", "Times New Roman", "serif"],
       },
       boxShadow: {
         "meta-sm": "0 0 10px -2px rgb(8 102 255 / 0.35)",
