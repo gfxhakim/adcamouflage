@@ -6,11 +6,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CmsIcon, CmsLink, CmsSection, CmsSlot, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
+import MatrixWords from "@/components/landing/MatrixWords";
 import { CmsHeadline, EASE } from "@/components/landing/primitives";
 import { HyperText } from "@/components/ui/hyper-text";
 
 // The hero headline transforms smoothly through these core actions in order.
 const WORDS = ["SCALE IT", "EDIT IT", "RUN IT"];
+const EMPTY_WORDS: string[] = [];
 const WORD_INTERVAL_MS = 2600;
 
 export function Hero({ startHref }: { startHref: string }) {
@@ -45,23 +47,16 @@ export function Hero({ startHref }: { startHref: string }) {
       id="home"
       className="relative isolate flex min-h-[100svh] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
     >
-      {/* Subtle dark dot grid (or admin hero.background media) + Meta-blue studio glow */}
-      <CmsSlot k="hero.background" label="Background texture" className="absolute inset-0 h-full object-cover">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-45"
-          style={{
-            backgroundImage: "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
-            backgroundSize: "18px 18px",
-          }}
-          aria-hidden
-        />
+      {/* Authentic live animated Matrix grid background + subtle blue studio spotlight */}
+      <CmsSlot k="hero.background" label="Background animation" className="absolute inset-0 h-full object-cover">
+        <MatrixWords words={EMPTY_WORDS} centerY={0.22} className="absolute inset-0 h-full w-full" />
       </CmsSlot>
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[55%] bg-[radial-gradient(ellipse_65%_60%_at_50%_20%,rgba(8,102,255,0.28),transparent_72%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[52%] bg-[radial-gradient(ellipse_65%_55%_at_50%_20%,rgba(8,102,255,0.22),transparent_72%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-black via-black/80 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-black via-black/82 to-transparent"
         aria-hidden
       />
 
@@ -70,7 +65,7 @@ export function Hero({ startHref }: { startHref: string }) {
           <HyperText
             text={activeWord}
             duration={750}
-            className="text-[clamp(2.55rem,11vw,5.75rem)] font-black leading-none tracking-[0.06em] text-white drop-shadow-[0_2px_12px_rgba(8,102,255,0.38)]"
+            className="text-[clamp(2.55rem,11vw,5.75rem)] font-black leading-none tracking-[0.06em] text-[#ebf3ff] [text-shadow:0_0_16px_rgba(8,102,255,0.95),0_0_36px_rgba(51,133,255,0.65)]"
           />
         </div>
 

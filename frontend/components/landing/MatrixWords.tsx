@@ -5,7 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import { useEffect, useRef } from "react";
 
-const CHARS = "0123456789ABCDEF<>/*+=#%";
+const CHARS = "01アイウエオカキクケコサシスセソタチツテト<>/*+#=$%";
 const HOLD_MS = 2300;
 const MORPH_MS = 900;
 const INTRO_MS = 1050;
@@ -14,8 +14,8 @@ const pickIndex = () => Math.floor(Math.random() * CHARS.length);
 const easeOutCubic = (x: number) => 1 - (1 - x) ** 3;
 
 interface MatrixWordsProps {
-  words: string[];
-  /** Vertical centre of the word, as a share of the hero height. */
+  words?: string[];
+  /** Vertical centre of the focal matrix band, as a share of the hero height. */
   centerY?: number;
   /** Tallest the word block may be, as a share of the hero height. */
   maxHeight?: number;
@@ -23,15 +23,16 @@ interface MatrixWordsProps {
 }
 
 /**
- * Full-bleed high-FPS dot-matrix display morphing between hero words.
- * Uses a pre-rendered static background layer + DPR-scaled glyph atlas and
- * animates exclusively via unthrottled requestAnimationFrame (>= 60 FPS).
+ * Full-bleed high-FPS dot-matrix grid canvas. Renders subtle twinkling Matrix
+ * symbols across the hero background (and morphs pixel-masked words when `words` is non-empty).
  */
-export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className }: MatrixWordsProps) {
+export function MatrixWords({ words = [], centerY = 0.21, maxHeight = 0.23, className }: MatrixWordsProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const reduce = useReducedMotion();
+  const wordsKey = words.join("\n");
 
   useEffect(() => {
+    const activeWords = wordsKey ? wordsKey.split("\n") : [];
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d", { alpha: false });
     if (!canvas || !ctx) return;
@@ -200,7 +201,7 @@ export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className
       buildBgLayer();
 
       const total = cols * rows;
-      masks = words.map(buildMask);
+      masks = activeWords.map(buildMask);
       glyphIdx = new Uint8Array(total);
       nextFlip = new Float32Array(total);
       delay = new Float32Array(total);
@@ -216,6 +217,7 @@ export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className
         }
       }
 
+      const ambientThreshold = masks.length === 0 ? 0.935 : 0.982;
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
@@ -225,7 +227,7 @@ export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className
           delay[i] = (x / cols) * 0.62 + (y / rows) * 0.14 + Math.random() * 0.24;
           if (anyMask[i] === 1) {
             active.push(i);
-          } else if (noise[i] > 0.982) {
+          } else if (noise[i] > ambientThreshold) {
             ambient.push(i);
           }
         }
@@ -242,6 +244,27 @@ export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className
       ctx.drawImage(bgCanvas, 0, 0, viewW, viewH);
 
       const t = reduce ? INTRO_MS : Math.max(0, now - start);
+
+      // Sparse twinkling ambient matrix sparks across the hero canvas.
+      for (let a = 0; a < ambientCells.length; a++) {
+        const i = ambientCells[a];
+        if (!reduce && now >= nextFlip[i]) {
+          glyphIdx[i] = pickIndex();
+          nextFlip[i] = now + 450 + Math.random() * 1600;
+        }
+        const col = i % cols;
+        const row = (i / cols) | 0;
+        const pulse = Math.abs(Math.sin(t * 0.0016 + noise[i] * 50));
+        ctx.globalAlpha = masks.length === 0 ? 0.18 + 0.52 * pulse : 0.28 + 0.48 * pulse;
+        const pRow = masks.length === 0 && noise[i] > 0.975 ? 2 : 3;
+        ctx.drawImage(atlas, glyphIdx[i] * tilePx, pRow * tilePx, tilePx, tilePx, col * cell, row * cell, cell, cell);
+      }
+
+      if (masks.length === 0) {
+        ctx.globalAlpha = 1;
+        return;
+      }
+
       const cycle = HOLD_MS + MORPH_MS;
       const step = Math.floor(t / cycle);
       const phase = t - step * cycle;
@@ -249,16 +272,6 @@ export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className
       const to = masks[(step + 1) % masks.length];
       const morph = phase > HOLD_MS ? (phase - HOLD_MS) / MORPH_MS : -1;
       const introProgress = step === 0 && !reduce ? Math.min(1, t / INTRO_MS) : 1;
-
-      // Sparse twinkling ambient matrix sparks in the background.
-      for (let a = 0; a < ambientCells.length; a++) {
-        const i = ambientCells[a];
-        const col = i % cols;
-        const row = (i / cols) | 0;
-        const alpha = 0.28 + 0.48 * Math.abs(Math.sin(t * 0.0016 + noise[i] * 50));
-        ctx.globalAlpha = alpha;
-        ctx.drawImage(atlas, glyphIdx[i] * tilePx, 3 * tilePx, tilePx, tilePx, col * cell, row * cell, cell, cell);
-      }
 
       const inset = cell <= 6 ? 0.25 : 0.45;
       const plateSize = cell - inset * 2;
@@ -358,7 +371,7 @@ export function MatrixWords({ words, centerY = 0.21, maxHeight = 0.23, className
       io.disconnect();
       window.removeEventListener("resize", onResize);
     };
-  }, [words, centerY, maxHeight, reduce]);
+  }, [wordsKey, centerY, maxHeight, reduce]);
 
   return <canvas ref={ref} className={className} aria-hidden />;
 }
