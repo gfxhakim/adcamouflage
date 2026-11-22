@@ -24,29 +24,29 @@ export function Hero({ startHref }: { startHref: string }) {
       k="hero"
       label="Hero"
       id="home"
-      className="relative isolate flex min-h-[max(100svh,820px)] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
+      className="relative isolate flex min-h-[100svh] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
     >
       <CmsSlot k="hero.background" label="Background animation" className="absolute inset-0 h-full object-cover">
         <MatrixWords
           words={words.length ? words : WORDS}
-          centerY={0.22}
-          maxHeight={0.24}
+          centerY={0.205}
+          maxHeight={0.21}
           className="absolute inset-0 h-full w-full"
         />
       </CmsSlot>
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-black via-black/80 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-black via-black/82 to-transparent"
         aria-hidden
       />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-end px-4 pb-10 pt-[34svh] text-center sm:px-6 lg:pt-[39vh]">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-end px-4 pb-6 pt-[clamp(14rem,32svh,19.5rem)] text-center sm:px-6 sm:pb-8 lg:pt-[clamp(15.5rem,33svh,21rem)]">
         <motion.span
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.08] px-3 py-1 text-[11px] font-medium text-white/80 backdrop-blur"
+          className="mb-4 inline-flex max-w-[92vw] items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3.5 py-1.5 text-[10px] font-semibold leading-snug tracking-[0.04em] text-white/85 backdrop-blur sm:mb-5 sm:max-w-none sm:rounded-full sm:py-1 sm:text-[11px]"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE }}
         >
-          <CmsIcon k="hero.badge.icon" fallback={ShieldCheck} className="h-3.5 w-3.5 text-meta-400" aria-hidden />
+          <CmsIcon k="hero.badge.icon" fallback={ShieldCheck} className="h-3.5 w-3.5 shrink-0 text-meta-400" aria-hidden />
           <T k="hero.studioBadge">CLOUD VIDEO FORMATTER • BRAND OVERLAYS & BATCH EXPORT</T>
         </motion.span>
 
@@ -55,14 +55,14 @@ export function Hero({ startHref }: { startHref: string }) {
           as="h1"
           dark
           text="One Master Video. | [Formatted, Branded &] | [Exported in Minutes.]"
-          className="text-[2.15rem] min-[400px]:text-[2.4rem] sm:text-6xl lg:text-[5.4rem]"
+          className="font-bold leading-[1.08] tracking-[-0.015em] text-[1.95rem] min-[400px]:text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.5rem] xl:text-[5rem]"
         />
 
         <T
           k="hero.studioLede"
           long
           as={motion.p}
-          className="mt-6 max-w-3xl text-sm leading-relaxed text-white/75 sm:text-base"
+          className="mt-4 max-w-3xl text-[13.5px] leading-relaxed text-white/75 sm:mt-5 sm:text-base"
           // Visible from the first paint (it is the page's largest text, so a
           // fade-in from 0 would delay Largest Contentful Paint); it only slides.
           initial={{ opacity: 1, y: 14 }}
@@ -73,7 +73,7 @@ export function Hero({ startHref }: { startHref: string }) {
         </T>
 
         <motion.div
-          className="mt-8 flex flex-wrap items-center justify-center gap-3"
+          className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:mt-7"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.65, ease: EASE }}

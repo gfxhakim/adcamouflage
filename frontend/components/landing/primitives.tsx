@@ -66,10 +66,10 @@ export function Headline({
                   {words.map((w) => {
                     const i = word++;
                     return (
-                      <span key={`${pi}-${w}-${i}`} className="relative mr-[0.22em] inline-block">
+                      <span key={`${pi}-${w}-${i}`} className="relative mr-[0.26em] inline-block">
                         {marked ? (
                           <motion.span
-                            className="absolute -inset-x-[0.08em] inset-y-[0.04em] origin-left rounded-[0.12em] bg-meta-500"
+                            className="absolute -inset-x-[0.07em] inset-y-[0.04em] origin-left rounded-[0.12em] bg-meta-500"
                             initial={{ scaleX: 0 }}
                             animate={show ? { scaleX: 1 } : {}}
                             transition={{ duration: 0.7, delay: 0.2 + stagger(i), ease: EASE }}
