@@ -1,0 +1,9 @@
+{
+  "$schema": "https://cdn.jsdelivr.net/npm/wrangler@latest/config-schema.json",
+  "name": "clipvariants",
+  "compatibility_date": "2026-11-21",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  }
+}
