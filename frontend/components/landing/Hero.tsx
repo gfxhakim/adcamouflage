@@ -1,23 +1,42 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Rocket, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { CmsIcon, CmsLink, CmsSection, CmsSlot, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
-import MatrixWords from "@/components/landing/MatrixWords";
 import { CmsHeadline, EASE } from "@/components/landing/primitives";
+import { HyperText } from "@/components/ui/hyper-text";
 
-// The hero background morphs between these, cell by cell.
-const WORDS = ["EDIT IT", "SCALE IT", "SHIP IT"];
+// The hero headline transforms smoothly through these core actions in order.
+const WORDS = ["SCALE IT", "EDIT IT", "RUN IT"];
+const WORD_INTERVAL_MS = 2600;
 
 export function Hero({ startHref }: { startHref: string }) {
   const cms = useCms();
-  const words = cms
-    .text("hero.matrixWords", WORDS.join(", "), "text", "Background words (comma separated)")
-    .split(",")
-    .map((w) => w.trim())
-    .filter(Boolean);
+  const reduceMotion = useReducedMotion();
+  const rawWords = cms.text("hero.matrixWords", WORDS.join(", "), "text", "Transforming hero words (comma separated)");
+  const wordList = useMemo(() => {
+    const parsed = rawWords
+      .split(",")
+      .map((w) => w.trim())
+      .filter(Boolean);
+    return parsed.length ? parsed : WORDS;
+  }, [rawWords]);
+
+  const [wordIndex, setWordIndex] = useState(0);
+
+  useEffect(() => {
+    setWordIndex(0);
+    if (reduceMotion || wordList.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setWordIndex((prev) => (prev + 1) % wordList.length);
+    }, WORD_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [wordList, reduceMotion]);
+
+  const activeWord = wordList[wordIndex % wordList.length] ?? WORDS[0];
 
   return (
     <CmsSection
@@ -26,20 +45,35 @@ export function Hero({ startHref }: { startHref: string }) {
       id="home"
       className="relative isolate flex min-h-[100svh] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
     >
-      <CmsSlot k="hero.background" label="Background animation" className="absolute inset-0 h-full object-cover">
-        <MatrixWords
-          words={words.length ? words : WORDS}
-          centerY={0.205}
-          maxHeight={0.21}
-          className="absolute inset-0 h-full w-full"
+      {/* Subtle dark dot grid (or admin hero.background media) + Meta-blue studio glow */}
+      <CmsSlot k="hero.background" label="Background texture" className="absolute inset-0 h-full object-cover">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-45"
+          style={{
+            backgroundImage: "radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px)",
+            backgroundSize: "18px 18px",
+          }}
+          aria-hidden
         />
       </CmsSlot>
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-black via-black/82 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[55%] bg-[radial-gradient(ellipse_65%_60%_at_50%_20%,rgba(8,102,255,0.28),transparent_72%)]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-black via-black/80 to-transparent"
         aria-hidden
       />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-end px-4 pb-6 pt-[clamp(14rem,32svh,19.5rem)] text-center sm:px-6 sm:pb-8 lg:pt-[clamp(15.5rem,33svh,21rem)]">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 pb-6 pt-20 text-center sm:px-6 sm:pb-8 sm:pt-24">
+        <div aria-live="off" className="mb-3 flex w-full justify-center sm:mb-5">
+          <HyperText
+            text={activeWord}
+            duration={750}
+            className="text-[clamp(2.55rem,11vw,5.75rem)] font-black leading-none tracking-[0.06em] text-white drop-shadow-[0_2px_12px_rgba(8,102,255,0.38)]"
+          />
+        </div>
+
         <motion.span
           className="mb-4 inline-flex max-w-[92vw] items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3.5 py-1.5 text-[10px] font-semibold leading-snug tracking-[0.04em] text-white/85 backdrop-blur sm:mb-5 sm:max-w-none sm:rounded-full sm:py-1 sm:text-[11px]"
           initial={{ opacity: 0, y: 10 }}
