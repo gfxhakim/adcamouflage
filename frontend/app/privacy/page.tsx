@@ -52,7 +52,7 @@ export default function PrivacyPage() {
         only and is never shared.
       </p>
       <p>
-        Only if you click <b>Accept</b> on the cookie banner, we also use the <b>Meta Pixel</b> and Meta&apos;s{" "}
+        Only if you click <b>Accept Cookies</b> on the cookie prompt, we also use the <b>Meta Pixel</b> and Meta&apos;s{" "}
         <b>Conversions API</b> to measure our advertising on Facebook and Instagram. This tells Meta when someone who
         saw our ad visits a page, creates an account, starts a checkout or completes a purchase (with the amount and
         currency). We share a hashed (scrambled) version of your email address, your IP address, browser details and
