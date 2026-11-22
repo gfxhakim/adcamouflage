@@ -4,6 +4,7 @@ import { animate, motion, useInView, useReducedMotion } from "framer-motion";
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useCms } from "@/components/cms/ContentProvider";
+import { TextRoll } from "@/components/ui/text-roll";
 
 import { cn } from "@/lib/utils";
 
@@ -33,9 +34,22 @@ export function Headline({
   "data-cms"?: string;
 }) {
   const ref = useRef<HTMLHeadingElement>(null);
-  const inView = useInView(ref, { once: true, margin: "0px 0px -12% 0px" });
+  const inView = useInView(ref, { once: false, amount: 0.25 });
   const reduce = useReducedMotion();
-  const show = inView || reduce;
+  const [replayKey, setReplayKey] = useState(0);
+  const [hasEntered, setHasEntered] = useState(Tag === "h1");
+  const prevInView = useRef(false);
+
+  useEffect(() => {
+    if (inView && !prevInView.current) {
+      setHasEntered(true);
+      setReplayKey((k) => k + 1);
+    }
+    prevInView.current = inView;
+  }, [inView]);
+
+  const show = Boolean(inView || reduce);
+  const pillVisible = hasEntered || show;
 
   let word = 0;
   const lines = text.split("|");
@@ -65,26 +79,41 @@ export function Headline({
                 <Fragment key={pi}>
                   {words.map((w) => {
                     const i = word++;
+                    const baseDelay = 0.08 + stagger(i) * 0.85;
                     return (
                       <span key={`${pi}-${w}-${i}`} className="relative mr-[0.26em] inline-block">
                         {marked ? (
                           <motion.span
                             className="absolute -inset-x-[0.07em] inset-y-[0.04em] origin-left rounded-[0.12em] bg-meta-500"
                             initial={{ scaleX: 0 }}
-                            animate={show ? { scaleX: 1 } : {}}
-                            transition={{ duration: 0.7, delay: 0.2 + stagger(i), ease: EASE }}
+                            animate={pillVisible ? { scaleX: 1 } : {}}
+                            transition={{ duration: 0.55, delay: 0.06 + stagger(i) * 0.7, ease: EASE }}
                           />
                         ) : null}
-                        <motion.span
-                          className={cn("relative inline-block", marked && "text-white")}
-                          // The page's h1 is painted at once (only slides) so it doesn't hold back
-                          // Largest Contentful Paint; other headlines still fade in on scroll.
-                          initial={{ y: "0.5em", opacity: Tag === "h1" ? 1 : 0 }}
-                          animate={show ? { y: 0, opacity: 1 } : {}}
-                          transition={{ duration: 0.6, delay: stagger(i), ease: EASE }}
-                        >
-                          {w}
-                        </motion.span>
+                        {marked ? (
+                          <TextRoll
+                            active={show}
+                            replayKey={replayKey}
+                            duration={0.42}
+                            getEnterDelay={(ci) => baseDelay + ci * 0.028}
+                            getExitDelay={(ci) => baseDelay + ci * 0.028 + 0.12}
+                            transition={{ ease: [0.22, 1, 0.36, 1] }}
+                            className="relative inline-block whitespace-nowrap text-white"
+                          >
+                            {w}
+                          </TextRoll>
+                        ) : (
+                          <motion.span
+                            className="relative inline-block"
+                            // The page's h1 is painted at once (only slides) so it doesn't hold back
+                            // Largest Contentful Paint; other headlines still fade in on scroll.
+                            initial={{ y: "0.5em", opacity: Tag === "h1" ? 1 : 0 }}
+                            animate={pillVisible ? { y: 0, opacity: 1 } : {}}
+                            transition={{ duration: 0.55, delay: stagger(i), ease: EASE }}
+                          >
+                            {w}
+                          </motion.span>
+                        )}
                       </span>
                     );
                   })}
