@@ -8,6 +8,7 @@ import {
   type Transition,
   type VariantLabels,
 } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,8 @@ export type TextRollProps = {
   active?: boolean;
   /** Incrementing key resets and replays the roll cleanly on re-entry. */
   replayKey?: number;
+  /** Allow standalone hover replay when moving pointer onto the text. */
+  triggerOnHover?: boolean;
   variants?: {
     enter: {
       initial: Target | VariantLabels | boolean;
@@ -35,41 +38,88 @@ export type TextRollProps = {
   onAnimationComplete?: () => void;
 };
 
+const DEFAULT_EASE = [0.22, 1, 0.36, 1] as const;
+const DEFAULT_TRANSITION: Transition = { ease: DEFAULT_EASE };
+const ENTER_OPACITY_TIMES = [0, 0.72, 1];
+const EXIT_OPACITY_TIMES = [0, 0.28, 1];
+
 export function TextRoll({
   children,
   duration = 0.45,
   getEnterDelay = (i) => i * 0.035,
-  getExitDelay = (i) => i * 0.035 + 0.12,
+  getExitDelay = (i) => i * 0.035 + 0.08,
   className,
-  transition = { ease: [0.22, 1, 0.36, 1] },
+  transition = DEFAULT_TRANSITION,
   active = true,
   replayKey = 0,
+  triggerOnHover = false,
   variants,
   onAnimationComplete,
 }: TextRollProps) {
   const reduceMotion = useReducedMotion();
+  const [hoverKey, setHoverKey] = useState(0);
+  const hoveredRef = useRef(false);
+  const rollingRef = useRef(false);
+  const resetTimerRef = useRef<number | null>(null);
 
-  const defaultVariants = {
-    enter: {
-      initial: { rotateX: 0, opacity: 1 },
-      animate: { rotateX: 95, opacity: 0 },
-    },
-    exit: {
-      initial: { rotateX: -95, opacity: 0 },
-      animate: { rotateX: 0, opacity: 1 },
-    },
-  } as const;
+  useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+    };
+  }, []);
+
+  const enterInitial: Target | VariantLabels | boolean = { rotateX: 0, opacity: 1 };
+  const enterAnimate: TargetAndTransition | VariantLabels = {
+    rotateX: 90,
+    opacity: [1, 1, 0],
+  };
+  const exitInitial: Target | VariantLabels | boolean = { rotateX: -90, opacity: 0 };
+  const exitAnimate: TargetAndTransition | VariantLabels = {
+    rotateX: 0,
+    opacity: [0, 1, 1],
+  };
 
   if (reduceMotion) {
     return <span className={cn("inline-block", className)}>{children}</span>;
   }
 
   const letters = children.split("");
+  const lastIndex = Math.max(0, letters.length - 1);
+  const rollTotalMs = Math.ceil((Math.max(getEnterDelay(lastIndex), getExitDelay(lastIndex)) + duration) * 1000) + 60;
+
+  const handleMouseEnter = triggerOnHover
+    ? () => {
+        if (hoveredRef.current || rollingRef.current) return;
+        hoveredRef.current = true;
+        rollingRef.current = true;
+        setHoverKey((k) => k + 1);
+        if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = window.setTimeout(() => {
+          rollingRef.current = false;
+        }, rollTotalMs);
+      }
+    : undefined;
+
+  const handleMouseLeave = triggerOnHover
+    ? () => {
+        hoveredRef.current = false;
+      }
+    : undefined;
+
+  const effectiveKey = replayKey + hoverKey;
+  const isActive = active || hoverKey > 0;
 
   return (
-    <span key={replayKey} className={cn("inline-block", className)}>
+    <span
+      key={effectiveKey}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={cn("relative z-10 inline-block [isolation:isolate]", triggerOnHover && "cursor-default", className)}
+    >
       {letters.map((letter, i) => {
         const glyph = letter === " " ? "\u00A0" : letter;
+        const enterDelay = isActive ? getEnterDelay(i) : 0;
+        const exitDelay = isActive ? getExitDelay(i) : 0;
         return (
           <span
             key={i}
@@ -77,36 +127,46 @@ export function TextRoll({
             aria-hidden="true"
           >
             <motion.span
-              className="absolute left-0 top-0 inline-block [backface-visibility:hidden] [transform-origin:50%_20%]"
-              initial={variants?.enter?.initial ?? defaultVariants.enter.initial}
+              className="absolute left-0 top-0 inline-block [backface-visibility:hidden] [transform-origin:50%_25%]"
+              initial={variants?.enter?.initial ?? enterInitial}
               animate={
-                active
-                  ? (variants?.enter?.animate ?? defaultVariants.enter.animate)
-                  : (variants?.enter?.initial ?? defaultVariants.enter.initial)
+                isActive
+                  ? (variants?.enter?.animate ?? enterAnimate)
+                  : (variants?.enter?.initial ?? enterInitial)
               }
-              transition={{
-                ...transition,
-                duration,
-                delay: active ? getEnterDelay(i) : 0,
-              }}
+              transition={
+                variants?.enter
+                  ? { ...transition, duration, delay: enterDelay }
+                  : {
+                      ...transition,
+                      duration,
+                      delay: enterDelay,
+                      opacity: { duration, delay: enterDelay, times: ENTER_OPACITY_TIMES, ease: "linear" },
+                    }
+              }
             >
               {glyph}
             </motion.span>
             <motion.span
-              className="absolute left-0 top-0 inline-block [backface-visibility:hidden] [transform-origin:50%_80%]"
-              initial={variants?.exit?.initial ?? defaultVariants.exit.initial}
+              className="absolute left-0 top-0 inline-block [backface-visibility:hidden] [transform-origin:50%_75%]"
+              initial={variants?.exit?.initial ?? exitInitial}
               animate={
-                active
-                  ? (variants?.exit?.animate ?? defaultVariants.exit.animate)
-                  : (variants?.exit?.initial ?? defaultVariants.exit.initial)
+                isActive
+                  ? (variants?.exit?.animate ?? exitAnimate)
+                  : (variants?.exit?.initial ?? exitInitial)
               }
-              transition={{
-                ...transition,
-                duration,
-                delay: active ? getExitDelay(i) : 0,
-              }}
+              transition={
+                variants?.exit
+                  ? { ...transition, duration, delay: exitDelay }
+                  : {
+                      ...transition,
+                      duration,
+                      delay: exitDelay,
+                      opacity: { duration, delay: exitDelay, times: EXIT_OPACITY_TIMES, ease: "linear" },
+                    }
+              }
               onAnimationComplete={
-                active && letters.length === i + 1 ? onAnimationComplete : undefined
+                isActive && letters.length === i + 1 ? onAnimationComplete : undefined
               }
             >
               {glyph}

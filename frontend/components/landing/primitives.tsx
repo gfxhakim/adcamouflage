@@ -9,6 +9,7 @@ import { TextRoll } from "@/components/ui/text-roll";
 import { cn } from "@/lib/utils";
 
 export const EASE = [0.16, 1, 0.3, 1] as const;
+const ROLL_TRANSITION = { ease: [0.22, 1, 0.36, 1] } as const;
 
 /** Word-by-word delay, capped so long headlines on narrow screens don't sit half-shown. */
 const stagger = (i: number) => Math.min(i, 8) * 0.05;
@@ -37,22 +38,87 @@ export function Headline({
   const inView = useInView(ref, { once: false, amount: 0.25 });
   const reduce = useReducedMotion();
   const [replayKey, setReplayKey] = useState(0);
+  const [triggerMode, setTriggerMode] = useState<"scroll" | "hover">("scroll");
   const [hasEntered, setHasEntered] = useState(Tag === "h1");
   const prevInView = useRef(false);
+  const hoverEngagedRef = useRef(false);
+  const rollingRef = useRef(false);
+  const hoverLeaveTimerRef = useRef<number | null>(null);
+  const rollResetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (inView && !prevInView.current) {
       setHasEntered(true);
+      setTriggerMode("scroll");
       setReplayKey((k) => k + 1);
+    } else if (!inView && prevInView.current) {
+      hoverEngagedRef.current = false;
+      rollingRef.current = false;
+      setTriggerMode("scroll");
     }
     prevInView.current = inView;
   }, [inView]);
 
-  const show = Boolean(inView || reduce);
+  useEffect(() => {
+    return () => {
+      if (hoverLeaveTimerRef.current !== null) window.clearTimeout(hoverLeaveTimerRef.current);
+      if (rollResetTimerRef.current !== null) window.clearTimeout(rollResetTimerRef.current);
+    };
+  }, []);
+
+  const show = Boolean(inView || reduce || triggerMode === "hover");
   const pillVisible = hasEntered || show;
 
-  let word = 0;
   const lines = text.split("|");
+  let markedCount = 0;
+  let hoverMaxEndSec = 0.5;
+  for (const line of lines) {
+    for (const part of line.trim().split(/(\[[^\]]+\])/).filter(Boolean)) {
+      if (!part.startsWith("[")) continue;
+      for (const w of part.replace(/[[\]]/g, "").trim().split(/\s+/)) {
+        const idx = markedCount++;
+        hoverMaxEndSec = Math.max(
+          hoverMaxEndSec,
+          idx * 0.045 + Math.max(0, w.length - 1) * 0.022 + 0.06 + 0.38,
+        );
+      }
+    }
+  }
+  const hoverTotalMs = Math.ceil(hoverMaxEndSec * 1000) + 60;
+
+  const handleMarkedEnter = () => {
+    if (reduce) return;
+    if (hoverLeaveTimerRef.current !== null) {
+      window.clearTimeout(hoverLeaveTimerRef.current);
+      hoverLeaveTimerRef.current = null;
+    }
+    if (hoverEngagedRef.current || rollingRef.current) return;
+    hoverEngagedRef.current = true;
+    rollingRef.current = true;
+    setHasEntered(true);
+    setTriggerMode("hover");
+    setReplayKey((k) => k + 1);
+    if (rollResetTimerRef.current !== null) {
+      window.clearTimeout(rollResetTimerRef.current);
+    }
+    rollResetTimerRef.current = window.setTimeout(() => {
+      rollingRef.current = false;
+      rollResetTimerRef.current = null;
+    }, hoverTotalMs);
+  };
+
+  const handleMarkedLeave = () => {
+    if (hoverLeaveTimerRef.current !== null) {
+      window.clearTimeout(hoverLeaveTimerRef.current);
+    }
+    hoverLeaveTimerRef.current = window.setTimeout(() => {
+      hoverEngagedRef.current = false;
+      hoverLeaveTimerRef.current = null;
+    }, 80);
+  };
+
+  let word = 0;
+  let markedWord = 0;
 
   return (
     <Tag
@@ -79,12 +145,21 @@ export function Headline({
                 <Fragment key={pi}>
                   {words.map((w) => {
                     const i = word++;
-                    const baseDelay = 0.08 + stagger(i) * 0.85;
+                    const mIdx = marked ? markedWord++ : 0;
+                    const isHoverRoll = triggerMode === "hover";
+                    const baseDelay = isHoverRoll ? mIdx * 0.045 : 0.08 + stagger(i) * 0.85;
+                    const charDelayStep = isHoverRoll ? 0.022 : 0.028;
+                    const exitGap = isHoverRoll ? 0.06 : 0.08;
                     return (
-                      <span key={`${pi}-${w}-${i}`} className="relative mr-[0.26em] inline-block">
+                      <span
+                        key={`${pi}-${w}-${i}`}
+                        onMouseEnter={marked ? handleMarkedEnter : undefined}
+                        onMouseLeave={marked ? handleMarkedLeave : undefined}
+                        className={cn("relative mr-[0.26em] inline-block", marked && "cursor-default")}
+                      >
                         {marked ? (
                           <motion.span
-                            className="absolute -inset-x-[0.07em] inset-y-[0.04em] origin-left rounded-[0.12em] bg-meta-500"
+                            className="pointer-events-none absolute -inset-x-[0.07em] inset-y-[0.04em] z-0 origin-left rounded-[0.12em] bg-meta-500"
                             initial={{ scaleX: 0 }}
                             animate={pillVisible ? { scaleX: 1 } : {}}
                             transition={{ duration: 0.55, delay: 0.06 + stagger(i) * 0.7, ease: EASE }}
@@ -94,11 +169,11 @@ export function Headline({
                           <TextRoll
                             active={show}
                             replayKey={replayKey}
-                            duration={0.42}
-                            getEnterDelay={(ci) => baseDelay + ci * 0.028}
-                            getExitDelay={(ci) => baseDelay + ci * 0.028 + 0.12}
-                            transition={{ ease: [0.22, 1, 0.36, 1] }}
-                            className="relative inline-block whitespace-nowrap text-white"
+                            duration={isHoverRoll ? 0.38 : 0.42}
+                            getEnterDelay={(ci) => baseDelay + ci * charDelayStep}
+                            getExitDelay={(ci) => baseDelay + ci * charDelayStep + exitGap}
+                            transition={ROLL_TRANSITION}
+                            className="relative z-10 inline-block whitespace-nowrap text-white [isolation:isolate]"
                           >
                             {w}
                           </TextRoll>
