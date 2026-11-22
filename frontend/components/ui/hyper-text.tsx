@@ -133,7 +133,7 @@ export function HyperText({
 
   return (
     <div
-      className="flex max-w-full cursor-default items-center justify-center overflow-hidden whitespace-nowrap px-6 py-4"
+      className="flex max-w-full cursor-default items-center justify-center overflow-visible whitespace-nowrap px-3 py-4 sm:px-6 sm:py-6"
       onMouseEnter={triggerAnimation}
       aria-label={text}
     >

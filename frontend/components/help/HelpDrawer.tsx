@@ -15,6 +15,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { MediaView, T } from "@/components/cms/Cms";
@@ -264,39 +265,57 @@ export function HelpDrawer({ open, currentStep, onClose, onJumpStep, onReplayTou
           {tab === "guide" || q ? (
             <>
               {!q ? (
-                <div className="rounded-2xl border border-meta-500/40 bg-gradient-to-br from-meta-500/25 to-meta-500/[0.04] p-4">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
-                    <Zap className="h-3.5 w-3.5 text-meta-300" aria-hidden />
-                    <T k="help.drawer.quickstart.title" label="Quick start title">
-                      Quick start
-                    </T>
-                  </p>
-                  <p className="mt-1 text-xs text-slate-300">
-                    <T k="help.drawer.quickstart.body" label="Quick start subtitle">
-                      The whole flow in four steps. Click a step to jump straight to it.
-                    </T>
-                  </p>
-                  <div className="mt-3 grid grid-cols-4 gap-2">
-                    {HELP_STEPS.map((s, idx) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => {
-                          onJumpStep(idx);
-                          setOpenStep(idx);
-                        }}
-                        className={clsx(
-                          "rounded-xl border px-2.5 py-2 text-left text-xs transition",
-                          currentStep === idx
-                            ? "border-meta-400 bg-meta-500/30 text-white"
-                            : "border-white/10 bg-black/35 text-slate-300 hover:border-meta-500/40 hover:text-white",
-                        )}
-                      >
-                        <span className="block font-mono text-[10px] font-bold text-meta-300">0{idx + 1}</span>
-                        <span className="mt-0.5 block truncate font-medium">{s.label}</span>
-                      </button>
-                    ))}
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-meta-500/40 bg-gradient-to-br from-meta-500/25 to-meta-500/[0.04] p-4">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                      <Zap className="h-3.5 w-3.5 text-meta-300" aria-hidden />
+                      <T k="help.drawer.quickstart.title" label="Quick start title">
+                        Quick start
+                      </T>
+                    </p>
+                    <p className="mt-1 text-xs text-slate-300">
+                      <T k="help.drawer.quickstart.body" label="Quick start subtitle">
+                        The whole flow in four steps. Click a step to jump straight to it.
+                      </T>
+                    </p>
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      {HELP_STEPS.map((s, idx) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            onJumpStep(idx);
+                            setOpenStep(idx);
+                          }}
+                          className={clsx(
+                            "rounded-xl border px-2.5 py-2 text-left text-xs transition",
+                            currentStep === idx
+                              ? "border-meta-400 bg-meta-500/30 text-white"
+                              : "border-white/10 bg-black/35 text-slate-300 hover:border-meta-500/40 hover:text-white",
+                          )}
+                        >
+                          <span className="block font-mono text-[10px] font-bold text-meta-300">0{idx + 1}</span>
+                          <span className="mt-0.5 block truncate font-medium">{s.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <Link
+                    href="/app/tutorials"
+                    onClick={onClose}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#11151e] px-4 py-3 text-xs transition hover:border-meta-500/50 hover:bg-meta-500/10"
+                  >
+                    <span className="flex items-center gap-2.5 text-slate-200">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-meta-500/20 text-meta-300">
+                        <Play className="h-3.5 w-3.5 fill-current" aria-hidden />
+                      </span>
+                      <span>
+                        <strong className="block font-semibold text-white">Video Tutorial &amp; Layer Guide</strong>
+                        <span className="text-[11px] text-slate-400">Watch the 2-minute walkthrough &amp; step breakdown</span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[11px] font-semibold text-meta-300">Watch →</span>
+                  </Link>
                 </div>
               ) : null}
 

@@ -27,6 +27,7 @@ import WelcomeTour from "@/components/help/WelcomeTour";
 import HelpDrawer from "@/components/help/HelpDrawer";
 import CoachMark from "@/components/help/CoachMark";
 import SupportBotWidget from "@/components/help/SupportBotWidget";
+import WorkspaceTutorialSection from "@/components/help/WorkspaceTutorialSection";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
 import OverlayPreview from "@/components/OverlayPreview";
 import PosterPicker from "@/components/PosterPicker";
@@ -1067,6 +1068,8 @@ export default function WorkspacePage() {
               </div>
             </div>
           </NeonCard>
+
+          <WorkspaceTutorialSection compact />
 
           <CmsSection k="workspace.footer" label="Footer" as="footer" className="mt-6 flex flex-col items-start justify-between gap-3 text-[11px] text-ink-faint dark:text-slate-500 sm:flex-row sm:items-center">
             <p>

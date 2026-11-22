@@ -47,64 +47,64 @@ export function Hero({ startHref }: { startHref: string }) {
       id="home"
       className="relative isolate flex min-h-[100svh] scroll-mt-24 flex-col overflow-hidden bg-black text-white"
     >
-      {/* Authentic live animated Matrix grid background + subtle blue studio spotlight */}
+      {/* Authentic live animated Matrix grid background + shining cyan/blue spotlight */}
       <CmsSlot k="hero.background" label="Background animation" className="absolute inset-0 h-full object-cover">
         <MatrixWords words={EMPTY_WORDS} centerY={0.22} className="absolute inset-0 h-full w-full" />
       </CmsSlot>
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[52%] bg-[radial-gradient(ellipse_65%_55%_at_50%_20%,rgba(8,102,255,0.22),transparent_72%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[58%] bg-[radial-gradient(ellipse_75%_65%_at_50%_22%,rgba(8,102,255,0.34),transparent_74%)]"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t from-black via-black/82 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[44%] bg-gradient-to-t from-black via-black/75 to-transparent"
         aria-hidden
       />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-4 pb-6 pt-20 text-center sm:px-6 sm:pb-8 sm:pt-24">
-        <div aria-live="off" className="mb-3 flex w-full justify-center sm:mb-5">
+      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col items-center justify-center px-3 pb-5 pt-16 text-center sm:px-6 sm:pb-7 sm:pt-20">
+        <div aria-live="off" className="mb-2 flex w-full justify-center sm:mb-4">
           <HyperText
             text={activeWord}
             duration={1150}
             holdPerWord
             style={{ fontFamily: "var(--font-palace), Georgia, serif" }}
-            className="font-palace text-[clamp(2.35rem,9.8vw,6.25rem)] font-bold leading-none tracking-[0.06em] text-[#ebf3ff] [text-shadow:0_0_16px_rgba(8,102,255,0.95),0_0_36px_rgba(51,133,255,0.65)]"
+            className="font-palace text-[clamp(2.65rem,10.6vw,9rem)] font-bold leading-none tracking-[0.04em] text-[#f4f8ff] [text-shadow:0_0_22px_rgba(8,102,255,1),0_0_52px_rgba(56,189,248,0.82)]"
           />
         </div>
 
         <motion.span
-          className="mb-4 inline-flex max-w-[92vw] items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3.5 py-1.5 text-[10px] font-semibold leading-snug tracking-[0.04em] text-white/85 backdrop-blur sm:mb-5 sm:max-w-none sm:rounded-full sm:py-1 sm:text-[11px]"
+          className="mb-3 inline-flex max-w-[92vw] items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/[0.08] px-3.5 py-1.5 text-[10px] font-semibold leading-snug tracking-[0.04em] text-white/85 backdrop-blur sm:mb-4 sm:max-w-none sm:rounded-full sm:py-1 sm:text-[11px]"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE }}
         >
           <CmsIcon k="hero.badge.icon" fallback={ShieldCheck} className="h-3.5 w-3.5 shrink-0 text-meta-400" aria-hidden />
-          <T k="hero.studioBadge">CLOUD VIDEO FORMATTER • BRAND OVERLAYS & BATCH EXPORT</T>
+          <T k="hero.studioBadge">AI LAYER ENGINE • MULTI-PLATFORM AD RECOVERY & BATCH SCALE</T>
         </motion.span>
 
         <CmsHeadline
           k="hero.studioHeadline"
           as="h1"
           dark
-          text="One Master Video. | [Formatted, Branded &] | [Exported in Minutes.]"
-          className="font-bold leading-[1.08] tracking-[-0.015em] text-[1.95rem] min-[400px]:text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.5rem] xl:text-[5rem]"
+          text="Fix Rejected Ads. | [Rebuilt to Deliver] | [& Scale Everywhere.]"
+          className="font-bold leading-[1.08] tracking-[-0.015em] text-[1.75rem] min-[400px]:text-[1.95rem] sm:text-5xl lg:text-[3.75rem] xl:text-[4.25rem]"
         />
 
         <T
           k="hero.studioLede"
           long
           as={motion.p}
-          className="mt-4 max-w-3xl text-[13.5px] leading-relaxed text-white/75 sm:mt-5 sm:text-base"
+          className="mt-3.5 max-w-3xl text-[13px] leading-relaxed text-white/80 sm:mt-4 sm:text-[15px]"
           // Visible from the first paint (it is the page's largest text, so a
           // fade-in from 0 would delay Largest Contentful Paint); it only slides.
           initial={{ opacity: 1, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.5, ease: EASE }}
         >
-          {"ProteusFlow is an online video and image production studio for marketing teams and creators. Format clips for Reels, TikTok, and YouTube Shorts, apply studio Rec.709 color grading and −14 LUFS audio leveling, burn in your brand logo and cover frame, and batch-export ready-to-publish files."}
+          {"ProteusFlow is your AI creative layer agent built for performance marketers. Take winning creatives that got rejected or stopped delivering and rebuild them layer by layer—re-mastering visual frames, Rec.709 color, −14 LUFS audio, clean encoding, and brand overlays—so every platform accepts them, unlocks delivery, and scales profitably again."}
         </T>
 
         <motion.div
-          className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:mt-7"
+          className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:mt-6"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.65, ease: EASE }}

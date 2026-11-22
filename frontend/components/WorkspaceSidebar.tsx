@@ -2,7 +2,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Clock, Crown, HelpCircle, LayoutGrid, LogOut, Megaphone, type LucideIcon } from "lucide-react";
+import { Clock, Crown, HelpCircle, LayoutGrid, LogOut, Megaphone, PlayCircle, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -101,6 +101,8 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
   });
   const showHelp = !cms.hidden("rail.help");
   cms.register({ key: "rail.help", type: "toggle", label: "Help center (?) button" });
+  const showTutorials = !cms.hidden("rail.tutorials");
+  cms.register({ key: "rail.tutorials", type: "toggle", label: "Tutorials link" });
   const showSignOut = !cms.hidden("rail.signOut");
   cms.register({ key: "rail.signOut", type: "toggle", label: "Sign out button" });
   const [signingOut, setSigningOut] = useState(false);
@@ -224,31 +226,52 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {showHelp ? (
+        {showHelp || showTutorials ? (
           <SidebarGroup className="mt-4 p-0">
             <SidebarGroupLabel className={GROUP_LABEL}>Help</SidebarGroupLabel>
             <SidebarGroupContent className="mt-1">
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={handleHelp}
-                    data-tour="help"
-                    tooltip="How to use · Guide & tips"
-                    className={clsx(
-                      ROW,
-                      "bg-meta-500 text-white shadow-[0_0_0_4px_rgba(8,102,255,0.18)] hover:bg-meta-600 hover:text-white active:bg-meta-700 active:text-white",
-                    )}
-                  >
-                    <HelpCircle aria-hidden />
-                    <span className={LABEL}>How to use</span>
-                  </SidebarMenuButton>
-                  {helpUnread ? (
-                    <span
-                      className="pointer-events-none absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900"
-                      aria-hidden
-                    />
-                  ) : null}
-                </SidebarMenuItem>
+              <SidebarMenu className="gap-1.5">
+                {showHelp ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={handleHelp}
+                      data-tour="help"
+                      tooltip="How to use · Guide & tips"
+                      className={clsx(
+                        ROW,
+                        "bg-meta-500 text-white shadow-[0_0_0_4px_rgba(8,102,255,0.18)] hover:bg-meta-600 hover:text-white active:bg-meta-700 active:text-white",
+                      )}
+                    >
+                      <HelpCircle aria-hidden />
+                      <span className={LABEL}>How to use</span>
+                    </SidebarMenuButton>
+                    {helpUnread ? (
+                      <span
+                        className="pointer-events-none absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </SidebarMenuItem>
+                ) : null}
+                {showTutorials ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(pathname, "/app/tutorials")}
+                      tooltip="Tutorials · Video walkthrough & guide"
+                      className={clsx(ROW, ROW_IDLE, ROW_CURRENT)}
+                    >
+                      <Link
+                        href="/app/tutorials"
+                        aria-current={isActive(pathname, "/app/tutorials") ? "page" : undefined}
+                        onClick={closeDrawer}
+                      >
+                        <PlayCircle aria-hidden />
+                        <span className={LABEL}>Tutorials</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : null}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

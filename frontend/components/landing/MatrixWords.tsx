@@ -63,13 +63,13 @@ export function MatrixWords({ words = [], centerY = 0.21, maxHeight = 0.23, clas
 
     const buildAtlas = () => {
       tilePx = Math.max(8, Math.round(cell * dpr));
-      const palettes = ["#ffffff", "#dbeafe", "#60a5fa", "rgba(96, 165, 250, 0.42)"];
+      const palettes = ["#ffffff", "#e0f2fe", "#38bdf8", "rgba(59, 130, 246, 0.78)"];
       atlas.width = CHARS.length * tilePx;
       atlas.height = palettes.length * tilePx;
       const a = atlas.getContext("2d");
       if (!a) return;
       a.clearRect(0, 0, atlas.width, atlas.height);
-      const fontSize = Math.max(6, Math.round(tilePx * 0.82));
+      const fontSize = Math.max(6, Math.round(tilePx * 0.84));
       a.font = `700 ${fontSize}px ${GeistMono.style.fontFamily}`;
       a.textAlign = "center";
       a.textBaseline = "middle";
@@ -89,8 +89,8 @@ export function MatrixWords({ words = [], centerY = 0.21, maxHeight = 0.23, clas
       b.setTransform(dpr, 0, 0, dpr, 0, 0);
       b.fillStyle = "#000000";
       b.fillRect(0, 0, viewW, viewH);
-      b.fillStyle = "rgba(255, 255, 255, 0.085)";
-      const dot = cell <= 6 ? 1.2 : 1.5;
+      b.fillStyle = masks.length === 0 ? "rgba(56, 189, 248, 0.16)" : "rgba(255, 255, 255, 0.085)";
+      const dot = cell <= 6 ? 1.3 : 1.6;
       const half = dot * 0.5;
       for (let y = 0; y < rows; y++) {
         const cy = y * cell + cell * 0.5 - half;
@@ -198,10 +198,9 @@ export function MatrixWords({ words = [], centerY = 0.21, maxHeight = 0.23, clas
       rows = Math.ceil(h / cell);
 
       buildAtlas();
-      buildBgLayer();
-
       const total = cols * rows;
       masks = activeWords.map(buildMask);
+      buildBgLayer();
       glyphIdx = new Uint8Array(total);
       nextFlip = new Float32Array(total);
       delay = new Float32Array(total);
@@ -217,7 +216,7 @@ export function MatrixWords({ words = [], centerY = 0.21, maxHeight = 0.23, clas
         }
       }
 
-      const ambientThreshold = masks.length === 0 ? 0.935 : 0.982;
+      const ambientThreshold = masks.length === 0 ? 0.855 : 0.982;
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const i = y * cols + x;
@@ -244,20 +243,36 @@ export function MatrixWords({ words = [], centerY = 0.21, maxHeight = 0.23, clas
       ctx.drawImage(bgCanvas, 0, 0, viewW, viewH);
 
       const t = reduce ? INTRO_MS : Math.max(0, now - start);
+      const isAmbientField = masks.length === 0;
+      const ambInset = cell <= 6 ? 0.25 : 0.45;
+      const ambPlate = cell - ambInset * 2;
 
-      // Sparse twinkling ambient matrix sparks across the hero canvas.
+      // Shimmering Matrix characters across the hero canvas.
       for (let a = 0; a < ambientCells.length; a++) {
         const i = ambientCells[a];
         if (!reduce && now >= nextFlip[i]) {
           glyphIdx[i] = pickIndex();
-          nextFlip[i] = now + 450 + Math.random() * 1600;
+          nextFlip[i] = now + (isAmbientField ? 220 + Math.random() * 880 : 450 + Math.random() * 1600);
         }
         const col = i % cols;
         const row = (i / cols) | 0;
-        const pulse = Math.abs(Math.sin(t * 0.0016 + noise[i] * 50));
-        ctx.globalAlpha = masks.length === 0 ? 0.18 + 0.52 * pulse : 0.28 + 0.48 * pulse;
-        const pRow = masks.length === 0 && noise[i] > 0.975 ? 2 : 3;
-        ctx.drawImage(atlas, glyphIdx[i] * tilePx, pRow * tilePx, tilePx, tilePx, col * cell, row * cell, cell, cell);
+        const px = col * cell;
+        const py = row * cell;
+        if (isAmbientField) {
+          const wave = 0.5 + 0.5 * Math.sin(t * 0.0028 - row * 0.34 + col * 0.11 + noise[i] * 24);
+          if (wave > 0.72) {
+            ctx.globalAlpha = (wave - 0.72) * 1.4;
+            ctx.fillStyle = noise[i] > 0.95 ? "rgba(56, 189, 248, 0.34)" : "rgba(8, 102, 255, 0.36)";
+            ctx.fillRect(px + ambInset, py + ambInset, ambPlate, ambPlate);
+          }
+          ctx.globalAlpha = 0.28 + 0.7 * wave;
+          const pRow = wave > 0.88 && noise[i] > 0.94 ? 0 : wave > 0.68 ? 1 : noise[i] > 0.91 ? 2 : 3;
+          ctx.drawImage(atlas, glyphIdx[i] * tilePx, pRow * tilePx, tilePx, tilePx, px, py, cell, cell);
+        } else {
+          const pulse = Math.abs(Math.sin(t * 0.0016 + noise[i] * 50));
+          ctx.globalAlpha = 0.28 + 0.48 * pulse;
+          ctx.drawImage(atlas, glyphIdx[i] * tilePx, 3 * tilePx, tilePx, tilePx, px, py, cell, cell);
+        }
       }
 
       if (masks.length === 0) {
