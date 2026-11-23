@@ -108,6 +108,22 @@ export default function PlanPage() {
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
   /** The payment method the user picked; the first one the server offers until then. */
   const [pickedProvider, setPickedProvider] = useState<PaymentProviderId | null>(null);
+  const [preferredPlan, setPreferredPlan] = useState<string | null>(null);
+  const [guideDismissed, setGuideDismissed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const planParam = params.get("plan");
+      if (planParam) setPreferredPlan(planParam);
+      if (window.sessionStorage.getItem("proteusflow:plan_guide_dismissed") === "1") {
+        setGuideDismissed(true);
+      }
+      window.sessionStorage.removeItem("proteusflow:post_agreement_guide");
+    } catch {
+      /* Ignore browser storage / search errors. */
+    }
+  }, []);
   // Plan labels for the settlement toast, which runs outside the render.
   const labelsRef = useRef<Record<string, string>>({});
   // The site currency for Meta events, read inside callbacks.
@@ -393,8 +409,8 @@ export default function PlanPage() {
             <p className="label">My plan</p>
             <h1 className="font-display text-4xl font-normal leading-tight text-black sm:text-5xl">Plan &amp; tokens</h1>
             <p className="max-w-2xl text-sm text-ink-muted">
-              Everything about your subscription in one place: what you pay, the tokens you have, what each
-              generation costs, and when the period ends.
+              Activate a plan to unlock our AI Layer Engine—rebuilding aggressive, rejected, or policy-flagged Meta,
+              TikTok &amp; YouTube video ads so they pass review, deliver cleanly, and convert better.
             </p>
           </section>
 
@@ -485,6 +501,37 @@ export default function PlanPage() {
                     }}
                   />
                 ) : null}
+                {!sub.subscription && !guideDismissed ? (
+                  <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-meta-500/30 bg-meta-50/75 px-4 py-3 text-xs text-slate-800">
+                    <div className="space-y-1">
+                      <p className="flex items-center gap-1.5 font-semibold text-black">
+                        <Sparkles className="h-3.5 w-3.5 text-meta-600" aria-hidden />
+                        Quick guide · How your plan fixes rejected ads
+                      </p>
+                      <p className="leading-relaxed text-ink-muted">
+                        Choose a plan below to load studio tokens and open rendering immediately.{" "}
+                        <strong className="font-semibold text-black">Pro &amp; Max</strong> unlock our full AI Layer
+                        Engine built for aggressive and anti-policy video creatives on Meta, TikTok &amp; YouTube—helping
+                        rejected ads pass review and convert higher. Failed server renders refund 100% automatically.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Dismiss activation guide"
+                      onClick={() => {
+                        setGuideDismissed(true);
+                        try {
+                          window.sessionStorage.setItem("proteusflow:plan_guide_dismissed", "1");
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                      className="shrink-0 rounded-lg p-1 text-ink-muted transition hover:bg-black/5 hover:text-black"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                ) : null}
                 <TokenPlanCards
                   plans={sub.token_plans}
                   current={isTokens ? sub.subscription : null}
@@ -493,6 +540,7 @@ export default function PlanPage() {
                   busy={checkoutBusy}
                   onBuy={buyPlan}
                   offer={offer}
+                  preferredPlanId={preferredPlan}
                 />
               </section>
 

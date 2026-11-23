@@ -85,14 +85,16 @@ export default function SignupPolicyModal({
             </h4>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-neutral-700">
               <li>
-                Upload video or image ad creatives, apply formatting presets, color/audio polish, overlays, and
-                cover frames, then batch-export ready-to-launch variations.
+                ProteusFlow uses its multi-layer AI engine to rebuild aggressive or rejected video ads across visual
+                frames, Rec.709 color, −14 LUFS audio, clean metadata, and brand overlays so platforms accept them and
+                they convert better.
               </li>
               <li>
-                Each rendered output spends tokens from your 30-day subscription balance or active top-ups.
+                Creating an account is free — to start rendering, activate a 30-day plan (Starter, Pro, or Max) to load
+                render tokens onto your profile.
               </li>
               <li>
-                If a render fails due to our service, those tokens are automatically credited back to your account.
+                If any render fails on our servers, those tokens are automatically credited back to your account.
               </li>
             </ul>
           </section>

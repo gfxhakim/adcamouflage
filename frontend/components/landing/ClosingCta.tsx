@@ -56,11 +56,12 @@ export function ClosingCta({ startHref }: { startHref: string }) {
           <CmsHeadline
             k="cta.studioHeadline"
             dark
-            text="Format, Brand & Export Your Next Video Batch."
+            text="Rebuild Rejected Ads. Unlock Delivery. Scale."
             className="text-4xl sm:text-6xl lg:text-7xl"
           />
           <T k="cta.studioLede" long as="p" className="mt-6 max-w-xl text-sm leading-relaxed text-white/65">
-            Drop in your master video or image, apply Reels, TikTok, and Shorts presets, burn in your brand logo and cover frame, and download your finished batch in minutes.
+            Create your account, choose the plan for your volume, and let ProteusFlow AI rebuild aggressive or
+            policy-flagged Meta, TikTok, and YouTube ads so they get approved and convert better.
           </T>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <CmsLink

@@ -28,14 +28,14 @@ export function Faq() {
               <T k="faq.card.studioKicker">Ready to try it?</T>
             </p>
             <T k="faq.card.studioTitle" as="p" className="mt-3 text-2xl font-semibold leading-tight tracking-tight">
-              Export your first branded video batch in minutes.
+              Fix your next rejected ad batch in minutes.
             </T>
             <T k="faq.card.studioBody" long as="p" className="mt-2 text-sm text-white/60">
-              Create an account, drop in your master video or image, add your brand watermark and cover frame, and download your batch.
+              Create your account, activate a plan, drop in your flagged or aggressive video ads, and download clean scaling variations.
             </T>
             <CmsLink
               k="faq.card.cta"
-              href="/login"
+              href="/signup"
               label="Open ProteusFlow Studio"
               className="group mt-5 inline-flex items-center gap-3 rounded-full bg-meta-500 py-1.5 pl-5 pr-1.5 text-sm font-semibold text-white"
             >

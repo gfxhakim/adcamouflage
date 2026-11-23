@@ -71,7 +71,7 @@ export function SiteHeader({ minimal = false, nav, floating = false }: SiteHeade
             />
             <CmsLink
               k="header.start"
-              href="/login"
+              href="/signup"
               label="Get started"
               className={
                 floating

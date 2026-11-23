@@ -20,7 +20,16 @@ interface TokenPlanCardsProps {
   onBuy: (plan: TokenPlanCard) => void;
   /** A referral or creator code waiting on this customer's first payment. */
   offer?: ReferralOffer | null;
+  /** Optional plan id pre-selected from the landing page (?plan=pro). */
+  preferredPlanId?: string | null;
 }
+
+const PLAN_BLURBS: Record<string, string> = {
+  starter:
+    "Fix your first rejected Meta video ads — clean container exports & studio presets help restricted ads regain approval.",
+  pro: "Best for aggressive & policy-flagged creatives — full AI Layer Engine makes rejected Meta, TikTok & YouTube ads pass review and convert higher.",
+  max: "Agency volume for strict direct-response verticals — full AI recovery engine, 5 team seats & lowest cost per export.",
+};
 
 /** The plan the page highlights when the user has none yet. */
 const POPULAR = "pro";
@@ -50,8 +59,18 @@ function rolloverLine(plan: TokenPlanCard): string {
  * period via Whop checkout; the button says whether that is a first
  * subscription, a renewal, an upgrade or a switch down.
  */
-export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy, onBuy, offer }: TokenPlanCardsProps) {
+export function TokenPlanCards({
+  plans,
+  current,
+  currency,
+  paymentsEnabled,
+  busy,
+  onBuy,
+  offer,
+  preferredPlanId,
+}: TokenPlanCardsProps) {
   const currentPlan = current ? plans.find((p) => p.id === current.plan_id) : undefined;
+  const activePreferred = !current ? (preferredPlanId ?? null) : null;
 
   return (
     <div className="space-y-4">
@@ -61,7 +80,8 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
           const isCurrent = current?.plan_id === plan.id;
           const couponPrice = offer?.prices?.[plan.id];
           const discounted = !current && couponPrice !== undefined && couponPrice < plan.price;
-          const highlight = isCurrent || (!current && plan.id === POPULAR);
+          const highlight =
+            isCurrent || (activePreferred ? plan.id === activePreferred : !current && plan.id === POPULAR);
           const note =
             action === "switch"
               ? "Switching down starts a new period with no rolled-over tokens."
@@ -109,10 +129,15 @@ export function TokenPlanCards({ plans, current, currency, paymentsEnabled, busy
                   >
                     {current && !current.active ? "Ended" : "Current plan"}
                   </span>
+                ) : activePreferred === plan.id ? (
+                  <span className="chip !border-meta-500/50 !bg-meta-50 !text-[10px] !text-meta-700">Selected plan</span>
                 ) : !current && plan.id === POPULAR ? (
                   <span className="chip !border-meta-500/40 !bg-meta-50 !text-[10px] !text-meta-700">Most popular</span>
                 ) : null}
               </div>
+              {PLAN_BLURBS[plan.id] ? (
+                <p className="mt-2 text-xs leading-relaxed text-ink-muted">{PLAN_BLURBS[plan.id]}</p>
+              ) : null}
 
               {discounted && offer ? (
                 <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">

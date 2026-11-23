@@ -29,16 +29,17 @@ interface PricingSectionProps {
 const POPULAR = "pro";
 
 const BLURBS: Record<string, string> = {
-  starter: "For solo creators and editors formatting a handful of projects each month.",
-  pro: "For marketing teams and editors producing social videos and static creatives weekly.",
-  max: "For agencies and production studios exporting client batches at scale.",
+  starter:
+    "Fix your first rejected Meta ads — clean container exports & studio formatting so restricted creatives pass review cleanly.",
+  pro: "Recommended for aggressive, policy-flagged video ads — full AI layer engine makes rejected Meta, TikTok & YouTube ads work and convert better.",
+  max: "For agencies & media buyers scaling strict-policy creatives at volume — full AI recovery engine, 5 team seats & lowest cost per export.",
 };
 
 const INCLUDED = [
-  "Pro Color Grading & Broadcast Audio Mastering",
-  "Video & Static Image Batch Export",
-  "Clean Container & Project Tag Export",
-  "Brand Watermark & Custom Cover Frame Studio",
+  "Full AI Engine for Rejected & Aggressive Video Ads",
+  "Turns Policy-Flagged Creatives Into Approved Winners",
+  "Clean Container, Fresh Encoding & Policy-Safe Re-Export",
+  "Brand Watermark & High-CTR Cover Frame Studio",
 ];
 
 function price(amount: number, currency: string, digits?: number) {
@@ -114,7 +115,10 @@ export function PricingSection({
   const included = cms
     .list("pricing.studioIncluded", INCLUDED, "Included in every plan", INCLUDED)
     .filter(({ item }) => !SEAT_LINE.test(item) && !PLATFORM_LINE.test(item));
-  const chooseHref = ctaHref;
+  const chooseHrefFor = (planId: string) =>
+    ctaHref.startsWith("/signup") || ctaHref.startsWith("/login")
+      ? `/signup?next=${encodeURIComponent(`/app/plan?plan=${planId}&welcome=1`)}`
+      : ctaHref;
 
   return (
     <div>
@@ -123,13 +127,14 @@ export function PricingSection({
           <CmsHeadline
             k="pricing.studioHeadline"
             dark
-            text="Simple Studio Plans for Every Production Volume."
+            text="Choose a Plan to Fix & Scale Rejected Ads."
             className="text-4xl sm:text-5xl lg:text-6xl"
           />
         </div>
         <T k="pricing.studioLede" long as="p" className="text-sm leading-relaxed text-white/65">
-          Pick the monthly export capacity that fits your workflow. Every plan gives you a 30-day allowance of studio
-          render tokens—no long-term contracts, nothing renews automatically, and you can upgrade or switch plans anytime.
+          Activate a 30-day plan to unlock our AI layer engine built for aggressive and rejected ad creatives on Meta,
+          TikTok, and YouTube—making restricted video ads pass review, deliver cleanly, and convert better with zero
+          auto-renewal lock-in.
         </T>
       </div>
 
@@ -317,7 +322,7 @@ export function PricingSection({
 
               <CmsLink
                 k="pricing.choose"
-                href={chooseHref}
+                href={chooseHrefFor(plan.id)}
                 label="Choose"
                 onClick={() => reportPlanClick(plan.id)}
                 className={cn(
@@ -345,6 +350,11 @@ export function PricingSection({
           );
         })}
       </div>
+
+      <p className="mt-8 text-center text-xs leading-relaxed text-white/55">
+        Account signup is free; rendering unlocks as soon as you activate a plan. Server-failed renders refund 100% of
+        tokens automatically — no auto-renewal surprises.
+      </p>
     </div>
   );
 }

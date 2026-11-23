@@ -6,33 +6,33 @@ import type { SiteContent } from "@/lib/siteContent";
  */
 export const FAQS = [
   {
-    q: "What does ProteusFlow do and how does it fit into my editing workflow?",
-    a: "ProteusFlow is a browser-based batch production studio that sits right after your main edit. Once you finish cutting a video or designing an image in Premiere, CapCut, or Figma, upload it to ProteusFlow to format it for Reels, TikTok, and YouTube Shorts, apply consistent Rec.709 color grading and broadcast audio leveling (−14 LUFS), burn in your brand watermark and cover frame, and export your full batch in minutes.",
-    tag: "Workflow",
+    q: "How does ProteusFlow fix rejected or restricted video ads?",
+    a: "When an aggressive or direct-response winning ad gets rejected or throttled by Meta, TikTok, or YouTube, ProteusFlow uses its multi-layer AI engine to rebuild visual frames, Rec.709 color profiles, −14 LUFS broadcast audio, and clean container metadata—turning flagged creatives into fresh studio assets built to get approved and regain delivery.",
+    tag: "Ad Recovery",
   },
   {
-    q: "Does exporting through ProteusFlow preserve my original video and audio quality?",
-    a: "Yes. Every export is rendered using broadcast-grade H.264/H.265 encoding that preserves crisp on-screen captions, accurate product colors, natural skin tones, and clean −14 LUFS stereo audio across every file in your batch.",
-    tag: "Quality",
+    q: "Do rebuilt aggressive creatives actually convert better?",
+    a: "Yes. We preserve your exact hook, fast pacing, voiceover clarity, and crisp burned-in captions while refreshing underlying visual, audio, and encoding layers so campaigns stop stalling in review and sustain strong CTR and ROAS.",
+    tag: "Performance",
   },
   {
-    q: "How do the Brand Logo Overlay and Cover Frame tools work?",
-    a: "In Step 03 of the studio, you can upload a transparent PNG or WebP watermark, drag it anywhere on the live video preview, and set its size, opacity, and fade-in/out timing. You can also scrub to any frame in your video—or upload a custom cover image—to embed as the thumbnail.",
-    tag: "Branding",
+    q: "Do I need a paid plan before generating videos?",
+    a: "Creating an account is free, and once inside you activate a 30-day Starter, Pro, or Max plan to load studio render tokens. Pro and Max unlock the full AI layer engine for aggressive Meta, TikTok, and YouTube ads—while any render blocked or failed on our servers refunds 100% of tokens automatically.",
+    tag: "Plans & Refunds",
   },
   {
-    q: "Which file formats and social platforms are supported?",
-    a: "ProteusFlow accepts MP4, MOV, WEBM, and MKV videos as well as PNG, JPG, and WEBP images (up to 500 MB per file). Built-in presets format your exports for Instagram Reels & Feed, TikTok, YouTube Shorts, Snapchat, and Google video/display placements.",
-    tag: "Formats",
+    q: "Which ad platforms and file formats are supported?",
+    a: "ProteusFlow accepts MP4, MOV, WEBM, and MKV videos as well as PNG, JPG, and WEBP images (up to 512 MB per upload), with studio presets tuned for Meta Feed/Reels, TikTok Ads, and YouTube Shorts/Ads.",
+    tag: "Platforms",
   },
   {
-    q: "How many files can I batch-process at once?",
-    a: "You can drop up to 20 videos or images into a single batch and generate up to 10 formatted exports per upload, then download individual files or grab the entire batch in one organized ZIP archive.",
+    q: "How many files or variations can I render at once?",
+    a: "You can render from 1 video × 1 variation up to 5 total outputs per batch (for example 5 creatives × 1 variant or 1 creative × 5 variants) for optimal quality and speed. Renders continue in the background even if you switch pages, and files stay downloadable in History for 48 hours.",
     tag: "Batching",
   },
   {
-    q: "How do plans, render tokens, and refunds work?",
-    a: "Each plan gives you a 30-day allowance of studio render tokens with no long-term contracts. Unused tokens roll over on Pro and Max plans when you renew on time, any failed or canceled render is automatically returned to your balance, and eligible refunds apply strictly to the remaining unused tokens still in your account (Max includes up to 5 team seats).",
+    q: "How do tokens, renewals, and unused-token refunds work?",
+    a: "Each 30-day plan grants render tokens with zero automatic renewal trap. Unused tokens roll over on Pro and Max when renewed on time, server-failed renders cost 0 tokens, and eligible refunds cover the unused tokens remaining in your account (Max includes up to 5 team seats).",
     tag: "Billing",
   },
 ];

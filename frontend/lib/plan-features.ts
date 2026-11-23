@@ -8,7 +8,7 @@ export type { PlanFeatureId };
  */
 export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyof MutationOptions)[] }> = {
   full_engine: {
-    label: "Pro Color Grading & Broadcast Audio Mastering",
+    label: "Full AI Engine for Rejected & Aggressive Video Ads",
     fields: [
       "elastic_mesh_warp",
       "dct_jnd_perturbation",
@@ -23,11 +23,11 @@ export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyo
     ],
   },
   metadata_wipe: {
-    label: "Clean Container & Project Tag Export",
+    label: "Clean Container, Fresh Encoding & Policy-Safe Re-Export",
     fields: ["strip_metadata"],
   },
   multi_platform: {
-    label: "TikTok Ads & YouTube Ads",
+    label: "Meta Ads, TikTok Ads & YouTube Ads Recovery",
     fields: [],
   },
 };
@@ -36,8 +36,8 @@ export const PLAN_FEATURE_IDS = Object.keys(PLAN_FEATURES) as PlanFeatureId[];
 
 /** Which feature a pricing line describes, matched loosely so edited wording still maps. */
 export function featureForLine(line: string): PlanFeatureId | null {
-  if (/probe|mutate|scrub\s*engine|23[- ]*layer|studio\s*variation|gen[- ]*4|pro\s*color\s*grading/i.test(line)) return "full_engine";
-  if (/metadata|hash\s*wipe|clean\s*container/i.test(line)) return "metadata_wipe";
+  if (/probe|mutate|scrub\s*engine|23[- ]*layer|studio\s*variation|gen[- ]*4|pro\s*color\s*grading|full\s*ai|rejected\s*&\s*aggressive/i.test(line)) return "full_engine";
+  if (/metadata|hash\s*wipe|clean\s*container|policy[- ]*safe/i.test(line)) return "metadata_wipe";
   if (/tiktok|youtube|multi[- ]*platform/i.test(line)) return "multi_platform";
   return null;
 }

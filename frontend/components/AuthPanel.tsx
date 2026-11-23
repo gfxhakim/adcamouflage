@@ -292,7 +292,12 @@ export function AuthPanel({ mode }: { mode: Mode }) {
             Use another email
           </button>
         </div>
-        <p className="mt-4 text-[11px] leading-relaxed text-ink-faint">
+        <p className="mt-4 rounded-xl border border-meta-500/25 bg-meta-50/70 px-3.5 py-2.5 text-[11px] leading-relaxed text-slate-700">
+          <span className="font-semibold text-black">Next step after verifying:</span> pick a Starter, Pro, or Max
+          plan to unlock render tokens so our AI Engine can rebuild your rejected or aggressive video ads to pass review
+          and convert better.
+        </p>
+        <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
           No email after a minute? Check your spam or promotions folder.
         </p>
       </NeonCard>
@@ -500,6 +505,11 @@ export function AuthPanel({ mode }: { mode: Mode }) {
             const intent = policyIntent;
             setPolicyIntent(null);
             if (!intent) return;
+            try {
+              window.sessionStorage.setItem("proteusflow:post_agreement_guide", "1");
+            } catch {
+              /* ignore storage block */
+            }
             if (intent.kind === "google") {
               window.location.assign(intent.href);
             } else if (intent.kind === "email") {

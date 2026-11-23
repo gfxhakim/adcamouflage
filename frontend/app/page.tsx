@@ -197,9 +197,9 @@ function structuredData(pricing: PublicPricing, content: SiteContent, descriptio
 }
 
 export default async function LandingPage() {
-  // Everyone sees the visitor version of this page, and every start button
-  // opens the login page, which also offers to create an account.
-  const startHref = "/login";
+  // Everyone sees the visitor version of this page; start buttons send new
+  // ad visitors directly into account creation (with a Sign in toggle below).
+  const startHref = "/signup";
   const [pricing, content, affiliateProgram] = await Promise.all([
     loadPricing(),
     loadPublishedContent("landing"),

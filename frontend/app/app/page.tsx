@@ -16,6 +16,8 @@ import {
   ImagePlus,
   Radar,
   Rocket,
+  Sparkles,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -172,6 +174,8 @@ export default function WorkspacePage() {
   const [helpUnread, setHelpUnread] = useState(false);
   const [coachActive, setCoachActive] = useState(false);
   const [tourMode, setTourMode] = useState(false);
+  const [postAgreement, setPostAgreement] = useState(false);
+  const [activationGuideDismissed, setActivationGuideDismissed] = useState(false);
 
   const currentStepId = STEPS[step].id as HelpStepId;
 
@@ -180,6 +184,12 @@ export default function WorkspacePage() {
       const params = new URLSearchParams(window.location.search);
       const seenDrawer = window.localStorage.getItem(HELP_STORAGE.drawerSeen) === "1";
       setHelpUnread(!seenDrawer);
+      if (window.sessionStorage.getItem("proteusflow:post_agreement_guide") === "1") {
+        setPostAgreement(true);
+      }
+      if (window.sessionStorage.getItem("proteusflow:activation_guide_dismissed") === "1") {
+        setActivationGuideDismissed(true);
+      }
       if (params.get("help") === "1") {
         setHelpOpen(true);
         setHelpUnread(false);
@@ -652,28 +662,78 @@ export default function WorkspacePage() {
           ) : null}
 
           {paywalled ? (
-            <NeonCard tone="danger" padding="md" radius="lg">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200">
-                    <Lock className="h-5 w-5" aria-hidden />
-                  </span>
-                  <div>
+            !activationGuideDismissed ? (
+              <NeonCard padding="md" radius="lg" glow>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-meta-500/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-meta-700 dark:text-meta-300">
+                        <Sparkles className="h-3 w-3" aria-hidden />
+                        {postAgreement ? "Account & agreement complete" : "Quick start guide"}
+                      </span>
+                      <span className="text-[11px] font-medium text-ink-faint dark:text-slate-400">
+                        1 · Account ready ✓ → 2 · Pick a plan → 3 · Rebuild rejected ads
+                      </span>
+                    </div>
                     <p className="text-sm font-semibold text-black dark:text-slate-50">
-                      {billing?.subscription ? "Renew your plan to keep generating" : "Subscribe to start generating"}
+                      {billing?.subscription
+                        ? "Renew your plan to keep rebuilding rejected ads"
+                        : "Activate a plan to fix rejected & policy-flagged video ads"}
                     </p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-ink-muted dark:text-slate-400">
-                      {billing?.alerts.find((a) => a.code === "ended" || a.code === "no_subscription")?.text ??
-                        "Pick a plan on the plan page; tokens are added as soon as the payment is confirmed."}
+                    <p className="text-xs leading-relaxed text-ink-muted dark:text-slate-400">
+                      {billing?.subscription
+                        ? "Your previous period ended. Renew any plan so our AI Layer Engine can process and export new variations."
+                        : "You can preview the studio below right away, and rendering starts as soon as you pick Starter, Pro, or Max—unlocking the AI Layer Engine that makes aggressive Meta, TikTok & YouTube ads pass review and convert better."}
                     </p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Link href="/app/plan" className="btn-primary !text-xs">
+                      <Crown className="h-3.5 w-3.5" aria-hidden />
+                      {billing?.subscription ? "Renew plan" : "See plans & activate"}
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                    </Link>
+                    <button
+                      type="button"
+                      aria-label="Hide guide"
+                      onClick={() => {
+                        setActivationGuideDismissed(true);
+                        try {
+                          window.sessionStorage.setItem("proteusflow:activation_guide_dismissed", "1");
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                      className="rounded-lg p-1.5 text-ink-muted transition hover:bg-black/5 hover:text-black dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
                 </div>
-                <Link href="/app/plan" className="btn-primary shrink-0 !text-xs">
-                  <Crown className="h-3.5 w-3.5" aria-hidden />
-                  {billing?.subscription ? "Renew" : "See plans"}
-                </Link>
-              </div>
-            </NeonCard>
+              </NeonCard>
+            ) : (
+              <NeonCard tone="danger" padding="md" radius="lg">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200">
+                      <Lock className="h-5 w-5" aria-hidden />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-black dark:text-slate-50">
+                        {billing?.subscription ? "Renew your plan to keep generating" : "Subscribe to start generating"}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-ink-muted dark:text-slate-400">
+                        {billing?.alerts.find((a) => a.code === "ended" || a.code === "no_subscription")?.text ??
+                          "Pick a plan on the plan page; tokens are added as soon as the payment is confirmed."}
+                      </p>
+                    </div>
+                  </div>
+                  <Link href="/app/plan" className="btn-primary shrink-0 !text-xs">
+                    <Crown className="h-3.5 w-3.5" aria-hidden />
+                    {billing?.subscription ? "Renew" : "See plans"}
+                  </Link>
+                </div>
+              </NeonCard>
+            )
           ) : null}
 
           {bannerAlerts.length > 0 ? <BillingAlerts alerts={bannerAlerts} linkToPlan /> : null}
