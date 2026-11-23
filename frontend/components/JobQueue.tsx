@@ -64,7 +64,11 @@ export function JobQueue({
     );
   }
 
-  const running = batch.total - batch.completed - batch.failed;
+  const running =
+    batch.assets.length > 0
+      ? batch.assets.filter((asset) => asset.status === "queued" || asset.status === "processing").length
+      : Math.max(0, batch.total - batch.completed - batch.failed);
+  const cancelledCount = batch.assets.filter((asset) => asset.status === "cancelled").length;
   const allDone = running <= 0;
 
   return (
@@ -136,6 +140,9 @@ export function JobQueue({
             <span className="chip !text-[10px] !text-meta-600 dark:!text-meta-300">{batch.completed} done</span>
             {running > 0 ? (
               <span className="chip !text-[10px] !text-meta-500">{running} in flight</span>
+            ) : null}
+            {cancelledCount > 0 ? (
+              <span className="chip !text-[10px] !text-ink-subtle dark:!text-slate-400">{cancelledCount} stopped</span>
             ) : null}
             {batch.failed > 0 ? (
               <span className="chip !text-[10px] !text-red-600 dark:!text-red-400">{batch.failed} failed</span>

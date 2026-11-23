@@ -483,6 +483,119 @@ def test_refund_never_raises():
     assert tokens.refund_asset("asset_does_not_exist") == 0
 
 
+def test_cancelled_render_is_not_refunded_even_on_worker_interrupt(sample_image, monkeypatch):
+    from app import main as main_module
+    from app import tasks
+    from app.schemas import JobStatus
+    from app.storage import get_store
+
+    monkeypatch.setattr(main_module, "enqueue_asset", lambda _asset_id: "celery-stub-task")
+
+    email = address("user-cancel-no-refund")
+    client = _signed_in(email)
+    _grant(email, "pro")
+    created = _upload(client, sample_image, count=2)
+    assert created.status_code == 202, created.text
+    asset_id = created.json()["accepted"][0]["id"]
+    assert _balances(email)[0] == 4500 - 180
+
+    cancelled = client.post(f"/api/v1/assets/{asset_id}/cancel")
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+    assert _balances(email)[0] == 4500 - 180
+    assert tokens.refund_asset(asset_id) == 0
+
+    # Even if the worker throws during teardown after user cancel, keep CANCELLED and never refund.
+    def interrupt(*_args, **_kwargs):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(tasks, "mutate", interrupt)
+    assert tasks.run_asset_job(asset_id)["status"] == "cancelled"
+    tasks._fail(asset_id, error="should not overwrite cancel")
+    assert get_store().get_asset(asset_id).status is JobStatus.CANCELLED
+    assert _balances(email)[0] == 4500 - 180
+
+
+def test_blocked_and_interrupted_renders_refund_automatically(sample_image, monkeypatch):
+    from app import main as main_module
+    from app import queue, tasks
+    from app.celery_app import celery_app
+    from app.schemas import JobStatus
+    from app.storage import get_store
+
+    # 1. Enqueue failure (queue unreachable) must fail + refund immediately.
+    monkeypatch.setattr(settings, "inline_worker", False)
+
+    class DeadTask:
+        def apply_async(self, **_kw):
+            raise ConnectionError("redis down")
+
+    monkeypatch.setattr(queue, "process_asset", DeadTask())
+    monkeypatch.setattr(queue.time, "sleep", lambda _s: None)
+
+    email_q = address("enqueue-fail")
+    client_q = _signed_in(email_q)
+    _grant(email_q, "pro")
+    created_q = _upload(client_q, sample_image, count=1)
+    assert created_q.status_code == 202, created_q.text
+    asset_q = created_q.json()["accepted"][0]["id"]
+    assert get_store().get_asset(asset_q).status is JobStatus.FAILED
+    assert _balances(email_q)[0] == 4500  # fully refunded
+
+    # 2. Prevent auto-execution so we can test stalled, expired-batch, BaseException, and worker crash.
+    monkeypatch.setattr(main_module, "enqueue_asset", lambda _asset_id: "celery-stub-task")
+
+    email = address("server-fail-refund")
+    client = _signed_in(email)
+    _grant(email, "pro")
+    created = _upload(client, sample_image, count=4)
+    assert created.status_code == 202, created.text
+    batch_id = created.json()["batch_id"]
+    a_expire, a_interrupt, a_worker_lost, a_stalled = [a["id"] for a in created.json()["accepted"]]
+    assert _balances(email)[0] == 4500 - 360
+
+    store = get_store()
+
+    # 2a. Batch record missing before processing.
+    orig_get_batch = store.get_batch
+    monkeypatch.setattr(store, "get_batch", lambda bid: None if bid == batch_id else orig_get_batch(bid))
+    # Point a_expire to missing batch check once:
+    assert tasks.run_asset_job(a_expire)["status"] == "failed"
+    assert _balances(email)[0] == 4500 - 270
+    monkeypatch.setattr(store, "get_batch", orig_get_batch)
+
+    # 2b. Server interrupt (BaseException / deploy shutdown, NOT cancelled by user).
+    def crash_sigterm(*_args, **_kwargs):
+        raise SystemExit(15)
+
+    monkeypatch.setattr(tasks, "mutate", crash_sigterm)
+    with pytest.raises(SystemExit):
+        tasks.run_asset_job(a_interrupt)
+    assert store.get_asset(a_interrupt).status is JobStatus.FAILED
+    assert _balances(email)[0] == 4500 - 180
+
+    # 2c. Celery worker crash (WorkerLostError / OOM SIGKILL signal).
+    tasks._on_process_asset_failure(args=[a_worker_lost], exception=RuntimeError("Worker exited prematurely"))
+    assert store.get_asset(a_worker_lost).status is JobStatus.FAILED
+    assert _balances(email)[0] == 4500 - 90
+
+    # 2d. Stalled PROCESSING asset reaped when batch is polled -> refunded cleanly.
+    stalled_rec = store.get_asset(a_stalled)
+    stalled_rec.status = JobStatus.PROCESSING
+    stalled_rec.started_at = datetime.now(timezone.utc) - timedelta(seconds=settings.stale_processing_seconds + 120)
+    stalled_rec.updated_at = stalled_rec.started_at
+    # Save directly without save_asset bumping updated_at:
+    store.backend.set(f"adcam:asset:{a_stalled}", stalled_rec.model_dump_json(), ex=3600)
+
+    polled = client.get(f"/api/v1/batches/{batch_id}")
+    assert polled.status_code == 200
+    assert polled.json()["failed"] == 4
+    assert store.get_asset(a_stalled).stage == "stalled"
+    assert _balances(email)[0] == 4500
+    # Verify Celery Beat schedule includes stalled reaper.
+    assert "reap-stalled-assets" in celery_app.conf.beat_schedule
+
+
 # --------------------------------------------------------------------------
 # checkout and Whop
 # --------------------------------------------------------------------------

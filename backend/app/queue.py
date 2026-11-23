@@ -12,11 +12,13 @@ import logging
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timezone
 
 from .config import settings
 from .schemas import JobStatus
 from .storage import get_store
 from .tasks import process_asset, run_asset_job
+from .tokens import refund_asset
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +117,10 @@ def enqueue_asset(asset_id: str) -> str | None:
         asset_id,
         status=JobStatus.FAILED,
         stage="failed",
+        finished_at=datetime.now(timezone.utc),
         error="The render queue is unreachable right now. Press retry in a minute; if it keeps failing, Admin > Overview shows the reason.",
     )
+    refund_asset(asset_id)
     return None
 
 
@@ -155,24 +159,36 @@ def shutdown_inline_workers(wait: bool = True, timeout: float = 60.0) -> None:
 
 
 def cancel_asset(asset_id: str) -> bool:
-    """Best-effort cancellation of a queued job."""
+    """Best-effort cancellation of a queued or active job.
+
+    Marks the asset CANCELLED *before* terminating the worker so the worker's
+    error/shutdown handler sees CANCELLED and never refunds user-stopped jobs.
+    """
 
     store = get_store()
-    asset = store.get_asset(asset_id)
-    if asset is None or asset.is_terminal:
-        return False
+    with store._lock:
+        asset = store.get_asset(asset_id)
+        if asset is None or asset.is_terminal:
+            return False
+        task_id = asset.task_id
+        store.update_asset(
+            asset_id,
+            status=JobStatus.CANCELLED,
+            stage="cancelled",
+            finished_at=datetime.now(timezone.utc),
+            error=None,
+        )
 
     if settings.inline_worker:
         future = _pending.get(asset_id)
         if future is not None:
             future.cancel()
-    elif asset.task_id:
+    elif task_id:
         try:
             from .celery_app import celery_app
 
-            celery_app.control.revoke(asset.task_id, terminate=True, signal="SIGTERM")
+            celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
         except Exception:  # noqa: BLE001
-            logger.warning("could not revoke celery task %s", asset.task_id)
+            logger.warning("could not revoke celery task %s", task_id)
 
-    store.update_asset(asset_id, status=JobStatus.CANCELLED, stage="cancelled", error=None)
     return True

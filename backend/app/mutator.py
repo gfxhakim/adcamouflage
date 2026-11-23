@@ -1249,6 +1249,7 @@ def _deep_scramble_video(
         out_u8 = np.empty((height, width, 3), dtype=np.uint8)
 
         index = 0
+        killed_by_abort = False
         assert writer.stdin is not None
         try:
             while True:
@@ -1294,16 +1295,26 @@ def _deep_scramble_video(
                 writer.stdin.write(out_u8.tobytes())
 
                 index += 1
-                if on_progress and total_frames > 0 and index % 15 == 0:
-                    on_progress(min(index / total_frames, 1.0), "deep-scramble")
+                if on_progress:
+                    if total_frames > 0 and index % 15 == 0:
+                        on_progress(min(index / total_frames, 1.0), "deep-scramble")
+                    elif total_frames <= 0 and index % 30 == 0:
+                        on_progress(0.5, "deep-scramble")
+        except BaseException:
+            if writer.poll() is None:
+                killed_by_abort = True
+                writer.kill()
+                writer.wait()
+            raise
         finally:
-            try:
-                writer.stdin.close()
-            except (BrokenPipeError, OSError):
-                pass
+            if writer.stdin is not None:
+                try:
+                    writer.stdin.close()
+                except (BrokenPipeError, OSError):
+                    pass
             stderr = writer.stderr.read() if writer.stderr else b""
             code = writer.wait()
-            if code != 0:
+            if not killed_by_abort and code != 0:
                 raise MutationError(
                     "deep scramble encoder failed: "
                     + describe_ffmpeg_exit(code, stderr.decode("utf-8", "replace"))

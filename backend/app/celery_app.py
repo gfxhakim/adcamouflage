@@ -30,6 +30,10 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     task_default_queue="mutations",
     beat_schedule={
+        "reap-stalled-assets": {
+            "task": "app.tasks.reap_stalled_assets",
+            "schedule": 120.0,
+        },
         "purge-expired-assets": {
             "task": "app.tasks.purge_expired_assets",
             "schedule": 900.0,

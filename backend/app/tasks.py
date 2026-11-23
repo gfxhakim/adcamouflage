@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from celery.exceptions import SoftTimeLimitExceeded
+from celery.signals import task_failure
 
 from . import costs
 from .celery_app import celery_app
@@ -15,7 +16,7 @@ from .config import settings
 from .db import get_session_factory
 from .mailer import send_billing_reminders as _send_billing_reminders
 from .mutator import MutationError, mutate
-from .schemas import AssetKind, JobStatus
+from .schemas import AssetJob, AssetKind, JobStatus
 from .security import sign_download
 from .storage import get_store, resolve_within
 from .tokens import refund_asset
@@ -23,14 +24,30 @@ from .tokens import refund_asset
 logger = logging.getLogger(__name__)
 
 
-def _fail(asset_id: str, **fields: object) -> None:
-    """Mark an asset FAILED and hand back the tokens it cost. Never raises for the refund."""
+def _utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
-    get_store().update_asset(asset_id, status=JobStatus.FAILED, finished_at=datetime.now(timezone.utc), **fields)
+
+def _fail(asset_id: str, **fields: object) -> bool:
+    """Mark an asset FAILED and hand back the tokens it cost.
+
+    Never overwrites a user-initiated cancellation (`CANCELLED`), and never
+    refunds user-stopped renders. Never raises for the refund.
+    """
+
+    store = get_store()
+    with store._lock:
+        current = store.get_asset(asset_id)
+        if current is not None and current.status is JobStatus.CANCELLED:
+            return False
+        store.update_asset(asset_id, status=JobStatus.FAILED, finished_at=datetime.now(timezone.utc), **fields)
     try:
         refund_asset(asset_id)
     except Exception:  # noqa: BLE001 - belt and braces; refund_asset catches its own errors
         logger.warning("refund hook failed for %s", asset_id, exc_info=True)
+    return True
 
 
 class _ProgressThrottle:
@@ -75,12 +92,7 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
 
     batch = store.get_batch(asset.batch_id)
     if batch is None:
-        store.update_asset(
-            asset_id,
-            status=JobStatus.FAILED,
-            error="The batch record expired before this asset was processed.",
-            finished_at=datetime.now(timezone.utc),
-        )
+        _fail(asset_id, stage="failed", error="The batch record expired before this asset was processed.")
         return {"asset_id": asset_id, "status": "failed"}
 
     options = batch.options.resolved()
@@ -121,7 +133,11 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
             on_progress=_ProgressThrottle(asset_id),
         )
     except SoftTimeLimitExceeded:
-        _fail(asset_id, stage="timeout", error="Rendering exceeded the configured time limit.")
+        _fail(
+            asset_id,
+            stage="timeout",
+            error="Rendering exceeded the configured time limit; your tokens have been refunded.",
+        )
         raise
     except MutationError as exc:
         logger.warning("mutation failed for %s: %s", asset_id, exc)
@@ -131,6 +147,22 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
         logger.exception("unexpected worker error for %s", asset_id)
         _fail(asset_id, stage="failed", error=f"Internal worker error: {exc}")
         return {"asset_id": asset_id, "status": "failed", "error": str(exc)}
+    except BaseException:
+        current = store.get_asset(asset_id)
+        if current is None or current.status is not JobStatus.CANCELLED:
+            _fail(
+                asset_id,
+                stage="interrupted",
+                error="The render was interrupted on our server before finishing; your tokens have been refunded.",
+            )
+        raise
+
+    latest = store.get_asset(asset_id)
+    if latest is not None and latest.status is JobStatus.CANCELLED:
+        report.output_path.unlink(missing_ok=True)
+        if report.poster_filename:
+            resolve_within(settings.outputs_dir, report.poster_filename).unlink(missing_ok=True)
+        return {"asset_id": asset_id, "status": "cancelled"}
 
     output = report.output_path
     token = sign_download(asset.id)
@@ -176,6 +208,92 @@ def run_asset_job(asset_id: str, task_id: str | None = None) -> dict[str, object
 )
 def process_asset(self, asset_id: str) -> dict[str, object]:
     return run_asset_job(asset_id, task_id=self.request.id)
+
+
+@task_failure.connect(sender=process_asset)
+def _on_process_asset_failure(args=None, kwargs=None, exception=None, **_extra: object) -> None:
+    """Catch worker crashes / SIGKILLs where `run_asset_job` could not run `_fail`."""
+
+    asset_id = None
+    if args:
+        asset_id = args[0]
+    elif kwargs:
+        asset_id = kwargs.get("asset_id")
+    if not isinstance(asset_id, str) or not asset_id:
+        return
+    asset = get_store().get_asset(asset_id)
+    if asset is None or asset.is_terminal:
+        return
+    reason = str(exception).strip() if exception else "Render worker stopped unexpectedly."
+    _fail(
+        asset_id,
+        stage="failed",
+        error=f"Rendering stopped on our server ({reason[:200]}); your tokens have been refunded.",
+    )
+
+
+def reap_asset_if_stalled(
+    asset: AssetJob,
+    *,
+    now: datetime | None = None,
+    inline_reset: bool = False,
+) -> AssetJob:
+    """Fail and refund an active asset if our worker stalled, crashed or got killed."""
+
+    if asset.is_terminal:
+        return asset
+
+    now = now or datetime.now(timezone.utc)
+    store = get_store()
+
+    if asset.status is JobStatus.PROCESSING:
+        last_touch = _utc(asset.updated_at) or _utc(asset.started_at) or _utc(asset.created_at) or now
+        started = _utc(asset.started_at) or last_touch
+        idle_s = (now - last_touch).total_seconds()
+        elapsed_s = (now - started).total_seconds()
+        if (
+            inline_reset
+            or idle_s > settings.stale_processing_seconds
+            or elapsed_s > settings.job_timeout_seconds + 180
+        ):
+            _fail(
+                asset.id,
+                stage="stalled",
+                error="Rendering stalled or stopped on our server before finishing; your tokens have been refunded.",
+            )
+            return store.get_asset(asset.id) or asset
+    elif asset.status is JobStatus.QUEUED:
+        created = _utc(asset.created_at) or _utc(asset.updated_at) or now
+        wait_s = (now - created).total_seconds()
+        if inline_reset or wait_s > settings.stale_queued_seconds:
+            _fail(
+                asset.id,
+                stage="stalled",
+                error="The render waited too long in the queue without starting; your tokens have been refunded.",
+            )
+            return store.get_asset(asset.id) or asset
+
+    return asset
+
+
+@celery_app.task(name="app.tasks.reap_stalled_assets")
+def reap_stalled_assets(*, inline_reset: bool = False) -> dict[str, int]:
+    """Fail and refund queued/processing jobs whose worker disappeared or stalled."""
+
+    store = get_store()
+    now = datetime.now(timezone.utc)
+    reaped = 0
+    for key in store.backend.scan_iter("adcam:asset:*"):
+        asset_id = str(key).removeprefix("adcam:asset:")
+        asset = store.get_asset(asset_id)
+        if asset is None or asset.is_terminal:
+            continue
+        updated = reap_asset_if_stalled(asset, now=now, inline_reset=inline_reset)
+        if updated.status is JobStatus.FAILED:
+            reaped += 1
+    if reaped:
+        logger.warning("reaped %s stalled render job(s) and refunded tokens", reaped)
+    return {"reaped": reaped}
 
 
 @celery_app.task(name="app.tasks.pay_referral_rewards")

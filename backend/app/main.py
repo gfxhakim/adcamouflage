@@ -6,6 +6,7 @@ import asyncio
 import logging
 import zipfile
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -56,8 +57,10 @@ from .tokens import (
     get_token_plans,
     get_topups,
     promo_public,
+    refund_asset,
 )
 from .queue import broker_status, cancel_asset, enqueue_asset, queue_depth, worker_mode
+from .tasks import reap_asset_if_stalled, reap_stalled_assets
 from .schemas import (
     PRESET_DEFAULTS,
     AssetJob,
@@ -106,6 +109,8 @@ async def lifespan(app: FastAPI):
     removed = await asyncio.to_thread(store.purge_expired)
     if removed:
         logger.info("startup purge removed %s stale files", removed)
+    if settings.inline_worker:
+        await asyncio.to_thread(reap_stalled_assets, inline_reset=True)
     yield
 
 
@@ -451,7 +456,19 @@ async def create_batch(
     record_batch(db, batch.id, user.id, len(accepted), resolved, token_cost=token_cost)
 
     for job in accepted:
-        task_id = await asyncio.to_thread(enqueue_asset, job.id)
+        try:
+            task_id = await asyncio.to_thread(enqueue_asset, job.id)
+        except Exception as exc:  # noqa: BLE001 - never lose tokens if dispatch raises unexpectedly
+            logger.exception("enqueue raised unexpectedly for %s", job.id)
+            store.update_asset(
+                job.id,
+                status=JobStatus.FAILED,
+                stage="failed",
+                finished_at=datetime.now(timezone.utc),
+                error=f"Could not queue render ({type(exc).__name__}); your tokens have been refunded.",
+            )
+            await asyncio.to_thread(refund_asset, job.id)
+            continue
         if task_id:
             store.update_asset(job.id, task_id=task_id)
             job.task_id = task_id
@@ -554,6 +571,8 @@ async def get_batch(batch_id: str, user: User = Depends(require_studio_user)) ->
     batch = _owned_batch(batch_id, user)
     asset_ids = batch.asset_ids or store.list_asset_ids(batch_id)
     assets = await asyncio.to_thread(store.get_assets, asset_ids)
+    if any(not asset.is_terminal for asset in assets):
+        assets = await asyncio.to_thread(lambda: [reap_asset_if_stalled(asset) for asset in assets])
     return _summarise(batch, assets)
 
 
@@ -563,6 +582,8 @@ async def get_asset(asset_id: str, user: User = Depends(require_studio_user)) ->
     if asset is None:
         raise HTTPException(status_code=404, detail="Asset not found or expired.")
     _owned_batch(asset.batch_id, user)
+    if not asset.is_terminal:
+        asset = await asyncio.to_thread(reap_asset_if_stalled, asset)
     return _with_fresh_links(asset)
 
 

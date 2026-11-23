@@ -235,6 +235,8 @@ class Settings(BaseSettings):
     ffprobe_binary: str = "ffprobe"
     ffmpeg_threads: int = 0  # 0 => let ffmpeg pick
     job_timeout_seconds: int = 60 * 45
+    stale_processing_seconds: int = 60 * 10
+    stale_queued_seconds: int = 60 * 60
     video_max_duration: int = 60 * 30
 
     @field_validator("cors_origins", mode="before")

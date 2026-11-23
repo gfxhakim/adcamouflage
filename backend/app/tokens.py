@@ -955,8 +955,9 @@ def void_order(db: Session, order: Order, status: str, *, tell_customer: bool | 
 def refund_asset(asset_id: str) -> int:
     """Give back one generation's tokens for an asset that failed to render.
 
-    Runs on the worker after a FAILED update, so it opens its own session and
-    never raises: a refund that cannot be made is logged and skipped. Each
+    Runs when a job fails or stalls on our side, so it opens its own session and
+    never raises: a refund that cannot be made is logged and skipped. Jobs that
+    were explicitly stopped by the user (`CANCELLED`) are never refunded. Each
     asset is refunded at most once (the ledger note ``refund <asset id>`` is
     the marker). Tokens go back to the bucket they were taken from, the
     subscription bucket first. Returns the tokens refunded.
@@ -964,10 +965,11 @@ def refund_asset(asset_id: str) -> int:
 
     try:
         from .db import get_session_factory
+        from .schemas import JobStatus
         from .storage import get_store
 
         asset = get_store().get_asset(asset_id)
-        if asset is None:
+        if asset is None or asset.status is JobStatus.CANCELLED:
             return 0
         with get_session_factory()() as db:
             return _refund_in_session(db, asset.batch_id, asset_id)

@@ -293,6 +293,9 @@ def run_ffmpeg(
         process.wait()
         raise MediaError("ffmpeg exceeded the configured job timeout") from exc
     finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
         pump.join(timeout=10)
         collector.join(timeout=10)
         for stream in (process.stdout, process.stderr):
@@ -326,7 +329,7 @@ def describe_ffmpeg_exit(returncode: int, stderr: str) -> str:
             name = signal.Signals(-returncode).name
         except ValueError:
             name = f"signal {-returncode}"
-        if -returncode == signal.SIGKILL:
+        if -returncode == getattr(signal, "SIGKILL", 9):
             return (
                 f"ffmpeg was killed ({name}), most likely because the server ran out of memory; "
                 "try fewer renders at once or give the service more RAM"

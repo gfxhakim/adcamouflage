@@ -267,6 +267,7 @@ export default function WorkspacePage() {
   }, []);
 
   const batchIdRef = useRef<string | null>(null);
+  const lastRefundSyncRef = useRef<{ batchId: string; failed: number; settled: boolean } | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -377,9 +378,33 @@ export default function WorkspacePage() {
     }
   }, []);
 
+  const syncAccount = useCallback(() => {
+    void fetchMe()
+      .then((profile) => {
+        if (profile && mountedRef.current) {
+          setUser(profile);
+          void loadBilling(profile);
+        }
+      })
+      .catch(() => undefined);
+  }, [loadBilling]);
+
   useEffect(() => {
     if (!batch) return;
-    const settled = batch.completed + batch.failed >= batch.total;
+    const settled =
+      batch.assets.length > 0
+        ? batch.assets.every(
+            (asset) => asset.status === "completed" || asset.status === "failed" || asset.status === "cancelled",
+          )
+        : batch.completed + batch.failed >= batch.total;
+    const prev = lastRefundSyncRef.current;
+    const batchChanged = !prev || prev.batchId !== batch.batch.id;
+    const newFailure = !batchChanged && batch.failed > prev.failed;
+    const justSettled = (!batchChanged ? !prev.settled : true) && settled && batch.failed > 0;
+    lastRefundSyncRef.current = { batchId: batch.batch.id, failed: batch.failed, settled };
+    if (newFailure || justSettled) {
+      syncAccount();
+    }
     if (settled) {
       setPolling(false);
       return;
@@ -392,7 +417,7 @@ export default function WorkspacePage() {
     }, POLL_INTERVAL_MS);
 
     return () => clearTimeout(timer);
-  }, [batch, refresh]);
+  }, [batch, refresh, syncAccount]);
 
   // --- actions ------------------------------------------------------------
   const handleSubmit = useCallback(async () => {
@@ -447,16 +472,9 @@ export default function WorkspacePage() {
         setUploadProgress(0);
       }
       // Keeps the token / plan usage readout in the header current.
-      void fetchMe()
-        .then((profile) => {
-          if (profile && mountedRef.current) {
-            setUser(profile);
-            void loadBilling(profile);
-          }
-        })
-        .catch(() => undefined);
+      syncAccount();
     }
-  }, [billing, files, loadBilling, options, overlayLayers, refresh, uploading]);
+  }, [billing, files, options, overlayLayers, refresh, syncAccount, uploading]);
 
   const handleCancel = useCallback(
     async (assetId: string) => {
