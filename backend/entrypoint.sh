@@ -16,7 +16,7 @@
 set -euo pipefail
 
 PORT="${PORT:-8000}"
-WORKER_CONCURRENCY="${ADCAM_WORKER_CONCURRENCY:-2}"
+WORKER_CONCURRENCY="${ADCAM_WORKER_CONCURRENCY:-5}"
 
 # Railway's private network is IPv6-only, so binding 0.0.0.0 would leave the
 # service unreachable at api.railway.internal. :: accepts IPv4 too.

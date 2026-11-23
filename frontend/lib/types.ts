@@ -201,6 +201,7 @@ export interface PresetCatalogue {
   limits: {
     max_upload_mb: number;
     max_batch_files: number;
+    min_batch_generations?: number;
     max_video_seconds: number;
     retention_hours: number;
   };

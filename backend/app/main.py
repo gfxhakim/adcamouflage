@@ -232,6 +232,7 @@ async def presets() -> dict[str, Any]:
         "limits": {
             "max_upload_mb": settings.max_upload_mb,
             "max_batch_files": settings.max_batch_files,
+            "min_batch_generations": settings.min_batch_generations,
             "max_video_seconds": settings.video_max_duration,
             "retention_hours": settings.retention_hours,
         },
@@ -434,6 +435,18 @@ async def create_batch(
         raise HTTPException(
             status_code=422,
             detail={"message": "No usable assets in this batch.", "rejected": [r.model_dump() for r in rejected]},
+        )
+
+    if len(accepted) < settings.min_batch_generations:
+        for path in stored:
+            path.unlink(missing_ok=True)
+        minimum = settings.min_batch_generations
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Queue at least {minimum} renders at once (e.g. {minimum} videos or 1 video × {minimum} variants) "
+                "for better results."
+            ),
         )
 
     # `accepted` already holds one job per variant, so it is the generation

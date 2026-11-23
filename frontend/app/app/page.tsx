@@ -50,7 +50,7 @@ import {
   getPresets,
 } from "@/lib/api";
 import { formatBytes, formatTokens, plural } from "@/lib/format";
-import { fetchMe, fetchSubscription, signOut, type Subscription, type UserProfile } from "@/lib/auth";
+import { fetchMe, fetchMyBatches, fetchSubscription, signOut, type Subscription, type UserProfile } from "@/lib/auth";
 import type {
   BatchStatus,
   HealthReport,
@@ -157,6 +157,7 @@ export default function WorkspacePage() {
   const [healthError, setHealthError] = useState<string | null>(null);
 
   const [batch, setBatch] = useState<BatchStatus | null>(null);
+  const [backgroundBatches, setBackgroundBatches] = useState<BatchStatus[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -177,14 +178,13 @@ export default function WorkspacePage() {
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const seenTour = window.localStorage.getItem(HELP_STORAGE.tourDone) === "1";
       const seenDrawer = window.localStorage.getItem(HELP_STORAGE.drawerSeen) === "1";
       setHelpUnread(!seenDrawer);
       if (params.get("help") === "1") {
         setHelpOpen(true);
         setHelpUnread(false);
         window.localStorage.setItem(HELP_STORAGE.drawerSeen, "1");
-      } else if (params.get("tour") === "1" || !seenTour) {
+      } else if (params.get("tour") === "1") {
         setTourOpen(true);
       }
     } catch {
@@ -193,14 +193,13 @@ export default function WorkspacePage() {
   }, []);
 
   useEffect(() => {
-    if (!tourMode) return;
+    // Keep focus on the main workspace card whenever switching steps or returning to the studio.
+    void tourMode;
+    setCoachActive(false);
     try {
-      const seenStep = window.localStorage.getItem(HELP_STORAGE.tipsSeen(currentStepId)) === "1";
-      if (!seenStep) {
-        setCoachActive(true);
-      }
+      document.getElementById(currentStepId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch {
-      setCoachActive(true);
+      /* Ignore scroll errors on older browsers. */
     }
   }, [currentStepId, tourMode]);
 
@@ -292,6 +291,43 @@ export default function WorkspacePage() {
     }
   }, []);
 
+  const refreshActiveBatches = useCallback(async (profileId: number, currentBatchId: string | null) => {
+    try {
+      const summaries = (await fetchMyBatches()).slice(0, 6);
+      if (!mountedRef.current || summaries.length === 0) return;
+      const settledList = await Promise.all(
+        summaries.map((row) => getBatch(row.id).catch(() => null)),
+      );
+      if (!mountedRef.current) return;
+      const liveBatches = settledList.filter((item): item is BatchStatus => item !== null);
+      const isActive = (item: BatchStatus) =>
+        item.assets.some((asset) => asset.status === "queued" || asset.status === "processing");
+      const activeRuns = liveBatches.filter(isActive);
+
+      let activePrimaryId = currentBatchId;
+      if (!activePrimaryId) {
+        let savedId: string | null = null;
+        try {
+          savedId = window.sessionStorage.getItem(`proteusflow:active_batch:${profileId}`);
+        } catch {
+          savedId = null;
+        }
+        const preferred =
+          (savedId && liveBatches.find((item) => item.batch.id === savedId)) ||
+          activeRuns[0] ||
+          null;
+        if (preferred) {
+          activePrimaryId = preferred.batch.id;
+          batchIdRef.current = preferred.batch.id;
+          setBatch(preferred);
+        }
+      }
+      setBackgroundBatches(activeRuns.filter((item) => item.batch.id !== activePrimaryId));
+    } catch {
+      /* Recent batch lookup is best-effort background continuity. */
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetchMe()
@@ -312,12 +348,13 @@ export default function WorkspacePage() {
         }
         setUser(profile);
         void loadBilling(profile);
+        void refreshActiveBatches(profile.id, batchIdRef.current);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [loadBilling]);
+  }, [loadBilling, refreshActiveBatches]);
 
   // --- health + presets ---------------------------------------------------
   useEffect(() => {
@@ -447,6 +484,14 @@ export default function WorkspacePage() {
         overlayImages,
       );
       batchIdRef.current = created.batch_id;
+      if (user) {
+        try {
+          window.sessionStorage.setItem(`proteusflow:active_batch:${user.id}`, created.batch_id);
+        } catch {
+          /* ignore */
+        }
+        void refreshActiveBatches(user.id, created.batch_id);
+      }
       setFiles([]);
 
       if (created.rejected.length > 0) {
@@ -474,7 +519,7 @@ export default function WorkspacePage() {
       // Keeps the token / plan usage readout in the header current.
       syncAccount();
     }
-  }, [billing, files, options, overlayLayers, refresh, syncAccount, uploading]);
+  }, [billing, files, options, overlayLayers, refresh, refreshActiveBatches, syncAccount, uploading, user]);
 
   const handleCancel = useCallback(
     async (assetId: string) => {
@@ -484,14 +529,22 @@ export default function WorkspacePage() {
         setPollError(error instanceof Error ? error.message : "Could not cancel that asset.");
       }
       if (batchIdRef.current) await refresh(batchIdRef.current);
+      if (user) void refreshActiveBatches(user.id, batchIdRef.current);
     },
-    [refresh],
+    [refresh, refreshActiveBatches, user],
   );
 
   const handleDiscard = useCallback(async () => {
     const batchId = batchIdRef.current;
     if (!batchId) return;
     batchIdRef.current = null;
+    if (user) {
+      try {
+        window.sessionStorage.removeItem(`proteusflow:active_batch:${user.id}`);
+      } catch {
+        /* ignore */
+      }
+    }
     setBatch(null);
     setPolling(false);
     try {
@@ -499,7 +552,8 @@ export default function WorkspacePage() {
     } catch {
       /* The retention sweep removes it regardless; nothing useful to surface here. */
     }
-  }, []);
+    if (user) void refreshActiveBatches(user.id, null);
+  }, [refreshActiveBatches, user]);
 
   const handleRefresh = useCallback(() => {
     if (batchIdRef.current) void refresh(batchIdRef.current);
@@ -509,38 +563,10 @@ export default function WorkspacePage() {
   const limits = catalogue?.limits;
   const maxFiles = limits?.max_batch_files ?? 25;
   const maxSizeMb = limits?.max_upload_mb ?? 2048;
+  const minGenerations = limits?.min_batch_generations ?? 5;
+  const retentionHours = limits?.retention_hours ?? 48;
 
   const queuedBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
-
-  const activeLayers = useMemo(
-    () =>
-      [
-        options.micro_crop,
-        options.frame_rate_stagger,
-        options.noise_injection,
-        options.color_drift,
-        options.audio_mutation,
-        options.strip_metadata,
-        options.keyframe_gop_jitter,
-        options.container_bitrate_shuffle,
-        options.chroma_matrix_shift,
-        options.frequency_smoothing,
-        options.deep_scramble,
-        options.mirror,
-        options.temporal_trim,
-        options.elastic_mesh_warp,
-        options.dct_jnd_perturbation,
-        options.lut_clahe_color,
-        options.optical_flow_timewarp,
-        options.adversarial_cnn_layer,
-        options.audio_allpass_phase,
-        options.formant_pitch_lfo,
-        options.psychoacoustic_rir,
-        options.authentic_atom_spoof,
-        options.macroblock_aq_variance,
-      ].filter(Boolean).length,
-    [options],
-  );
 
   // First queued video, used by the poster picker as a scrub preview.
   const firstVideo = useMemo(() => files.find(isVideoFile) ?? null, [files]);
@@ -579,6 +605,9 @@ export default function WorkspacePage() {
   const perGeneration = billing?.subscription?.tokens_per_generation ?? 0;
   const usableTokens = billing?.balance.usable_tokens ?? user?.tokens_usable ?? 0;
   const generations = files.length * Math.max(1, options.variants);
+  const neededVariants =
+    files.length > 0 ? Math.min(5, Math.max(1, Math.ceil(minGenerations / files.length))) : minGenerations;
+  const belowMinimum = files.length > 0 && generations < minGenerations;
   const batchCost = perGeneration * generations;
   const shortOfTokens = tokenMode && !paywalled && perGeneration > 0 && batchCost > usableTokens;
   // The paywall already says what the danger alerts say; the banner keeps the rest.
@@ -762,7 +791,7 @@ export default function WorkspacePage() {
               {files.length ? ` · ${formatBytes(queuedBytes)}` : ` · max ${maxFiles}`}
             </span>
             <span className="chip !font-mono">
-              Layers {activeLayers}/23 · {options.preset} {options.intensity}
+              {options.preset} · {options.intensity}
             </span>
             <span
               className={clsx(
@@ -790,6 +819,15 @@ export default function WorkspacePage() {
               Ready {outputsReady}
               {batch ? `/${batch.total}` : ""}
             </button>
+            {backgroundBatches.length > 0 ? (
+              <Link
+                href="/app/history"
+                className="chip !border-meta-500/50 !bg-meta-500/10 !font-mono !text-meta-700 hover:!border-meta-500 dark:!text-meta-200"
+              >
+                <Radar className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                {backgroundBatches.length} more running in History →
+              </Link>
+            ) : null}
           </CmsSection>
 
           {/* The one step card ------------------------------------------ */}
@@ -800,9 +838,9 @@ export default function WorkspacePage() {
                   <h1 className="font-display text-3xl font-normal leading-none text-black dark:text-slate-50 sm:text-4xl">
                     {STEPS[step].title}
                   </h1>
-                  <p className="mt-2 max-w-xl text-sm text-ink-muted dark:text-slate-400">
+                  <p className="mt-2 max-w-2xl text-sm text-ink-muted dark:text-slate-400">
                     {step === 0
-                      ? `Drop up to ${maxFiles} videos or images. Outputs are deleted after ${limits?.retention_hours ?? 24} hours.`
+                      ? `Minimum ${minGenerations} outputs at once (e.g. ${minGenerations} videos or 1 file × ${minGenerations} variants) for better results · up to ${maxFiles} files. Rendered files delete ${retentionHours} hours after rendering.`
                       : STEPS[step].hint}
                   </p>
                 </div>
@@ -855,14 +893,40 @@ export default function WorkspacePage() {
 
               <div className="min-w-0 flex-1">
                 {step === 0 ? (
-                  <div data-tour="load.drop">
-                    <UploadZone
-                      files={files}
-                      onFilesChange={setFiles}
-                      maxFiles={maxFiles}
-                      maxSizeMb={maxSizeMb}
-                      disabled={uploading}
-                    />
+                  <div className="space-y-4">
+                    <div data-tour="load.drop">
+                      <UploadZone
+                        files={files}
+                        onFilesChange={setFiles}
+                        maxFiles={maxFiles}
+                        maxSizeMb={maxSizeMb}
+                        minGenerations={minGenerations}
+                        disabled={uploading}
+                      />
+                    </div>
+                    <div
+                      className={clsx(
+                        "flex flex-col gap-2 rounded-xl border px-3.5 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between",
+                        belowMinimum
+                          ? "border-amber-400/60 bg-amber-50 text-amber-900 dark:border-amber-400/35 dark:bg-amber-500/10 dark:text-amber-200"
+                          : "border-black/[0.08] bg-black/[0.02] text-ink-muted dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300",
+                      )}
+                    >
+                      <p className="leading-relaxed">
+                        {belowMinimum
+                          ? `Selected ${files.length} file${files.length === 1 ? "" : "s"} × ${options.variants} ${options.variants === 1 ? "variant" : "variants"} = ${generations} output${generations === 1 ? "" : "s"}. Queue at least ${minGenerations} outputs at once (add ${Math.max(0, minGenerations - files.length)} more file${minGenerations - files.length === 1 ? "" : "s"} or set variants to ${neededVariants}) for better results.`
+                          : `Minimum batch rule: at least ${minGenerations} renders at once for better results (5+ files, or 1 file × 5 variants). Renders run in the background even if you change pages or start a new batch, and files auto-delete ${retentionHours} hours after rendering.`}
+                      </p>
+                      {belowMinimum ? (
+                        <button
+                          type="button"
+                          onClick={() => setOptions((current) => ({ ...current, variants: neededVariants }))}
+                          className="shrink-0 rounded-lg border border-meta-500/50 bg-white px-3 py-1.5 text-[11px] font-semibold text-meta-700 transition hover:bg-meta-50 dark:bg-slate-900 dark:text-meta-200 dark:hover:bg-meta-500/20"
+                        >
+                          Set {neededVariants} variants per file
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
 
@@ -940,6 +1004,7 @@ export default function WorkspacePage() {
                         onClick={handleSubmit}
                         disabled={
                           files.length === 0 ||
+                          belowMinimum ||
                           uploading ||
                           paywalled ||
                           shortOfTokens ||
@@ -962,6 +1027,24 @@ export default function WorkspacePage() {
                           </>
                         )}
                       </button>
+
+                      {belowMinimum ? (
+                        <div className="flex flex-col gap-2 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-400/35 dark:bg-amber-500/10 dark:text-amber-200">
+                          <p>
+                            Minimum batch size is {minGenerations} outputs for better results (currently{" "}
+                            {generations}). Add {Math.max(0, minGenerations - files.length)} more file
+                            {minGenerations - files.length === 1 ? "" : "s"} in Load, or bump variants to{" "}
+                            {neededVariants}.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setOptions((current) => ({ ...current, variants: neededVariants }))}
+                            className="w-fit rounded-md border border-meta-500/50 bg-white px-2.5 py-1 font-semibold text-meta-700 transition hover:bg-meta-50 dark:bg-slate-900 dark:text-meta-200"
+                          >
+                            Set {neededVariants} variants per file ({files.length * neededVariants} outputs)
+                          </button>
+                        </div>
+                      ) : null}
 
                       {uploading ? (
                         <ProgressBar value={uploadProgress * 100} active label="Upload progress" />
@@ -1037,10 +1120,24 @@ export default function WorkspacePage() {
                       ) : null}
 
                       <p className="text-[11px] leading-relaxed text-ink-faint dark:text-slate-500">
-                        Renders run on the worker queue, so large batches keep going after you close
-                        this tab. Files and download links are purged after{" "}
-                        {limits?.retention_hours ?? 24} hours.
+                        Renders keep running in the background if you scroll, switch pages, or start a
+                        new batch — track every rendering &amp; finished file in{" "}
+                        <Link href="/app/history" className="font-medium text-meta-600 underline dark:text-meta-300">
+                          History
+                        </Link>
+                        . Output files are deleted {retentionHours} hours after rendering finishes.
                       </p>
+                      {backgroundBatches.length > 0 ? (
+                        <p className="rounded-lg border border-meta-500/35 bg-meta-500/10 px-3 py-2 text-[11px] leading-relaxed text-meta-800 dark:text-meta-200">
+                          {backgroundBatches.length} earlier batch
+                          {backgroundBatches.length === 1 ? " is" : "es are"} still rendering in the
+                          background.{" "}
+                          <Link href="/app/history" className="font-semibold underline">
+                            Open History
+                          </Link>{" "}
+                          to watch live progress or download completed files.
+                        </p>
+                      ) : null}
                     </div>
                     <div id="queue" data-tour="render.queue" className="min-w-0">
                       <p className="label mb-3 flex items-center gap-1.5">

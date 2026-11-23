@@ -11,7 +11,7 @@ from urllib.parse import unquote
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
+from app.config import Settings, settings
 from app.main import _output_filename, _with_fresh_links, app
 from app.schemas import AssetJob, JobStatus
 from app.security import sign_download
@@ -354,3 +354,84 @@ def test_cancel_rejects_finished_assets(client, sample_image):
     status = _wait_for_batch(client, batch_id)
     asset_id = status["assets"][0]["id"]
     assert client.post(f"/api/v1/assets/{asset_id}/cancel").status_code == 409
+
+
+def test_default_retention_and_min_batch_limits(client, monkeypatch):
+    monkeypatch.delenv("ADCAM_MIN_BATCH_GENERATIONS", raising=False)
+    monkeypatch.delenv("ADCAM_RETENTION_HOURS", raising=False)
+    defaults = Settings(_env_file=None)
+    assert defaults.retention_hours == 48
+    assert defaults.min_batch_generations == 5
+
+    presets = client.get("/api/v1/presets")
+    assert presets.status_code == 200
+    limits = presets.json()["limits"]
+    assert "min_batch_generations" in limits
+    assert "retention_hours" in limits
+
+
+def test_min_batch_generations_blocks_small_batches_without_charge_and_allows_five(
+    client, sample_image, monkeypatch
+):
+    monkeypatch.setattr(settings, "min_batch_generations", 5)
+    before_me = client.get("/api/v1/auth/me").json()
+    before_uploads = set(p.name for p in settings.uploads_dir.iterdir())
+    img_bytes = sample_image.read_bytes()
+
+    blocked = _upload(
+        client,
+        [("files", ("too-small.jpg", img_bytes, "image/jpeg"))],
+        options={"variants": 4},
+    )
+    assert blocked.status_code == 422, blocked.text
+    assert "5" in blocked.json()["detail"]
+
+    after_blocked_me = client.get("/api/v1/auth/me").json()
+    assert after_blocked_me["tokens_usable"] == before_me["tokens_usable"]
+    assert set(p.name for p in settings.uploads_dir.iterdir()) == before_uploads
+
+    ok_variants = _upload(
+        client,
+        [("files", ("five-vars.jpg", img_bytes, "image/jpeg"))],
+        options={"variants": 5},
+    )
+    assert ok_variants.status_code == 202, ok_variants.text
+    settled_variants = _wait_for_batch(client, ok_variants.json()["batch_id"])
+    assert settled_variants["completed"] == 5
+
+    ok_files = _upload(
+        client,
+        [("files", (f"f{i}.jpg", img_bytes, "image/jpeg")) for i in range(5)],
+        options={"variants": 1},
+    )
+    assert ok_files.status_code == 202, ok_files.text
+    settled_files = _wait_for_batch(client, ok_files.json()["batch_id"])
+    assert settled_files["completed"] == 5
+
+
+def test_save_asset_refreshes_batch_ttl_on_terminal_state(monkeypatch):
+    store = get_store()
+    touched: list[str] = []
+    original = store.touch_batch_ttl
+
+    def _spy(batch_id: str) -> None:
+        touched.append(batch_id)
+        original(batch_id)
+
+    monkeypatch.setattr(store, "touch_batch_ttl", _spy)
+
+    active = AssetJob(
+        batch_id="batch_ttl_test",
+        original_filename="clip.jpg",
+        stored_filename="clip.jpg",
+        kind="image",
+        size_bytes=123,
+        status=JobStatus.PROCESSING,
+    )
+    store.save_asset(active)
+    assert touched == []
+
+    active.status = JobStatus.COMPLETED
+    store.save_asset(active)
+    assert touched == ["batch_ttl_test"]
+

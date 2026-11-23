@@ -248,6 +248,13 @@ class JobStore:
         self.backend.rpush(key, *asset_ids)
         self.backend.expire(key, self._ttl())
 
+    def touch_batch_ttl(self, batch_id: str) -> None:
+        """Keep the batch wrapper alive alongside finished renders (48h from render)."""
+
+        ttl = self._ttl()
+        self.backend.expire(BATCH_KEY.format(batch_id), ttl)
+        self.backend.expire(BATCH_ASSETS_KEY.format(batch_id), ttl)
+
     def list_asset_ids(self, batch_id: str) -> list[str]:
         return list(self.backend.lrange(BATCH_ASSETS_KEY.format(batch_id), 0, -1))
 
@@ -255,6 +262,8 @@ class JobStore:
     def save_asset(self, asset: AssetJob) -> None:
         asset.updated_at = datetime.now(timezone.utc)
         self.backend.set(ASSET_KEY.format(asset.id), asset.model_dump_json(), ex=self._ttl())
+        if asset.is_terminal:
+            self.touch_batch_ttl(asset.batch_id)
 
     def get_asset(self, asset_id: str) -> AssetJob | None:
         raw = self.backend.get(ASSET_KEY.format(asset_id))

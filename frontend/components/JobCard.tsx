@@ -233,18 +233,6 @@ export function JobCard({ asset, onCancel }: JobCardProps) {
 
             {expanded && asset.status === "completed" ? (
               <div className="mt-3 space-y-3 rounded-lg border border-black/[0.08] dark:border-white/10 bg-meta-50/60 dark:bg-meta-500/10 p-3">
-                <div>
-                  <p className="label mb-1.5">Applied studio layers</p>
-                  <ul className="space-y-1">
-                    {asset.applied.map((entry) => (
-                      <li key={entry} className="flex gap-2 text-[11px] text-ink-subtle dark:text-slate-400">
-                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-meta-500" aria-hidden />
-                        {entry}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                   <div className="col-span-2 flex justify-between gap-2">
                     <dt className="text-ink-subtle dark:text-slate-400">Source SHA-256</dt>

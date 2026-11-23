@@ -32,10 +32,10 @@ export const HELP_STEPS: { id: HelpStepId; label: string; time: string; line: st
 
 /** The one-line "How this step works" strip on top of each step card. */
 export const HELP_STRIPS: Record<HelpStepId, string> = {
-  upload: "Drop the finished creative you want to batch. Several files at once is fine: each one is processed separately.",
+  upload: "Minimum 5 renders per batch (e.g. 5 videos or 1 file × 5 variants) for better results. Each asset renders independently in the background.",
   configure: "Choose the target platform first, then a variation profile. Dynamic is recommended for most campaigns; Balanced or Studio Pro offers lighter tuning.",
   overlay: "Both tools here are optional. Skip this step if you don't need a logo watermark or a custom cover frame.",
-  run: "Check the token cost, start the render, then download each variation or the whole batch as a zip.",
+  run: "Check the token cost, start the render, and keep browsing or start another batch — track every rendering & finished file in History for 48 hours.",
 };
 
 export const HELP_TIPS: Record<HelpStepId, HelpTip[]> = {
@@ -133,11 +133,11 @@ export const HELP_GUIDE: HelpGuideSection[] = [
     title: "Render & download",
     meta: "Zip + export report",
     points: [
-      "Check the token cost line, then press Render.",
-      "Renders keep going if you close the tab. Come back to the queue any time.",
+      "Check the token cost line, then press Render (at least 5 outputs per batch).",
+      "Renders keep running in the background if you scroll, switch pages, or start a new batch — follow all in-progress and finished files in History.",
       "Download each variation or the whole batch as a zip.",
     ],
-    warning: "Files are deleted automatically after the retention window. Download your zip right away.",
+    warning: "Rendered files are deleted automatically 48 hours after rendering finishes. Download your zip right away.",
   },
 ];
 

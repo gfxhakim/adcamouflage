@@ -59,7 +59,7 @@ const CHAPTERS: Chapter[] = [
     time: "01:47",
     seconds: 107,
     title: "History & Token Plans",
-    summary: "Re-download past batches inside the 24-hour retention window or manage Starter / Pro / Max plans & top-ups.",
+    summary: "Track background renders and re-download finished batches for 48 hours after rendering, or manage Starter / Pro / Max plans.",
   },
 ];
 
@@ -87,10 +87,10 @@ const LAYER_PILLARS = [
 ];
 
 const TIPS = [
-  "Generate 2–4 clean variations per winning creative so each ad set gets fresh delivery without exhausting spend.",
-  "Each finished output file counts as one generation; check exact token cost inside Step 4 (Render) before starting.",
+  "Queue at least 5 outputs at once (5+ videos, or 1 creative × 5 variants) for better delivery and split-testing results.",
+  "Each finished output file counts as one generation; failed/blocked server renders refund automatically while user-stopped renders stay billed.",
   "Always scrub the thumbnail picker to a crisp hook frame (0.5s–2.0s) so your feed cover grabs attention immediately.",
-  "All rendered assets auto-purge after 24 hours for privacy — download your batch ZIP from Step 4 or History right away.",
+  "Renders keep running in the background when you switch pages or start new batches — find all active & finished files in History for 48 hours from rendering.",
 ];
 
 export function WorkspaceTutorialSection({ compact = false }: { compact?: boolean }) {
