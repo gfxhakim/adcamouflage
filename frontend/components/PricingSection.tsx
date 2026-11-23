@@ -351,7 +351,7 @@ export function PricingSection({
         })}
       </div>
 
-      <p className="mt-8 text-center text-xs leading-relaxed text-white/55">
+      <p className="mx-auto mt-10 max-w-4xl text-center text-base font-semibold leading-relaxed tracking-[-0.01em] text-white [text-shadow:0_0_16px_rgba(255,255,255,0.9),0_0_34px_rgba(255,255,255,0.48),0_0_54px_rgba(56,189,248,0.42)] sm:text-lg md:text-xl">
         Account signup is free; rendering unlocks as soon as you activate a plan. Server-failed renders refund 100% of
         tokens automatically — no auto-renewal surprises.
       </p>
