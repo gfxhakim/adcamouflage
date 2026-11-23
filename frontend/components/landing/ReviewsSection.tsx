@@ -83,11 +83,12 @@ export function ReviewsSection() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-end">
           <div>
             <T k="reviews.studioHeadline" as="h2" className="text-4xl font-semibold leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">
-              Trusted by video editors, creative teams, and e-commerce brands.
+              Built for media buyers who ship aggressive creatives every day.
             </T>
           </div>
           <T k="reviews.studioLede" long as="p" className="text-sm leading-relaxed text-white/80">
-            Format for Reels, TikTok, and Shorts, add brand watermarks and cover frames, and export clean batches in minutes. Here is what teams using ProteusFlow say.
+            Rebuild rejected or fatigued winners across Meta, TikTok, and YouTube in minutes, keep your hook intact, and
+            scale fresh variations with zero timeline re-editing.
           </T>
         </div>
       </div>

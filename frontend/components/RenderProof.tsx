@@ -28,39 +28,39 @@ const hex = (n: number) =>
 
 const ROWS: Row[] = [
   {
-    label: "Social format",
-    before: "16:9 Master.mov",
-    next: () => pick(["9:16 Reels · MP4", "9:16 TikTok · MP4", "9:16 Shorts · MP4", "4:5 Feed · MP4", "1:1 Square · MP4"]),
+    label: "Platform status",
+    before: "Rejected · Limited",
+    next: () => pick(["Approved · Delivering", "Active · Meta Reels", "Active · TikTok Ads", "Active · Shorts", "Learning · Scaling"]),
   },
   {
-    label: "Output frame",
-    before: "Raw timeline",
-    next: () => pick(["1080 × 1920 Full HD", "1080 × 1350 Portrait", "1080 × 1080 Square", "1920 × 1080 Landscape"]),
+    label: "Visual & framing",
+    before: "Flagged frame hash",
+    next: () => pick(["Rebuilt Micro-Geometry", "Clean Edge Structure", "Fresh Motion Timing", "1080 × 1920 Studio Cut"]),
   },
   {
-    label: "Color grade",
+    label: "Color profile",
     before: "Unleveled source",
     next: () => pick(["Rec.709 Studio LUT", "Warm Commercial Grade", "Crisp Daylight Balance", "Clean Neutral Contrast"]),
   },
   {
-    label: "Brand & cover",
-    before: "Unbranded clip",
-    next: () => pick(["PNG Logo + Cover Frame", "Corner Watermark + Poster", "Branded End-Card + Cover"]),
+    label: "Audio stream",
+    before: "Flagged audio track",
+    next: () => pick(["−14 LUFS Clean Master", "Rebuilt Phase + EQ", "Fresh Voice Clarity", "Policy-Safe Loudness"]),
   },
   {
-    label: "Audio master",
-    before: "Raw audio track",
-    next: () => pick(["−14 LUFS Broadcast Master", "Voice Clarity EQ + Limiter", "Stereo Loudness Leveled"]),
+    label: "Export container",
+    before: "Old file metadata",
+    next: () => pick(["Clean MP4 + Cover Frame", "Fresh Bitrate + Logo", "Clean Container + Poster"]),
   },
 ];
 
 // What the server renders and what shows first, so hydration matches.
 const FIRST = [
-  "9:16 Reels · MP4",
-  "1080 × 1920 Full HD",
+  "Approved · Delivering",
+  "Rebuilt Micro-Geometry",
   "Rec.709 Studio LUT",
-  "PNG Logo + Cover Frame",
-  "−14 LUFS Broadcast Master",
+  "−14 LUFS Clean Master",
+  "Clean MP4 + Cover Frame",
 ];
 
 /** One value assembling itself letter by letter, intro style. */
@@ -135,10 +135,22 @@ export function RenderProof({ dark = false }: { dark?: boolean } = {}) {
       innerClassName={dark ? "text-white [outline-color:rgb(255_255_255/0.08)]" : undefined}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className={cn("label", dark && "!text-white/60")}>Studio batch export preview</p>
+        <p className={cn("label", dark && "!text-white/60")}>AI Creative Rebuild Preview</p>
         <span className={cn("inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums", dark ? "text-meta-400" : "text-meta-600")}>
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-meta-500" aria-hidden />
-          export #{String(render).padStart(3, "0")}
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" aria-hidden />
+          batch #{String(render).padStart(3, "0")}
+        </span>
+      </div>
+
+      <div className={cn("mt-3 flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[11px] font-semibold", dark ? "border-white/10 bg-white/[0.04]" : "border-black/10 bg-black/[0.03]")}>
+        <span className="inline-flex items-center gap-1.5 text-red-400">
+          <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden />
+          Before: Rejected
+        </span>
+        <ArrowRight className="h-3.5 w-3.5 text-meta-400" aria-hidden />
+        <span className="inline-flex items-center gap-1.5 text-emerald-400">
+          <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
+          After: Delivering
         </span>
       </div>
 
@@ -163,8 +175,8 @@ export function RenderProof({ dark = false }: { dark?: boolean } = {}) {
       </dl>
 
       <p className={cn("mt-5 border-t pt-4 text-[11px] leading-relaxed", dark ? "border-white/10 text-white/50" : "border-black/10 text-ink-faint")}>
-        Live studio preview: set your target social aspect ratio, Rec.709 color grade, −14 LUFS broadcast audio
-        normalization, and brand watermark once—then export your entire batch ready to publish.
+        Illustrative layer preview. Preserves your winning hook, fast cuts, and captions while rebuilding visual,
+        audio, and container layers for clean delivery.
       </p>
     </NeonCard>
   );

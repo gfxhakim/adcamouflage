@@ -140,6 +140,23 @@ export function PricingSection({
 
       {onOffer ? <OfferCountdown left={left} savePercent={bestSaving} /> : null}
 
+      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { kpi: "From $37 / mo", label: "Lower entry than $45.90–$47.90 alternatives" },
+          { kpi: "50 renders on Pro", label: "2.5× more video volume at $89 vs 20-limit mid plans" },
+          { kpi: "5 seats on Max", label: "Collaborate across your media-buying team (120 renders)" },
+          { kpi: "100% auto-refund", label: "Failed server renders credit tokens back · no auto-renewal" },
+        ].map(({ kpi, label }) => (
+          <div
+            key={kpi}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left"
+          >
+            <p className="font-mono text-xs font-semibold uppercase tracking-wider text-meta-300">{kpi}</p>
+            <p className="mt-1 text-xs leading-snug text-white/65">{label}</p>
+          </div>
+        ))}
+      </div>
+
       <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", onOffer ? "mt-8" : "mt-10")}>
         {plans.map((plan, index) => {
           const popular = plan.id === popularId;
