@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { CmsIcon, CmsLink, T } from "@/components/cms/Cms";
 import { useCms } from "@/components/cms/ContentProvider";
 import OfferCountdown, { useTimeLeft } from "@/components/landing/OfferCountdown";
+import GuaranteeBanner from "@/components/landing/GuaranteeBanner";
 import { CmsHeadline } from "@/components/landing/primitives";
 import { fetchVisitorOffer, subscribeVisitorOffer, type ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
@@ -139,23 +140,6 @@ export function PricingSection({
       </div>
 
       {onOffer ? <OfferCountdown left={left} savePercent={bestSaving} /> : null}
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { kpi: "From $37 / mo", label: "Lower entry than $45.90–$47.90 alternatives" },
-          { kpi: "50 renders on Pro", label: "2.5× more video volume at $89 vs 20-limit mid plans" },
-          { kpi: "5 seats on Max", label: "Collaborate across your media-buying team (120 renders)" },
-          { kpi: "100% auto-refund", label: "Failed server renders credit tokens back · no auto-renewal" },
-        ].map(({ kpi, label }) => (
-          <div
-            key={kpi}
-            className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left"
-          >
-            <p className="font-mono text-xs font-semibold uppercase tracking-wider text-meta-300">{kpi}</p>
-            <p className="mt-1 text-xs leading-snug text-white/65">{label}</p>
-          </div>
-        ))}
-      </div>
 
       <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-3", onOffer ? "mt-8" : "mt-10")}>
         {plans.map((plan, index) => {
@@ -368,7 +352,9 @@ export function PricingSection({
         })}
       </div>
 
-      <p className="mx-auto mt-10 max-w-4xl text-center text-base font-semibold leading-relaxed tracking-[-0.01em] text-white [text-shadow:0_0_16px_rgba(255,255,255,0.9),0_0_34px_rgba(255,255,255,0.48),0_0_54px_rgba(56,189,248,0.42)] sm:text-lg md:text-xl">
+      <GuaranteeBanner />
+
+      <p className="mx-auto mt-8 max-w-4xl text-center text-base font-semibold leading-relaxed tracking-[-0.01em] text-white [text-shadow:0_0_16px_rgba(255,255,255,0.9),0_0_34px_rgba(255,255,255,0.48),0_0_54px_rgba(56,189,248,0.42)] sm:text-lg md:text-xl">
         Account signup is free; rendering unlocks as soon as you activate a plan. Server-failed renders refund 100% of
         tokens automatically — no auto-renewal surprises.
       </p>

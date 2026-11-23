@@ -52,7 +52,7 @@ DEFAULT_RULES: dict[str, Any] = {
     # Customers can ask at all (off hides the button and refuses new requests).
     "enabled": True,
     # Days after the payment a customer may ask.
-    "window_days": 7,
+    "window_days": 15,
     # The most of an order's tokens a customer may have used and still ask
     # (0 = only unused orders, 100 = no limit).
     "max_used_percent": 20,

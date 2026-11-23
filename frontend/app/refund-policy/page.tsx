@@ -79,7 +79,7 @@ export default function RefundPolicyPage() {
           or rolled-over tokens have no independent cash value.
         </li>
         <li>
-          <b>Request window &amp; immediate pause</b>: Eligible payments within the configured refund window (7 days by
+          <b>Request window &amp; immediate pause</b>: Eligible payments within the configured refund window (15 days by
           default from Account settings &rarr; <Link href="/app/plan">Your plan</Link>) can be submitted for review.
           Submitting a refund request stops auto-renewal and immediately pauses the account and remaining period so no
           additional tokens can be spent while your refund is processed.
