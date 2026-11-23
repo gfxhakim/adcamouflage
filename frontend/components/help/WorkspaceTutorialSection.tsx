@@ -87,7 +87,7 @@ const LAYER_PILLARS = [
 ];
 
 const TIPS = [
-  "Queue at least 5 outputs at once (5+ videos, or 1 creative × 5 variants) for better delivery and split-testing results.",
+  "Render up to 5 outputs at once per batch (from 1 video × 1 variant up to 5 files × 1 or 1 × 5 variants) for faster turnaround and better results.",
   "Each finished output file counts as one generation; failed/blocked server renders refund automatically while user-stopped renders stay billed.",
   "Always scrub the thumbnail picker to a crisp hook frame (0.5s–2.0s) so your feed cover grabs attention immediately.",
   "Renders keep running in the background when you switch pages or start new batches — find all active & finished files in History for 48 hours from rendering.",

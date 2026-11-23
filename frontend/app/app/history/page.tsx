@@ -234,7 +234,7 @@ export default function HistoryPage() {
               No renders yet
             </p>
             <p className="mt-1 max-w-sm text-xs text-ink-muted dark:text-slate-400">
-              Upload creatives in the workspace (minimum 5 total outputs per batch) and every active
+              Upload creatives in the workspace (up to 5 outputs at once) and every active
               render and finished export will appear right here.
             </p>
             <Link href="/app" className="btn-primary mt-5">

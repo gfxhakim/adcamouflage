@@ -21,8 +21,9 @@ os.environ.setdefault("ADCAM_INLINE_WORKER", "1")
 os.environ.setdefault("ADCAM_REDIS_URL", "redis://127.0.0.1:6399/15")
 os.environ.setdefault("ADCAM_SECRET_KEY", "test-secret-key-for-signing-only")
 os.environ.setdefault("ADCAM_INLINE_WORKER_CONCURRENCY", "2")
-# Existing unit/integration tests upload 1 asset; explicit tests pin min_batch_generations=5.
-os.environ.setdefault("ADCAM_MIN_BATCH_GENERATIONS", "1")
+# Existing billing tests upload 3 files x 4 variants (= 12) and 11 files to hit 402; explicit cap tests pin 5.
+os.environ.setdefault("ADCAM_MAX_BATCH_FILES", "25")
+os.environ.setdefault("ADCAM_MAX_BATCH_GENERATIONS", "100")
 # Pipeline tests run many batches as one user; quota tests opt into limits.
 os.environ.setdefault("ADCAM_DEFAULT_PLAN", "unlimited")
 

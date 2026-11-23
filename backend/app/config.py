@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     storage_root: Path = Field(default=Path("/tmp/adcamouflage"))
     retention_hours: int = 48
     max_upload_mb: int = 2048
-    max_batch_files: int = 25
-    min_batch_generations: int = 5
+    max_batch_files: int = 5
+    max_batch_generations: int = 5
 
     # --- redis / celery ---------------------------------------------------
     redis_url: str = "redis://localhost:6379/0"

@@ -356,32 +356,44 @@ def test_cancel_rejects_finished_assets(client, sample_image):
     assert client.post(f"/api/v1/assets/{asset_id}/cancel").status_code == 409
 
 
-def test_default_retention_and_min_batch_limits(client, monkeypatch):
-    monkeypatch.delenv("ADCAM_MIN_BATCH_GENERATIONS", raising=False)
+def test_default_retention_and_max_batch_limits(client, monkeypatch):
+    monkeypatch.delenv("ADCAM_MAX_BATCH_FILES", raising=False)
+    monkeypatch.delenv("ADCAM_MAX_BATCH_GENERATIONS", raising=False)
     monkeypatch.delenv("ADCAM_RETENTION_HOURS", raising=False)
     defaults = Settings(_env_file=None)
     assert defaults.retention_hours == 48
-    assert defaults.min_batch_generations == 5
+    assert defaults.max_batch_files == 5
+    assert defaults.max_batch_generations == 5
 
     presets = client.get("/api/v1/presets")
     assert presets.status_code == 200
     limits = presets.json()["limits"]
-    assert "min_batch_generations" in limits
+    assert "max_batch_generations" in limits
     assert "retention_hours" in limits
 
 
-def test_min_batch_generations_blocks_small_batches_without_charge_and_allows_five(
+def test_max_batch_generations_allows_single_and_five_blocks_over_five(
     client, sample_image, monkeypatch
 ):
-    monkeypatch.setattr(settings, "min_batch_generations", 5)
+    monkeypatch.setattr(settings, "max_batch_generations", 5)
+    monkeypatch.setattr(settings, "max_batch_files", 5)
+    img_bytes = sample_image.read_bytes()
+
+    ok_single = _upload(
+        client,
+        [("files", ("single.jpg", img_bytes, "image/jpeg"))],
+        options={"variants": 1},
+    )
+    assert ok_single.status_code == 202, ok_single.text
+    assert _wait_for_batch(client, ok_single.json()["batch_id"])["completed"] == 1
+
     before_me = client.get("/api/v1/auth/me").json()
     before_uploads = set(p.name for p in settings.uploads_dir.iterdir())
-    img_bytes = sample_image.read_bytes()
 
     blocked = _upload(
         client,
-        [("files", ("too-small.jpg", img_bytes, "image/jpeg"))],
-        options={"variants": 4},
+        [("files", (f"too-many-{i}.jpg", img_bytes, "image/jpeg")) for i in range(2)],
+        options={"variants": 3},
     )
     assert blocked.status_code == 422, blocked.text
     assert "5" in blocked.json()["detail"]

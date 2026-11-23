@@ -31,7 +31,7 @@ interface UploadZoneProps {
   onFilesChange: (files: File[]) => void;
   maxFiles: number;
   maxSizeMb: number;
-  minGenerations?: number;
+  maxGenerations?: number;
   disabled?: boolean;
 }
 
@@ -40,7 +40,7 @@ export function UploadZone({
   onFilesChange,
   maxFiles,
   maxSizeMb,
-  minGenerations = 5,
+  maxGenerations = 5,
   disabled = false,
 }: UploadZoneProps) {
   const [dragging, setDragging] = useState(false);
@@ -151,7 +151,7 @@ export function UploadZone({
                 {dragging ? "Release to queue these assets" : "Drop videos or images here"}
               </span>
               <span className="mt-1 block text-xs text-ink-subtle dark:text-slate-400">
-                or click to browse · min {minGenerations} outputs at once (e.g. {minGenerations} videos or 1 × {minGenerations} variants) · up to {maxFiles} files · {maxSizeMb}MB each
+                or click to browse · max {maxGenerations} outputs at once for better results (up to {maxFiles} files · 1 × {maxGenerations} or {maxFiles} × 1) · {maxSizeMb}MB each
               </span>
             </span>
             <span className="relative flex flex-wrap justify-center gap-1.5">

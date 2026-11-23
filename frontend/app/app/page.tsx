@@ -561,9 +561,9 @@ export default function WorkspacePage() {
 
   // --- derived ------------------------------------------------------------
   const limits = catalogue?.limits;
-  const maxFiles = limits?.max_batch_files ?? 25;
+  const maxFiles = limits?.max_batch_files ?? 5;
   const maxSizeMb = limits?.max_upload_mb ?? 2048;
-  const minGenerations = limits?.min_batch_generations ?? 5;
+  const maxGenerations = limits?.max_batch_generations ?? 5;
   const retentionHours = limits?.retention_hours ?? 48;
 
   const queuedBytes = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files]);
@@ -605,9 +605,9 @@ export default function WorkspacePage() {
   const perGeneration = billing?.subscription?.tokens_per_generation ?? 0;
   const usableTokens = billing?.balance.usable_tokens ?? user?.tokens_usable ?? 0;
   const generations = files.length * Math.max(1, options.variants);
-  const neededVariants =
-    files.length > 0 ? Math.min(5, Math.max(1, Math.ceil(minGenerations / files.length))) : minGenerations;
-  const belowMinimum = files.length > 0 && generations < minGenerations;
+  const maxVariantsForFiles =
+    files.length > 0 ? Math.max(1, Math.floor(maxGenerations / files.length)) : maxGenerations;
+  const overMaximum = files.length > 0 && generations > maxGenerations;
   const batchCost = perGeneration * generations;
   const shortOfTokens = tokenMode && !paywalled && perGeneration > 0 && batchCost > usableTokens;
   // The paywall already says what the danger alerts say; the banner keeps the rest.
@@ -840,7 +840,7 @@ export default function WorkspacePage() {
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-ink-muted dark:text-slate-400">
                     {step === 0
-                      ? `Minimum ${minGenerations} outputs at once (e.g. ${minGenerations} videos or 1 file × ${minGenerations} variants) for better results · up to ${maxFiles} files. Rendered files delete ${retentionHours} hours after rendering.`
+                      ? `Maximum ${maxGenerations} outputs at once (e.g. 1 file × 1 variant, up to ${maxFiles} files × 1 or 1 × ${maxGenerations} variants) for better results. Rendered files delete ${retentionHours} hours after rendering.`
                       : STEPS[step].hint}
                   </p>
                 </div>
@@ -900,30 +900,30 @@ export default function WorkspacePage() {
                         onFilesChange={setFiles}
                         maxFiles={maxFiles}
                         maxSizeMb={maxSizeMb}
-                        minGenerations={minGenerations}
+                        maxGenerations={maxGenerations}
                         disabled={uploading}
                       />
                     </div>
                     <div
                       className={clsx(
                         "flex flex-col gap-2 rounded-xl border px-3.5 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between",
-                        belowMinimum
+                        overMaximum
                           ? "border-amber-400/60 bg-amber-50 text-amber-900 dark:border-amber-400/35 dark:bg-amber-500/10 dark:text-amber-200"
                           : "border-black/[0.08] bg-black/[0.02] text-ink-muted dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300",
                       )}
                     >
                       <p className="leading-relaxed">
-                        {belowMinimum
-                          ? `Selected ${files.length} file${files.length === 1 ? "" : "s"} × ${options.variants} ${options.variants === 1 ? "variant" : "variants"} = ${generations} output${generations === 1 ? "" : "s"}. Queue at least ${minGenerations} outputs at once (add ${Math.max(0, minGenerations - files.length)} more file${minGenerations - files.length === 1 ? "" : "s"} or set variants to ${neededVariants}) for better results.`
-                          : `Minimum batch rule: at least ${minGenerations} renders at once for better results (5+ files, or 1 file × 5 variants). Renders run in the background even if you change pages or start a new batch, and files auto-delete ${retentionHours} hours after rendering.`}
+                        {overMaximum
+                          ? `Selected ${files.length} file${files.length === 1 ? "" : "s"} × ${options.variants} ${options.variants === 1 ? "variant" : "variants"} = ${generations} outputs, exceeding the maximum of ${maxGenerations} renders at once for better results. Remove some files or set variants to ${maxVariantsForFiles}.`
+                          : `Maximum batch limit: up to ${maxGenerations} renders at once for better results (1 file × 1 variant works too, up to ${maxGenerations} total outputs). Renders run in the background if you change pages or start a new batch, and files auto-delete ${retentionHours} hours after rendering.`}
                       </p>
-                      {belowMinimum ? (
+                      {overMaximum ? (
                         <button
                           type="button"
-                          onClick={() => setOptions((current) => ({ ...current, variants: neededVariants }))}
+                          onClick={() => setOptions((current) => ({ ...current, variants: maxVariantsForFiles }))}
                           className="shrink-0 rounded-lg border border-meta-500/50 bg-white px-3 py-1.5 text-[11px] font-semibold text-meta-700 transition hover:bg-meta-50 dark:bg-slate-900 dark:text-meta-200 dark:hover:bg-meta-500/20"
                         >
-                          Set {neededVariants} variants per file
+                          Set {maxVariantsForFiles} {maxVariantsForFiles === 1 ? "variant" : "variants"} per file
                         </button>
                       ) : null}
                     </div>
@@ -945,6 +945,8 @@ export default function WorkspacePage() {
                       onChange={setOptions}
                       catalogue={catalogue}
                       disabled={uploading}
+                      fileCount={files.length}
+                      maxGenerations={maxGenerations}
                       lockedFeatures={billing?.locked_features ?? []}
                     />
                   </div>
@@ -1004,7 +1006,7 @@ export default function WorkspacePage() {
                         onClick={handleSubmit}
                         disabled={
                           files.length === 0 ||
-                          belowMinimum ||
+                          overMaximum ||
                           uploading ||
                           paywalled ||
                           shortOfTokens ||
@@ -1028,20 +1030,23 @@ export default function WorkspacePage() {
                         )}
                       </button>
 
-                      {belowMinimum ? (
+                      {overMaximum ? (
                         <div className="flex flex-col gap-2 rounded-lg border border-amber-400/50 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-400/35 dark:bg-amber-500/10 dark:text-amber-200">
                           <p>
-                            Minimum batch size is {minGenerations} outputs for better results (currently{" "}
-                            {generations}). Add {Math.max(0, minGenerations - files.length)} more file
-                            {minGenerations - files.length === 1 ? "" : "s"} in Load, or bump variants to{" "}
-                            {neededVariants}.
+                            Maximum batch size is {maxGenerations} outputs at once for better results
+                            (currently {generations}). Remove{" "}
+                            {Math.max(1, files.length - Math.floor(maxGenerations / Math.max(1, options.variants)))}{" "}
+                            {files.length - Math.floor(maxGenerations / Math.max(1, options.variants)) === 1
+                              ? "file"
+                              : "files"}{" "}
+                            in Load, or set variants to {maxVariantsForFiles}.
                           </p>
                           <button
                             type="button"
-                            onClick={() => setOptions((current) => ({ ...current, variants: neededVariants }))}
+                            onClick={() => setOptions((current) => ({ ...current, variants: maxVariantsForFiles }))}
                             className="w-fit rounded-md border border-meta-500/50 bg-white px-2.5 py-1 font-semibold text-meta-700 transition hover:bg-meta-50 dark:bg-slate-900 dark:text-meta-200"
                           >
-                            Set {neededVariants} variants per file ({files.length * neededVariants} outputs)
+                            Set {maxVariantsForFiles} {maxVariantsForFiles === 1 ? "variant" : "variants"} per file ({files.length * maxVariantsForFiles} outputs)
                           </button>
                         </div>
                       ) : null}

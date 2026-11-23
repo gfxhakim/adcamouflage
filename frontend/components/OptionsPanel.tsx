@@ -13,6 +13,8 @@ interface OptionsPanelProps {
   onChange: (options: MutationOptions) => void;
   catalogue: PresetCatalogue | null;
   disabled?: boolean;
+  fileCount?: number;
+  maxGenerations?: number;
   /** Feature groups the user's plan does not include; their controls show locked. */
   lockedFeatures?: PlanFeatureId[];
   /** Where the "Upgrade to Pro" hint links. */
@@ -75,9 +77,13 @@ export function OptionsPanel({
   onChange,
   catalogue,
   disabled = false,
+  fileCount = 0,
+  maxGenerations = 5,
   lockedFeatures = [],
   upgradeHref = "/app/plan",
 }: OptionsPanelProps) {
+  const maxVariantsForFiles =
+    fileCount > 0 ? Math.max(1, Math.floor(maxGenerations / fileCount)) : maxGenerations;
   // Every change goes through the plan locks, so a preset can never switch a locked option on.
   const emit = (next: MutationOptions) => onChange(applyPlanLocks(next, lockedFeatures));
   const set = <K extends keyof MutationOptions>(key: K, value: MutationOptions[K]) =>
@@ -254,12 +260,31 @@ export function OptionsPanel({
             disabled={disabled}
             onChange={(event) => onChange({ ...options, variants: Number(event.target.value) })}
           >
-            {[1, 2, 3, 4, 5].map((count) => (
-              <option key={count} value={count}>
-                {count} {count === 1 ? "copy" : "copies"}
-              </option>
-            ))}
+            {[1, 2, 3, 4, 5].map((count) => {
+              const overCap = fileCount > 0 && fileCount * count > maxGenerations;
+              return (
+                <option
+                  key={count}
+                  value={count}
+                  disabled={overCap && count !== options.variants}
+                >
+                  {count} {count === 1 ? "copy" : "copies"}
+                  {overCap ? ` (over ${maxGenerations} max)` : ""}
+                </option>
+              );
+            })}
           </select>
+          {fileCount > 0 && fileCount * options.variants > maxGenerations ? (
+            <p className="mt-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              {fileCount} files × {options.variants} variants exceeds {maxGenerations} max outputs —
+              select {maxVariantsForFiles} {maxVariantsForFiles === 1 ? "copy" : "copies"} or fewer.
+            </p>
+          ) : fileCount > 1 ? (
+            <p className="mt-1.5 text-[11px] text-ink-faint dark:text-slate-500">
+              Up to {maxVariantsForFiles} {maxVariantsForFiles === 1 ? "copy" : "copies"} with{" "}
+              {fileCount} files ({maxGenerations} outputs max at once).
+            </p>
+          ) : null}
         </div>
 
         <div>
