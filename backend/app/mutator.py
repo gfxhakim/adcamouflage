@@ -20,8 +20,11 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import os
 import random
 import shutil
+import subprocess
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -43,6 +46,52 @@ from .schemas import (
 from .scrub import bitstream_filter_args, scrub_container
 
 logger = logging.getLogger(__name__)
+
+
+def _ffmpeg_encode_threads() -> int:
+    """Thread budget per worker for libx264/libvpx-vp9 output encoding."""
+
+    if settings.ffmpeg_threads > 0:
+        return max(1, min(settings.ffmpeg_threads, 4))
+    workers = max(1, settings.worker_concurrency)
+    cpus = os.cpu_count() or 2
+    return max(1, min(3, max(1, cpus // workers)))
+
+
+def _ffmpeg_decode_threads() -> int:
+    """Thread budget per worker for video decoding."""
+
+    return max(1, min(2, _ffmpeg_encode_threads()))
+
+
+def _ffmpeg_filter_threads() -> int:
+    """Thread budget per worker for ffmpeg filter graphs."""
+
+    if settings.ffmpeg_filter_threads > 0:
+        return max(1, min(settings.ffmpeg_filter_threads, 4))
+    return max(1, min(2, _ffmpeg_encode_threads()))
+
+
+def _opencv_threads() -> int:
+    """Thread budget per worker for OpenCV image/frame ops."""
+
+    return max(1, min(settings.opencv_threads, 4))
+
+
+cv2.setNumThreads(_opencv_threads())
+
+
+def _open_video_capture(path: Path) -> cv2.VideoCapture:
+    """Open a video via OpenCV with bounded FFmpeg decoder threads."""
+
+    if hasattr(cv2, "CAP_PROP_N_THREADS"):
+        cap = cv2.VideoCapture(
+            str(path), cv2.CAP_FFMPEG, [cv2.CAP_PROP_N_THREADS, _ffmpeg_decode_threads()]
+        )
+        if cap.isOpened():
+            return cap
+        cap.release()
+    return cv2.VideoCapture(str(path))
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -134,7 +183,7 @@ def _to_gray(frame: np.ndarray) -> np.ndarray:
 
 
 def _first_frame(path: Path) -> np.ndarray | None:
-    capture = cv2.VideoCapture(str(path))
+    capture = _open_video_capture(path)
     try:
         # Sample a frame a little way in: frame zero is often a black slate.
         total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -536,7 +585,7 @@ def build_video_filter_stages(
         if rdiv > 0:
             matrix = f"0 {ct} 0 {cl} {cc} {cr} 0 {cb} 0"
             post.append(
-                f"convolution=0m='{matrix}':1m='0 0 0 0 1 0 0 0 0':2m='0 0 0 0 1 0 0 0 0':0rdiv={rdiv}:1rdiv=1:2rdiv=1"
+                f"convolution=0m='{matrix}':1m='0 0 0 0 1 0 0 0 0':2m='0 0 0 0 1 0 0 0 0':0rdiv={1.0 / rdiv:g}:1rdiv=1:2rdiv=1"
             )
 
     if plan.noise_strength:
@@ -815,7 +864,21 @@ def generate_poster(
     poster_path = target.with_name(f"{target.stem}.poster.jpg")
     try:
         run_ffmpeg(
-            ["-ss", f"{timestamp:.3f}", "-i", str(source), "-frames:v", "1", "-q:v", "3", str(poster_path)],
+            [
+                "-filter_threads",
+                "1",
+                "-threads",
+                "1",
+                "-ss",
+                f"{timestamp:.3f}",
+                "-i",
+                str(source),
+                "-frames:v",
+                "1",
+                "-q:v",
+                "3",
+                str(poster_path),
+            ],
             stage="poster",
         )
     except MediaError:
@@ -894,6 +957,9 @@ def build_audio_filters(plan: MutationPlan, info: MediaInfo) -> list[str]:
     # modulation with formant-band EQ compensation.
     if plan.formant_pitch_lfo and plan.vibrato_hz > 0 and plan.vibrato_depth > 0:
         filters.append(f"vibrato=f={plan.vibrato_hz}:d={plan.vibrato_depth}")
+        # Convert through 32-bit signed PCM to sanitize any uninitialized NaN/Inf
+        # samples emitted by ffmpeg's af_vibrato delay buffer before IIR/aac.
+        filters.append("aformat=sample_fmts=s32")
         if plan.formant_eq_hz and plan.formant_eq_gain:
             filters.append(
                 f"equalizer=f={plan.formant_eq_hz}:t=q:w=1.2:g={plan.formant_eq_gain}"
@@ -1186,7 +1252,7 @@ def _deep_scramble_video(
     than single frames.
     """
 
-    capture = cv2.VideoCapture(str(source))
+    capture = _open_video_capture(source)
     if not capture.isOpened():
         raise MutationError(f"OpenCV could not open {source.name}")
 
@@ -1200,8 +1266,11 @@ def _deep_scramble_video(
         if width <= 0 or height <= 0:
             raise MutationError(f"{source.name} reports an empty video stream")
 
+        encode_threads = _ffmpeg_encode_threads()
         writer = open_ffmpeg_writer(
             [
+                "-filter_threads",
+                "1",
                 "-f",
                 "rawvideo",
                 "-pix_fmt",
@@ -1221,6 +1290,8 @@ def _deep_scramble_video(
                 str(max(16, plan.crf - 2)),
                 "-pix_fmt",
                 "yuv420p",
+                "-threads",
+                str(encode_threads),
                 *metadata_strip_args(),
                 str(target),
             ]
@@ -1249,7 +1320,18 @@ def _deep_scramble_video(
         out_u8 = np.empty((height, width, 3), dtype=np.uint8)
 
         index = 0
-        killed_by_abort = False
+        aborted = False
+        pipe_broken = False
+        stderr_chunks: list[bytes] = []
+
+        def _drain_stderr() -> None:
+            if writer.stderr is None:
+                return
+            for chunk in iter(lambda: writer.stderr.read(4096), b""):
+                stderr_chunks.append(chunk)
+
+        stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+        stderr_thread.start()
         assert writer.stdin is not None
         try:
             while True:
@@ -1292,7 +1374,11 @@ def _deep_scramble_video(
 
                 # float32 -> uint8 assignment truncates exactly like astype(uint8)
                 out_u8[:] = scratch
-                writer.stdin.write(out_u8.tobytes())
+                try:
+                    writer.stdin.write(out_u8.tobytes())
+                except (BrokenPipeError, OSError):
+                    pipe_broken = True
+                    break
 
                 index += 1
                 if on_progress:
@@ -1301,8 +1387,8 @@ def _deep_scramble_video(
                     elif total_frames <= 0 and index % 30 == 0:
                         on_progress(0.5, "deep-scramble")
         except BaseException:
+            aborted = True
             if writer.poll() is None:
-                killed_by_abort = True
                 writer.kill()
                 writer.wait()
             raise
@@ -1312,12 +1398,24 @@ def _deep_scramble_video(
                     writer.stdin.close()
                 except (BrokenPipeError, OSError):
                     pass
-            stderr = writer.stderr.read() if writer.stderr else b""
-            code = writer.wait()
-            if not killed_by_abort and code != 0:
+            try:
+                code = writer.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                writer.kill()
+                code = writer.wait()
+            stderr_thread.join(timeout=10)
+            if writer.stderr is not None:
+                try:
+                    writer.stderr.close()
+                except OSError:
+                    pass
+            stderr_text = b"".join(stderr_chunks).decode("utf-8", "replace")
+            if not aborted and (code != 0 or pipe_broken):
+                if stderr_text.strip():
+                    logger.warning("deep scramble ffmpeg exited %s: %s", code, stderr_text.strip()[-1500:])
                 raise MutationError(
                     "deep scramble encoder failed: "
-                    + describe_ffmpeg_exit(code, stderr.decode("utf-8", "replace"))
+                    + describe_ffmpeg_exit(code, stderr_text)
                 )
         if index == 0:
             raise MutationError(f"no decodable frames in {source.name}")
@@ -1385,20 +1483,35 @@ def mutate_video(
         seek: list[str] = ["-ss", f"{plan.trim_head:.3f}"] if plan.trim_head else []
         take_audio_from_source = plan.deep_scramble and info.has_audio
 
-        # Input options must precede the -i they apply to; -t is added once
-        # afterwards as an output option so it bounds the muxed result.
-        args: list[str] = [*seek, "-i", str(render_source)]
+        encode_threads = _ffmpeg_encode_threads()
+        decode_threads = _ffmpeg_decode_threads()
+        filter_threads = _ffmpeg_filter_threads()
+
+        # Input options must precede the -i they apply to; -t is added after
+        # all -i inputs and -map flags as an output option so it bounds the
+        # muxed result rather than acting as an input duration on an overlay.
+        args: list[str] = [
+            "-filter_threads",
+            "1",
+            "-filter_complex_threads",
+            str(filter_threads),
+            "-threads",
+            str(decode_threads),
+            *seek,
+            "-i",
+            str(render_source),
+        ]
         if take_audio_from_source:
-            # The scramble pass is video-only; pull audio from the original.
-            args += [*seek, "-i", str(source)]
-        if plan.trim_head or plan.trim_tail:
-            args += ["-t", f"{effective_duration:.3f}"]
+            # The scramble pass is video-only; pull audio from the original
+            # with -vn so ffmpeg never spawns a second video decoder pool.
+            args += ["-vn", "-threads", "1", *seek, "-i", str(source)]
 
         if overlays:
-            # Each overlay is a still image looped for the length of the clip.
+            # Each overlay is a single-frame image; overlay=...:eof_action=repeat
+            # holds it for the full video without looping and re-scaling 25x/s.
             first_overlay_input = 2 if take_audio_from_source else 1
             for _layer, overlay_path in overlays:
-                args += ["-loop", "1", "-framerate", "25", "-i", str(overlay_path)]
+                args += ["-threads", "1", "-i", str(overlay_path)]
             graph = build_multi_overlay_filtergraph(
                 [layer for layer, _ in overlays],
                 plan,
@@ -1410,9 +1523,6 @@ def mutate_video(
                 trim_head=plan.trim_head,
             )
             args += ["-filter_complex", graph, "-map", "[vout]"]
-            # -loop makes the overlay inputs infinite, so the output length has
-            # to come from the video rather than the longest input.
-            args += ["-shortest"]
         else:
             args += ["-map", "0:v:0"]
             video_filters = pre_filters + post_filters
@@ -1423,6 +1533,9 @@ def mutate_video(
             args += ["-map", "1:a:0?"]
         elif info.has_audio:
             args += ["-map", "0:a:0?"]
+
+        if plan.trim_head or plan.trim_tail:
+            args += ["-t", f"{effective_duration:.3f}"]
 
         if audio_filters and info.has_audio:
             args += ["-af", ",".join(audio_filters)]
@@ -1436,8 +1549,7 @@ def mutate_video(
             # Drops the x264/x265 SEI that otherwise carries the encoder
             # version and its full option string inside the bitstream.
             args += bitstream_filter_args(video_codec)
-        if settings.ffmpeg_threads:
-            args += ["-threads", str(settings.ffmpeg_threads)]
+        args += ["-threads", str(encode_threads)]
         if options.strip_metadata:
             args += metadata_strip_args()
         args += ["-map_metadata:s:v", "-1"]

@@ -306,11 +306,22 @@ def run_ffmpeg(
                     pass
 
     if returncode != 0:
-        message = describe_ffmpeg_exit(returncode, "".join(stderr_chunks))
+        stderr_text = "".join(stderr_chunks)
+        if stderr_text.strip():
+            logger.warning("ffmpeg exited %s: %s", returncode, stderr_text.strip()[-1500:])
+        message = describe_ffmpeg_exit(returncode, stderr_text)
         raise MediaError(f"ffmpeg failed: {message}")
 
     if on_progress:
         on_progress(1.0, stage)
+
+
+_GENERIC_FFMPEG_WRAPPERS = (
+    "Error while processing the decoded data",
+    "Error initializing output stream",
+    "Conversion failed",
+    "Error reinitializing filters!",
+)
 
 
 def describe_ffmpeg_exit(returncode: int, stderr: str) -> str:
@@ -321,9 +332,20 @@ def describe_ffmpeg_exit(returncode: int, stderr: str) -> str:
     killer, which is worth saying plainly instead of leaving the reason blank.
     """
 
-    lines = stderr.strip().splitlines()
+    lines = [line.strip() for line in stderr.strip().splitlines() if line.strip()]
     if lines:
-        return lines[-1][-300:]
+        last = lines[-1]
+        if len(lines) >= 2 and last.startswith(
+            (
+                "Error while processing the decoded data",
+                "Error initializing output stream",
+                "Conversion failed",
+            )
+        ):
+            for candidate in reversed(lines[:-1]):
+                if not candidate.startswith(_GENERIC_FFMPEG_WRAPPERS):
+                    return f"{candidate} ({last})"[-300:]
+        return last[-300:]
     if returncode < 0:
         try:
             name = signal.Signals(-returncode).name

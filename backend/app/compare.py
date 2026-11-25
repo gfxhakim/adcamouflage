@@ -354,11 +354,20 @@ def _read_frame_at(capture: cv2.VideoCapture, index: int) -> np.ndarray | None:
     return frame if ok else None
 
 
+def _open_compare_capture(path: Path) -> cv2.VideoCapture:
+    if hasattr(cv2, "CAP_PROP_N_THREADS"):
+        cap = cv2.VideoCapture(str(path), cv2.CAP_FFMPEG, [cv2.CAP_PROP_N_THREADS, 1])
+        if cap.isOpened():
+            return cap
+        cap.release()
+    return cv2.VideoCapture(str(path))
+
+
 def compare_frames(original: Path, camouflaged: Path, info_a: MediaInfo, info_b: MediaInfo) -> dict[str, Any]:
     """Sample matched frames and measure how far the picture actually moved."""
 
-    capture_a = cv2.VideoCapture(str(original))
-    capture_b = cv2.VideoCapture(str(camouflaged))
+    capture_a = _open_compare_capture(original)
+    capture_b = _open_compare_capture(camouflaged)
     try:
         if not capture_a.isOpened() or not capture_b.isOpened():
             return {"error": "one of the files could not be decoded by OpenCV"}
@@ -452,11 +461,13 @@ def _decode_audio(path: Path, seconds: float = 12.0, rate: int = 16000) -> np.nd
         "-loglevel",
         "error",
         "-nostdin",
+        "-vn",
+        "-threads",
+        "1",
         "-i",
         str(path),
         "-t",
         str(seconds),
-        "-vn",
         "-ac",
         "1",
         "-ar",

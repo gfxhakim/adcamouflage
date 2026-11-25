@@ -3,7 +3,14 @@ FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    VECLIB_MAXIMUM_THREADS=1 \
+    OPENCV_FOR_THREADS_NUM=2 \
+    OPENCV_FFMPEG_CAPTURE_OPTIONS="threads;2"
 
 # ffmpeg/ffprobe are the engine; libgl + libglib are OpenCV's runtime deps.
 RUN apt-get update \

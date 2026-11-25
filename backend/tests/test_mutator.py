@@ -319,3 +319,252 @@ def test_gen4_advanced_layers_image_pipeline(sample_image, tmp_path):
     assert any("DCT mid-band & JND" in item for item in report.applied)
     assert any("adversarial CNN Gabor" in item for item in report.applied)
 
+
+def test_thread_budgets_are_bounded(monkeypatch):
+    from app import mutator
+
+    monkeypatch.setattr(mutator.settings, "worker_concurrency", 5)
+    monkeypatch.setattr(mutator.settings, "ffmpeg_threads", 0)
+    monkeypatch.setattr(mutator.settings, "ffmpeg_filter_threads", 0)
+    assert 1 <= mutator._ffmpeg_encode_threads() <= 4
+    assert 1 <= mutator._ffmpeg_decode_threads() <= 2
+    assert 1 <= mutator._ffmpeg_filter_threads() <= 2
+
+    monkeypatch.setattr(mutator.settings, "ffmpeg_threads", 32)
+    monkeypatch.setattr(mutator.settings, "ffmpeg_filter_threads", 32)
+    assert 1 <= mutator._ffmpeg_encode_threads() <= 4
+    assert 1 <= mutator._ffmpeg_decode_threads() <= 2
+    assert 1 <= mutator._ffmpeg_filter_threads() <= 4
+
+
+def test_ffmpeg_exit_description_surfaces_root_cause_before_stream_error():
+    from app.ffmpeg import describe_ffmpeg_exit
+
+    stderr = (
+        "[libx264 @ 0x555] pthread_create failed: Resource temporarily unavailable\n"
+        "Error reinitializing filters!\n"
+        "Failed to inject frame into filter network: Resource temporarily unavailable\n"
+        "Error while processing the decoded data for stream #3:0\n"
+    )
+    message = describe_ffmpeg_exit(1, stderr)
+    assert "Failed to inject frame" in message or "pthread_create" in message
+    assert "Error while processing the decoded data for stream #3:0" in message
+
+
+@requires_ffmpeg
+def test_mutate_video_bounds_threads_and_places_trim_after_inputs(
+    sample_video, tmp_path, monkeypatch
+):
+    import shutil
+    from PIL import Image
+    from app import mutator
+    from app.schemas import OverlayPosition, OverlaySettings
+
+    settings.ensure_dirs()
+    ov_path = settings.uploads_dir / "test_args_overlay.png"
+    Image.new("RGBA", (120, 60), (255, 0, 0, 255)).save(ov_path)
+
+    captured_writer_args: list[list[str]] = []
+    captured_ffmpeg_args: list[list[str]] = []
+
+    class _FakeWriter:
+        def __init__(self):
+            import io
+
+            self.stdin = io.BytesIO()
+            self.stderr = io.BytesIO(b"")
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+    def fake_open_writer(args):
+        captured_writer_args.append(list(args))
+        return _FakeWriter()
+
+    def fake_run_ffmpeg(args, **_kwargs):
+        captured_ffmpeg_args.append(list(args))
+        shutil.copy2(sample_video, args[-1])
+
+    monkeypatch.setattr(mutator, "open_ffmpeg_writer", fake_open_writer)
+    monkeypatch.setattr(mutator, "run_ffmpeg", fake_run_ffmpeg)
+
+    try:
+        options = MutationOptions(
+            preset=Preset.AGGRESSIVE,
+            seed=77,
+            overlay=OverlaySettings(
+                enabled=True,
+                position=OverlayPosition.TOP_LEFT,
+                scale_percent=20,
+                image_filename=ov_path.name,
+            ),
+        ).resolved()
+        mutate(sample_video, tmp_path / "args-check.mp4", AssetKind.VIDEO, options, seed=77)
+    finally:
+        ov_path.unlink(missing_ok=True)
+
+    assert len(captured_writer_args) == 1
+    w_args = captured_writer_args[0]
+    assert "-filter_threads" in w_args
+    assert "-threads" in w_args
+
+    assert len(captured_ffmpeg_args) == 1
+    f_args = captured_ffmpeg_args[0]
+    assert "-filter_threads" in f_args
+    assert "-filter_complex_threads" in f_args
+    assert "-loop" not in f_args
+    assert "-shortest" not in f_args
+
+    input_indices = [idx for idx, token in enumerate(f_args) if token == "-i"]
+    assert len(input_indices) == 3  # render_source, audio source, 1 overlay
+
+    prev = 0
+    for pos in input_indices:
+        segment = f_args[prev:pos]
+        assert "-threads" in segment, f"missing -threads before -i at {pos}: {segment}"
+        prev = pos + 2
+
+    audio_segment = f_args[input_indices[0] + 2 : input_indices[1]]
+    assert "-vn" in audio_segment
+
+    assert "-t" in f_args
+    assert f_args.index("-t") > input_indices[-1]
+    assert "-threads" in f_args[input_indices[-1] + 2 :]
+
+
+@requires_ffmpeg
+def test_deep_scramble_turns_broken_pipe_into_mutation_error(sample_video, tmp_path, monkeypatch):
+    import io
+    from app import mutator
+    from app.mutator import MutationError, _deep_scramble_video
+
+    class _BrokenStdin:
+        def write(self, _data):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def close(self):
+            pass
+
+    class _DyingWriter:
+        def __init__(self):
+            self.stdin = _BrokenStdin()
+            self.stderr = io.BytesIO(
+                b"pthread_create failed: Resource temporarily unavailable\n"
+                b"Error initializing output stream 0:0\n"
+            )
+
+        def poll(self):
+            return 1
+
+        def wait(self, timeout=None):
+            return 1
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(mutator, "open_ffmpeg_writer", lambda _args: _DyingWriter())
+
+    info = probe(sample_video)
+    plan = build_plan(
+        MutationOptions(preset=Preset.AGGRESSIVE).resolved(),
+        random.Random(9),
+        width=info.video.width,
+        height=info.video.height,
+        duration=info.duration,
+        source_fps=info.video.fps,
+    )
+    with pytest.raises(MutationError) as exc_info:
+        _deep_scramble_video(sample_video, tmp_path / "broken.mp4", plan, info, None)
+
+    message = str(exc_info.value)
+    assert "deep scramble encoder failed" in message
+    assert "pthread_create failed" in message
+
+
+@requires_ffmpeg
+def test_five_concurrent_aggressive_renders_with_two_overlays(sample_video, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    import cv2
+    import numpy as np
+    from PIL import Image
+    from app.schemas import OverlayMode, OverlayPosition, OverlaySettings
+
+    settings.ensure_dirs()
+    ov_always = settings.uploads_dir / "test_5x_always.png"
+    ov_flash = settings.uploads_dir / "test_5x_flash.png"
+    Image.new("RGBA", (200, 100), (255, 0, 0, 255)).save(ov_always)
+    Image.new("RGBA", (200, 100), (0, 255, 0, 255)).save(ov_flash)
+
+    source_info = probe(sample_video)
+
+    def _run_one(idx: int):
+        opts = MutationOptions(
+            preset=Preset.AGGRESSIVE,
+            seed=500 + idx,
+            overlays=[
+                OverlaySettings(
+                    enabled=True,
+                    mode=OverlayMode.ALWAYS,
+                    position=OverlayPosition.TOP_LEFT,
+                    scale_percent=30,
+                    offset_x=4,
+                    offset_y=4,
+                    image_filename=ov_always.name,
+                ),
+                OverlaySettings(
+                    enabled=True,
+                    mode=OverlayMode.FLASH_5,
+                    position=OverlayPosition.BOTTOM_RIGHT,
+                    scale_percent=30,
+                    offset_x=4,
+                    offset_y=4,
+                    image_filename=ov_flash.name,
+                ),
+            ],
+        ).resolved()
+        return mutate(
+            sample_video,
+            tmp_path / f"concurrent_{idx}.mp4",
+            AssetKind.VIDEO,
+            opts,
+            seed=500 + idx,
+        )
+
+    def _red_corner_fraction(video_path) -> float:
+        cap = cv2.VideoCapture(str(video_path))
+        try:
+            cap.set(cv2.CAP_PROP_POS_MSEC, 500)
+            ok, frame = cap.read()
+            if not ok:
+                return 0.0
+            h, w = frame.shape[:2]
+            region = frame[: h // 2, : w // 2]
+            target = np.array((0, 0, 255), dtype=np.int16)
+            return float((np.abs(region.astype(np.int16) - target).sum(axis=2) < 120).mean())
+        finally:
+            cap.release()
+
+    try:
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            reports = list(pool.map(_run_one, range(5)))
+
+        assert len(reports) == 5
+        for report in reports:
+            out_info = probe(report.output_path)
+            assert out_info.has_video
+            assert out_info.has_audio
+            assert 0.5 * source_info.duration < out_info.duration < source_info.duration
+            assert any("deep frame scramble" in line for line in report.applied)
+            assert sum("image overlay" in line for line in report.applied) == 2
+            assert _red_corner_fraction(report.output_path) > 0.02
+    finally:
+        ov_always.unlink(missing_ok=True)
+        ov_flash.unlink(missing_ok=True)
+
+

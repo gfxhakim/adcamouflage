@@ -234,7 +234,10 @@ class Settings(BaseSettings):
     # --- media engine -----------------------------------------------------
     ffmpeg_binary: str = "ffmpeg"
     ffprobe_binary: str = "ffprobe"
-    ffmpeg_threads: int = 0  # 0 => let ffmpeg pick
+    ffmpeg_threads: int = 0  # 0 => auto-sized per worker, capped for concurrency
+    ffmpeg_filter_threads: int = 0  # 0 => auto-sized per worker
+    opencv_threads: int = 2
+    worker_concurrency: int = 5
     job_timeout_seconds: int = 60 * 45
     stale_processing_seconds: int = 60 * 10
     stale_queued_seconds: int = 60 * 60
