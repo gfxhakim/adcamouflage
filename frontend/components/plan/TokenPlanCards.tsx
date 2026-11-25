@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Check, Loader2, RefreshCw, ShoppingCart, 
 import NeonCard from "@/components/NeonCard";
 import type { TokenSubscription } from "@/lib/auth";
 import { formatMoney, formatTokens } from "@/lib/format";
-import { PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
+import { confirmedFeaturesForPlan, PLAN_FEATURE_IDS, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
 import type { ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type TokenPlanCard } from "@/lib/types";
 
@@ -176,35 +176,41 @@ export function TokenPlanCards({
               <p className="mt-0.5 text-[11px] text-ink-faint">+ applicable sales tax / VAT calculated at checkout</p>
 
               <ul className="mt-3 space-y-1.5 text-xs text-ink-muted">
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                <li className="flex items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                   <span>
                     <span className="font-semibold text-black">{formatTokens(plan.tokens)}</span> tokens ={" "}
                     <span className="font-semibold text-black">{formatTokens(plan.generations)}</span> generations
                   </span>
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                <li className="flex items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
                   <span className="font-semibold text-black">{platformLineForPlan(plan)}</span>
                 </li>
                 {PLAN_FEATURE_IDS.filter((feature) => feature !== "multi_platform" && planIncludes(plan, feature)).map((feature) => (
-                  <li key={feature} className="flex items-center gap-1.5">
-                    <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                    {PLAN_FEATURES[feature].label}
+                  <li key={feature} className="flex items-start gap-1.5">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                    <span>{PLAN_FEATURES[feature].label}</span>
                   </li>
                 ))}
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                  {(plan.seats ?? 1) > 1 ? `Up to ${plan.seats} users sharing the tokens` : "Single user"}
+                {confirmedFeaturesForPlan(plan.id).map((extra) => (
+                  <li key={extra.id} className="flex items-start gap-1.5">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                    <span>{extra.label}</span>
+                  </li>
+                ))}
+                <li className="flex items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                  <span>{(plan.seats ?? 1) > 1 ? `Up to ${plan.seats} users sharing the tokens` : "Single user"}</span>
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
-                  {rolloverLine(plan)}
+                <li className="flex items-start gap-1.5">
+                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-meta-500" aria-hidden />
+                  <span>{rolloverLine(plan)}</span>
                 </li>
                 {/* Features this plan does not include go last. */}
                 {PLAN_FEATURE_IDS.filter((feature) => !planIncludes(plan, feature)).map((feature) => (
-                  <li key={feature} className="flex items-center gap-1.5 text-ink-faint">
-                    <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  <li key={feature} className="flex items-start gap-1.5 text-ink-faint">
+                    <X className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                     <span className="line-through">{PLAN_FEATURES[feature].label}</span>
                     <span className="sr-only"> (not included)</span>
                   </li>

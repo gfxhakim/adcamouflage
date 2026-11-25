@@ -12,7 +12,7 @@ import { CmsHeadline } from "@/components/landing/primitives";
 import { fetchVisitorOffer, subscribeVisitorOffer, type ReferralOffer } from "@/lib/referrals";
 import { rolloverCap, type PricePromo, type TokenPlanCard, type TopupTable } from "@/lib/types";
 import { reportPlanClick } from "@/lib/notify";
-import { featureForLine, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
+import { confirmedFeaturesForPlan, featureForLine, PLAN_FEATURES, planIncludes, platformLineForPlan } from "@/lib/plan-features";
 import { cn } from "@/lib/utils";
 
 interface PricingSectionProps {
@@ -288,6 +288,20 @@ export function PricingSection({
                       <span className={cn(unavailable && "line-through decoration-white/40")}>
                         <T k={`${key}.text`}>{feature}</T>
                         {unavailable ? <span className="sr-only"> (not included in {plan.label})</span> : null}
+                      </span>
+                    </li>
+                  );
+                })}
+                {confirmedFeaturesForPlan(plan.id).map((extra) => {
+                  const cmsKey = `pricing.planFeatures.${plan.id}.${extra.id}`;
+                  if (cms.hidden(cmsKey)) return null;
+                  return (
+                    <li key={extra.id} className="flex items-start gap-2.5 text-sm text-white/75">
+                      <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-meta-500 text-white">
+                        <Check className="h-2.5 w-2.5" strokeWidth={3} aria-hidden />
+                      </span>
+                      <span>
+                        <T k={cmsKey}>{extra.label}</T>
                       </span>
                     </li>
                   );

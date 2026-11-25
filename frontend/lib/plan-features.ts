@@ -34,6 +34,43 @@ export const PLAN_FEATURES: Record<PlanFeatureId, { label: string; fields: (keyo
 
 export const PLAN_FEATURE_IDS = Object.keys(PLAN_FEATURES) as PlanFeatureId[];
 
+export interface PlanConfirmedFeature {
+  id: string;
+  label: string;
+}
+
+const STARTER_CONFIRMED: readonly PlanConfirmedFeature[] = [
+  { id: "batch_zip", label: "5-Output Cloud Batch Rendering & 1-Click ZIP Download" },
+  { id: "bg_history", label: "Background Cloud Queue & 48h Auto-Delete History" },
+];
+
+const PRO_CONFIRMED: readonly PlanConfirmedFeature[] = [
+  ...STARTER_CONFIRMED,
+  { id: "upscale_quality", label: "4K Upscaling (Up to 2160p), Quality Tiers & Format Converter" },
+  { id: "seeds_reports", label: "Reproducible Render Seeds & Per-Export Verification Reports" },
+  { id: "ai_live_support", label: "AI Studio Assistant & Live Agent Support (<30 Min)" },
+];
+
+const MAX_CONFIRMED: readonly PlanConfirmedFeature[] = [
+  ...PRO_CONFIRMED,
+  { id: "best_economics", label: "Lowest Cost Per Export & Highest Top-Up Bonus Rate" },
+];
+
+/**
+ * Confirmed, non-layer app capabilities shown per plan on the landing page
+ * and `/app/plan` cards (2 on Starter, 5 on Pro, 6 on Max).
+ */
+export const PLAN_CONFIRMED_FEATURES: Record<string, readonly PlanConfirmedFeature[]> = {
+  starter: STARTER_CONFIRMED,
+  pro: PRO_CONFIRMED,
+  max: MAX_CONFIRMED,
+};
+
+/** Confirmed extra capabilities surfaced for a given plan id. */
+export function confirmedFeaturesForPlan(planId: string): readonly PlanConfirmedFeature[] {
+  return PLAN_CONFIRMED_FEATURES[planId] ?? [];
+}
+
 /** Which feature a pricing line describes, matched loosely so edited wording still maps. */
 export function featureForLine(line: string): PlanFeatureId | null {
   if (/probe|mutate|scrub\s*engine|23[- ]*layer|studio\s*variation|gen[- ]*4|pro\s*color\s*grading|full\s*ai|rejected\s*&\s*aggressive/i.test(line)) return "full_engine";
