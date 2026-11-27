@@ -70,8 +70,8 @@ export default function RefundPolicyPage() {
         <li>
           <b>Calculation formula</b>:{" "}
           <code>Refundable Amount = Paid Amount × (Remaining Unused Tokens ÷ Tokens Granted by Order)</code>. For
-          example, if an order granted 4,500 tokens for $89 and 1,350 tokens have already been spent (leaving 3,150
-          unused tokens, or 70%), only the remaining 3,150 tokens ($62.30) are eligible for refund.
+          example, if an order granted 4,500 tokens for $69 and 1,350 tokens have already been spent (leaving 3,150
+          unused tokens, or 70%), only the remaining 3,150 tokens ($48.30) are eligible for refund.
         </li>
         <li>
           <b>Consumed tokens are non-refundable</b>: Once tokens have been used to produce renders—or if 0 tokens from

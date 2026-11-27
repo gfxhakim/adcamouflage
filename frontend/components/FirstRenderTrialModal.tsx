@@ -21,9 +21,9 @@ interface FirstRenderTrialModalProps {
 }
 
 const FALLBACK_PLAN_SUMMARIES: Pick<TokenPlanCard, "id" | "label" | "price" | "generations">[] = [
-  { id: "starter", label: "Starter", price: 37, generations: 15 },
-  { id: "pro", label: "Pro", price: 89, generations: 50 },
-  { id: "max", label: "Max", price: 149, generations: 120 },
+  { id: "starter", label: "Starter", price: 29, generations: 15 },
+  { id: "pro", label: "Pro", price: 69, generations: 50 },
+  { id: "max", label: "Max", price: 115, generations: 120 },
 ];
 
 const PLAN_HIGHLIGHT: Record<string, string> = {

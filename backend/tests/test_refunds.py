@@ -140,7 +140,7 @@ def test_refund_request_stops_account_then_approve_refunds_via_whop(admin, sent,
     listed = client.get("/api/v1/billing/refunds").json()
     row = next(o for o in listed["orders"] if o["order_id"] == order_id)
     assert row["can_request"] is True and row["tokens_used"] == 0 and row["provider"] == "whop"
-    assert row["tokens_remaining"] == 4500 and row["refundable_amount"] == pytest.approx(89.0)
+    assert row["tokens_remaining"] == 4500 and row["refundable_amount"] == pytest.approx(69.0)
 
     # Submitting a Whop refund request needs no crypto address and stops plan & account immediately.
     asked = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "mistake", "details": "wrong plan"})
@@ -283,13 +283,13 @@ def test_refund_emails_render():
 def test_refund_is_prorated_to_remaining_tokens_and_rejects_zero_balance(admin, sent, monkeypatch):
     email = address("prorated")
     client = client_for(email)
-    order_id = buy(client, email)  # Pro = 4,500 tokens for $89
+    order_id = buy(client, email)  # Pro = 4,500 tokens for $69
     with session() as db:
         order = db.get(Order, order_id)
         order.provider_ref = "pay_whop_partial_1"
         db.commit()
 
-    # Use 15 generations (1,350 of 4,500 = 30% spent, 3,150 = 70% remaining -> $62.30 refundable).
+    # Use 15 generations (1,350 of 4,500 = 30% spent, 3,150 = 70% remaining -> $48.30 refundable).
     spend(email, 15)
     admin.put(
         "/api/v1/admin/refunds/rules",
@@ -300,7 +300,7 @@ def test_refund_is_prorated_to_remaining_tokens_and_rejects_zero_balance(admin, 
     assert row["can_request"] is True
     assert row["tokens_used"] == 1350
     assert row["tokens_remaining"] == 3150
-    assert row["refundable_amount"] == pytest.approx(62.30)
+    assert row["refundable_amount"] == pytest.approx(48.30)
 
     refund_calls: list[tuple[str, float | None, dict]] = []
     monkeypatch.setattr(
@@ -312,22 +312,22 @@ def test_refund_is_prorated_to_remaining_tokens_and_rejects_zero_balance(admin, 
     asked = client.post("/api/v1/billing/refunds", json={"order_id": order_id, "reason": "not_needed"})
     assert asked.status_code == 201, asked.text
     assert asked.json()["tokens_remaining"] == 3150
-    assert asked.json()["refund_amount"] == pytest.approx(62.30)
-    assert sent["mails"][-1][1]["amount"] == "$62.30"
+    assert asked.json()["refund_amount"] == pytest.approx(48.30)
+    assert sent["mails"][-1][1]["amount"] == "$48.30"
 
     pending = admin.get("/api/v1/admin/refunds").json()
     mine = next(r for r in pending["requests"] if r["order"]["id"] == order_id)
     assert mine["in_rules"] is True
     assert mine["tokens_remaining"] == 3150
-    assert mine["refund_amount"] == pytest.approx(62.30)
+    assert mine["refund_amount"] == pytest.approx(48.30)
 
     approved = admin.post(f"/api/v1/admin/refunds/{mine['id']}/approve", json={})
     assert approved.status_code == 200, approved.text
-    assert approved.json()["refund_amount"] == pytest.approx(62.30)
+    assert approved.json()["refund_amount"] == pytest.approx(48.30)
     assert len(refund_calls) == 1
     assert refund_calls[0][0] == "pay_whop_partial_1"
-    assert refund_calls[0][1] == pytest.approx(62.30)
-    assert sent["mails"][-1][0] == "refund_approved" and sent["mails"][-1][1]["amount"] == "$62.30"
+    assert refund_calls[0][1] == pytest.approx(48.30)
+    assert sent["mails"][-1][0] == "refund_approved" and sent["mails"][-1][1]["amount"] == "$48.30"
 
     # Zero remaining tokens cannot be refunded even when max_used_percent is 100.
     empty_email = address("spentall")

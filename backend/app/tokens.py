@@ -130,7 +130,7 @@ DEFAULT_PLANS: dict[str, TokenPlan] = {
         TokenPlan(
             "starter",
             "Starter",
-            37.0,
+            29.0,
             1500,
             100,
             0,
@@ -139,8 +139,8 @@ DEFAULT_PLANS: dict[str, TokenPlan] = {
             metadata_wipe=True,
             multi_platform=False,
         ),
-        TokenPlan("pro", "Pro", 89.0, 4500, 90, 1, 50),
-        TokenPlan("max", "Max", 149.0, 9600, 80, 2, 65, seats=5),
+        TokenPlan("pro", "Pro", 69.0, 4500, 90, 1, 50),
+        TokenPlan("max", "Max", 115.0, 9600, 80, 2, 65, seats=5),
     )
 }
 PLAN_IDS = tuple(DEFAULT_PLANS)
@@ -283,6 +283,27 @@ def ensure_starter_metadata_wipe(db: Session) -> None:
         features["metadata_wipe"] = True
         starter["features"] = features
         overrides["starter"] = starter
+        set_setting(db, PLAN_SETTING, overrides)
+    set_setting(db, key, True)
+    db.commit()
+
+
+def ensure_plan_prices_29_69_115(db: Session) -> None:
+    """One-time backfill updating stored plan price overrides to $29 / $69 / $115."""
+
+    key = "migration.plan_prices_29_69_115_v1"
+    if get_setting(db, key, False):
+        return
+    overrides = dict(get_setting(db, PLAN_SETTING, {}) or {})
+    changed = False
+    for plan_id, new_price in (("starter", 29.0), ("pro", 69.0), ("max", 115.0)):
+        if plan_id in overrides and isinstance(overrides[plan_id], dict) and "price" in overrides[plan_id]:
+            entry = dict(overrides[plan_id])
+            if float(entry["price"]) != new_price:
+                entry["price"] = new_price
+                overrides[plan_id] = entry
+                changed = True
+    if changed:
         set_setting(db, PLAN_SETTING, overrides)
     set_setting(db, key, True)
     db.commit()

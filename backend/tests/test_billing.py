@@ -176,7 +176,7 @@ def test_topup_totals_are_exact(plan_id, amount, total):
 
 @pytest.mark.parametrize(
     ("plan_id", "price", "tokens", "per_generation", "generations", "cap"),
-    [("starter", 37.0, 1500, 100, 15, 0), ("pro", 89, 4500, 90, 50, 4500), ("max", 149, 9600, 80, 120, 19200)],
+    [("starter", 29.0, 1500, 100, 15, 0), ("pro", 69, 4500, 90, 50, 4500), ("max", 115, 9600, 80, 120, 19200)],
 )
 def test_plan_cards(plan_id, price, tokens, per_generation, generations, cap):
     plan = DEFAULT_PLANS[plan_id]
@@ -202,7 +202,7 @@ def test_public_plans_endpoint_shape():
         "id", "label", "price", "tokens", "tokens_per_generation", "generations",
         "price_per_generation", "rollover_months", "topup_rate",
     }
-    assert card["generations"] == 50 and card["price_per_generation"] == 1.78
+    assert card["generations"] == 50 and card["price_per_generation"] == 1.38
     assert body["topups"]["amounts"] == [20, 40, 80, 160, 240]
     assert body["topups"]["bonus"]["max"]["240"] == 3100
     assert body["rules"] == {"grace_days": 7, "period_days": 30}
@@ -634,7 +634,7 @@ def test_checkout_creates_an_order_and_returns_whop_plan(whop_env):
     body = response.json()
     assert body["whop_plan"] == "plan_pro"
     assert body["provider"] == "whop"
-    assert body["amount"] == 89 and body["tokens"] == 4500
+    assert body["amount"] == 69 and body["tokens"] == 4500
 
     order = client.get(f"/api/v1/billing/orders/{body['order_id']}").json()
     assert order["status"] == "pending" and order["kind"] == "subscription" and order["plan_id"] == "pro"
@@ -688,7 +688,7 @@ def test_webhook_settles_an_order_exactly_once(whop_env, admin):
     with _session() as db:
         assert db.get(Order, order_id).applied_at is not None
     feed = admin.get("/api/v1/admin/activity", params={"kind": "payment"}).json()
-    assert any(e["user_id"] == user.id and "Paid $89 for Pro period (Whop)" == e["detail"] for e in feed)
+    assert any(e["user_id"] == user.id and "Paid $69 for Pro period (Whop)" == e["detail"] for e in feed)
 
 
 def test_webhook_settles_a_topup_with_its_bonus(whop_env):
@@ -820,7 +820,7 @@ def test_subscription_payload_for_a_token_user():
     _grant(email, "pro")
     data = client.get("/api/v1/auth/subscription").json()
     sub = data["subscription"]
-    assert sub["plan_id"] == "pro" and sub["plan_label"] == "Pro" and sub["price"] == 89
+    assert sub["plan_id"] == "pro" and sub["plan_label"] == "Pro" and sub["price"] == 69
     assert sub["active"] is True and sub["days_left"] == 30 and sub["in_grace"] is False
     assert sub["tokens_per_generation"] == 90 and sub["cancelled"] is False
     assert data["balance"]["usable_tokens"] == 4500 and data["balance"]["generations_left"] == 50
@@ -962,7 +962,7 @@ def test_admin_billing_config_is_validated_and_applied(admin):
     finally:
         for key in ("token_plans", "token_topups", "billing_rules"):
             _clear_setting(key)
-    assert admin.get("/api/v1/admin/billing/config").json()["plans"]["pro"]["price"] == 89
+    assert admin.get("/api/v1/admin/billing/config").json()["plans"]["pro"]["price"] == 69
 
 
 def _clear_setting(key: str) -> None:
@@ -983,7 +983,7 @@ def test_overview_counts_token_revenue_and_live_subscriptions(admin, whop_env):
 
     assert _post_whop(_whop_event(order_id, variant_id="plan_max")).status_code == 200
     after = admin.get("/api/v1/admin/overview").json()
-    assert after["token_revenue_30d"] - before["token_revenue_30d"] == pytest.approx(149)
+    assert after["token_revenue_30d"] - before["token_revenue_30d"] == pytest.approx(115)
     assert after["active_subscriptions"] == before["active_subscriptions"] + 1
     assert "mrr" in after  # the legacy figures stay
 
@@ -1180,3 +1180,56 @@ def test_failed_free_trial_render_refunds_once_and_cancel_does_not(sample_image,
     assert tokens.refund_asset(cancelled_id) == 0
     assert _load(email).free_generations == 2
     assert _ledger(email) == []
+
+
+def test_ensure_plan_prices_migration_updates_stored_overrides_once():
+    try:
+        with _session() as db:
+            tokens.save_token_plans(
+                db,
+                {
+                    "starter": {
+                        "label": "Starter",
+                        "price": 37.0,
+                        "tokens": 1500,
+                        "tokens_per_generation": 100,
+                        "rollover_months": 0,
+                        "topup_rate": 40,
+                        "seats": 1,
+                    },
+                    "pro": {
+                        "label": "Pro",
+                        "price": 89.0,
+                        "tokens": 4500,
+                        "tokens_per_generation": 90,
+                        "rollover_months": 1,
+                        "topup_rate": 50,
+                        "seats": 1,
+                    },
+                    "max": {
+                        "label": "Max",
+                        "price": 149.0,
+                        "tokens": 9600,
+                        "tokens_per_generation": 80,
+                        "rollover_months": 2,
+                        "topup_rate": 65,
+                        "seats": 5,
+                    },
+                },
+            )
+            db.commit()
+        _clear_setting("migration.plan_prices_29_69_115_v1")
+
+        with _session() as db:
+            tokens.ensure_plan_prices_29_69_115(db)
+            plans = get_token_plans(db)
+            assert (plans["starter"].price, plans["pro"].price, plans["max"].price) == (29.0, 69.0, 115.0)
+
+            # Subsequent admin edits are preserved when startup runs again.
+            tokens.save_token_plans(db, {"pro": {"price": 75.0}})
+            db.commit()
+            tokens.ensure_plan_prices_29_69_115(db)
+            assert get_token_plans(db)["pro"].price == 75.0
+    finally:
+        _clear_setting("token_plans")
+        _clear_setting("migration.plan_prices_29_69_115_v1")

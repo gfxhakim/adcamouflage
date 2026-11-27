@@ -156,9 +156,9 @@ export const FALLBACK_PUBLIC_AFFILIATE_PROGRAM: PublicAffiliateProgram = {
   link_days: 30,
   currency: "USD",
   plans: [
-    { id: "starter", label: "Starter", price: 37 },
-    { id: "pro", label: "Pro", price: 89 },
-    { id: "max", label: "Max", price: 149 },
+    { id: "starter", label: "Starter", price: 29 },
+    { id: "pro", label: "Pro", price: 69 },
+    { id: "max", label: "Max", price: 115 },
   ],
   partner: {
     enabled: true,

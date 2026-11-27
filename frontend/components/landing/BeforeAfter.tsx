@@ -45,7 +45,7 @@ const WITHOUT_ITEMS = [
 const WITH_ITEMS = [
   "Rebuilds visual, audio & container layers while keeping your winning hook",
   "Turns aggressive, strict-policy creatives into fresh, approvable exports",
-  "Starts at just $37/mo · Pro delivers 50 outputs at $89/mo (2.5× more)",
+  "Starts at just $29/mo · Pro delivers 50 outputs at $69/mo (2.5× more)",
   "Max adds 5 team seats + 120 outputs · 100% auto-refund on failed renders",
 ];
 
@@ -101,7 +101,7 @@ export function BeforeAfter() {
                 href="#pricing"
                 className="inline-flex items-center gap-1.5 rounded-full border border-black/15 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-black/[0.04]"
               >
-                Compare plans from $37
+                Compare plans from $29
               </a>
             </div>
           </Reveal>

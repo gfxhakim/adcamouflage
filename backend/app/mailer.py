@@ -78,7 +78,7 @@ PLACEHOLDERS: dict[str, str] = {
     "plan_url": "Link to the customer's plan page",
     "code": "The 6-digit code (code emails)",
     "minutes": "Minutes the code stays valid",
-    "amount": "Amount paid, e.g. $89",
+    "amount": "Amount paid, e.g. $69",
     "order_id": "Transaction ID of the payment",
     "paid_date": "Date of the payment",
     "method": "How they paid (Volet, BTCPay, ...)",
@@ -1292,7 +1292,7 @@ def _sample_values(user: User, kind: str, days_before: int) -> dict[str, Any]:
     return {
         **security_values(user),
         "code": "482913",
-        "amount": "$89",
+        "amount": "$69",
         "order_id": "BC-7Q2M-K4XD",
         "method": "Whop",
         "paid_date": f"{datetime.now(timezone.utc):%d %B %Y}",

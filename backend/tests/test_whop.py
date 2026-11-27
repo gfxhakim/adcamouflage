@@ -33,7 +33,7 @@ WEBHOOK_SECRET = "ws_webhook-secret-placeholder"
 PUBLIC_URL = "https://app.example.test"
 CHECKOUT = "/api/v1/billing/checkout"
 WEBHOOK_PATH = "/api/v1/billing/whop/webhook"
-PAID_STARTER = "Paid $37 for Starter period (Whop)"
+PAID_STARTER = "Paid $29 for Starter period (Whop)"
 
 SUB_PLANS = {"starter": "plan_starter", "pro": "plan_pro", "max": "plan_max"}
 TOPUP_PLANS = {
@@ -320,7 +320,7 @@ def test_only_whop_is_accepted_as_provider(whop_env):
 
     body = _checkout(client, "starter")
     assert body["provider"] == "whop" and body["whop_plan"] == "plan_starter"
-    assert body["amount"] == 37.0 and body["tokens"] == 1500
+    assert body["amount"] == 29.0 and body["tokens"] == 1500
     assert _balances(address("provider-check")) == (0, 0)
 
 
@@ -510,7 +510,7 @@ def test_whop_renewal_cancel_resume_and_deactivated_events(whop_env, monkeypatch
             "membership_id": "mem_life_1",
             "billing_reason": "subscription_cycle",
             "plan": {"id": "plan_starter"},
-            "final_amount": 37,
+            "final_amount": 29,
         },
     }
     res_cycle = _post_whop(cycle_evt)
@@ -679,7 +679,7 @@ def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
     assert click.status_code == 200
     offer = click.json()["offer"]
     assert offer["discount_pct"] == 20.0
-    assert offer["prices"] == {"starter": 29.60, "pro": 71.20, "max": 119.20}
+    assert offer["prices"] == {"starter": 23.20, "pro": 55.20, "max": 92.00}
 
     # Auto-applies the Whop-validated discount via ?ref= click without re-typing,
     # keeping the real base Whop plan and passing promoCode directly to Whop Elements.
@@ -689,9 +689,9 @@ def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
     )
     assert co_res.status_code == 201, co_res.text
     co = co_res.json()
-    assert co["original_amount"] == 89.0
-    assert co["discount"] == 17.80
-    assert co["amount"] == 71.20
+    assert co["original_amount"] == 69.0
+    assert co["discount"] == 13.80
+    assert co["amount"] == 55.20
     assert co["promo_code"] == code
     assert co["whop_plan"] == "plan_pro"
     assert co["whop_checkout_config"] is None
@@ -707,7 +707,7 @@ def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
         payment_id="pay_disc_1",
         variant_id="plan_pro",
         extra_data={
-            "usd_total": 71.20,
+            "usd_total": 55.20,
             "metadata": {"order_id": order_id, "coupon_code": code, "promo_code": code},
         },
     )
@@ -718,11 +718,11 @@ def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
     assert _balances(buyer_email) == (4500, 0)
     with get_session_factory()() as db:
         comm = db.query(AffiliateCommission).filter(AffiliateCommission.order_id == order_id).one()
-        assert round(float(comm.amount_usd), 2) == 71.20
+        assert round(float(comm.amount_usd), 2) == 55.20
         rows = [r for r in affiliates.commission_rows(db, partner_id) if r["order_id"] == order_id]
         assert len(rows) == 1
         assert rows[0]["rate_pct"] == 25.0
-        assert rows[0]["commission"] == round(71.20 * 0.25, 2)
+        assert rows[0]["commission"] == round(55.20 * 0.25, 2)
 
     # Also verify graceful behavior if promo_codes.list lacks promo_code:read permission (403):
     # no fake app reduction is applied locally, yet whop_promo_to_prefill still passes code to Whop.
@@ -745,7 +745,7 @@ def test_whop_promo_code_validation_and_checkout_prefill(whop_env, monkeypatch):
         json={"kind": "subscription", "plan_id": "pro", "provider": "whop", "coupon": code},
         headers={"x-device-id": f"dev-perm-{RUN_ID}"},
     ).json()
-    assert fb_co["discount"] == 0.0 and fb_co["amount"] == 89.0
+    assert fb_co["discount"] == 0.0 and fb_co["amount"] == 69.0
     assert fb_co["whop_plan"] == "plan_pro" and fb_co["whop_promo_to_prefill"] == code
 
 
@@ -782,22 +782,22 @@ def test_whop_webhook_syncs_whop_native_promo_code_and_discounted_total(whop_env
         order_id,
         payment_id="pay_native_promo_1",
         variant_id="plan_pro",
-        extra_data={"usd_total": 75.65, "promo_code": code},
+        extra_data={"usd_total": 58.65, "promo_code": code},
     )
     assert _post_whop(evt).json() == {"ok": True, "applied": True}
     order = _order(order_id)
     assert order.status == "paid"
     assert order.coupon_code == code
-    assert float(order.amount_usd) == 75.65
+    assert float(order.amount_usd) == 58.65
     with get_session_factory()() as db:
         buyer = _load(buyer_email)
         ref = db.query(Referral).filter(Referral.referred_user_id == buyer.id).one()
         assert ref.code == code and ref.channel == "partner"
         comm = db.query(AffiliateCommission).filter(AffiliateCommission.order_id == order_id).one()
-        assert round(float(comm.amount_usd), 2) == 75.65
+        assert round(float(comm.amount_usd), 2) == 58.65
         rows = [r for r in affiliates.commission_rows(db, partner_id) if r["order_id"] == order_id]
         assert len(rows) == 1
-        assert rows[0]["commission"] == round(75.65 * 0.25, 2)
+        assert rows[0]["commission"] == round(58.65 * 0.25, 2)
 
 
 def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkout(whop_env, monkeypatch):
@@ -907,7 +907,7 @@ def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkou
 
     # Buyer subscribes cleanly using the base plan (leaving Whop's promo code box open) with server redirect_url back to /app/plan.
     co = visitor.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "pro", "provider": "whop"}).json()
-    assert co["amount"] == 89.0
+    assert co["amount"] == 69.0
     assert co["whop_plan"] == "plan_pro"
     assert co["whop_checkout_config"] == "ch_auto_1"
     assert len(cfg_calls) == 1
@@ -919,13 +919,13 @@ def test_admin_approve_sets_manual_whop_code_and_affiliate_link_and_base_checkou
         co["order_id"],
         payment_id="pay_auto_1",
         variant_id="plan_pro",
-        extra_data={"usd_total": 75.65, "promo_code": code, "metadata": {"order_id": co["order_id"]}},
+        extra_data={"usd_total": 58.65, "promo_code": code, "metadata": {"order_id": co["order_id"]}},
     )
     assert _post_whop(paid_evt).json() == {"ok": True, "applied": True}
 
     me_after = partner_client.get("/api/v1/referrals/me").json()["partner"]
     assert me_after["stats"]["paying"] == 1
-    assert me_after["totals"]["pending"] == round(75.65 * 0.25, 2)
+    assert me_after["totals"]["pending"] == round(58.65 * 0.25, 2)
 
     # Suspending the partner disables their code locally.
     susp = admin_client.post(f"/api/v1/admin/affiliates/partners/{partner_user_id}", json={"action": "suspend"})

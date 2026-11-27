@@ -49,7 +49,7 @@ def _public_plan(plan_id: str) -> dict:
 def test_running_offer_shows_launch_and_regular_prices():
     ends = datetime.now(timezone.utc) + timedelta(days=2)
     _offer(ends)
-    for plan_id, launch, regular in (("starter", 37.0, 59), ("pro", 89, 129), ("max", 149, 199)):
+    for plan_id, launch, regular in (("starter", 29.0, 59), ("pro", 69, 129), ("max", 115, 199)):
         plan = _public_plan(plan_id)
         assert plan["price"] == launch and plan["regular_price"] == regular
         assert plan["launch_price"] == launch
@@ -64,20 +64,20 @@ def test_ended_offer_switches_to_regular_prices():
     _offer(datetime.now(timezone.utc) - timedelta(seconds=1))
     plan = _public_plan("pro")
     assert plan["price"] == 129 and plan["regular_price"] is None and plan["offer_ends_at"] is None
-    assert plan["launch_price"] == 89
+    assert plan["launch_price"] == 69
     assert plan["_promo"]["active"] is False
 
 
 def test_switched_off_offer_keeps_the_typed_prices():
     _offer(datetime.now(timezone.utc) - timedelta(days=1), enabled=False)
     plan = _public_plan("starter")
-    assert plan["price"] == 37.0 and plan["regular_price"] is None
+    assert plan["price"] == 29.0 and plan["regular_price"] is None
 
 
 def test_regular_price_not_above_launch_price_is_no_offer():
-    _offer(datetime.now(timezone.utc) + timedelta(days=1), regular={"starter": 30, "pro": 129, "max": 149})
-    assert _public_plan("starter")["regular_price"] is None and _public_plan("starter")["price"] == 37.0
-    assert _public_plan("max")["regular_price"] is None and _public_plan("max")["price"] == 149
+    _offer(datetime.now(timezone.utc) + timedelta(days=1), regular={"starter": 25, "pro": 129, "max": 115})
+    assert _public_plan("starter")["regular_price"] is None and _public_plan("starter")["price"] == 29.0
+    assert _public_plan("max")["regular_price"] is None and _public_plan("max")["price"] == 115
     assert _public_plan("pro")["regular_price"] == 129
 
 
@@ -85,7 +85,7 @@ def test_price_flips_exactly_at_the_end_time():
     ends = datetime(2030, 1, 1, tzinfo=timezone.utc)
     _offer(ends)
     with _session() as db:
-        assert get_token_plans(db, now=ends - timedelta(seconds=1))["max"].price == 149
+        assert get_token_plans(db, now=ends - timedelta(seconds=1))["max"].price == 115
         assert get_token_plans(db, now=ends)["max"].price == 199
 
 
@@ -94,7 +94,7 @@ def test_checkout_bills_the_shown_price_before_and_after(whop_env):
     early = _signed_in(address("promo-early"))
     response = early.post("/api/v1/billing/checkout", json={"kind": "subscription", "plan_id": "starter"})
     assert response.status_code == 201, response.text
-    assert response.json()["amount"] == 37.0 and response.json()["whop_plan"] == "plan_starter"
+    assert response.json()["amount"] == 29.0 and response.json()["whop_plan"] == "plan_starter"
 
     _offer(datetime.now(timezone.utc) - timedelta(seconds=1))
     late = _signed_in(address("promo-late"))
@@ -105,8 +105,8 @@ def test_checkout_bills_the_shown_price_before_and_after(whop_env):
 
     # The earlier order keeps the price it was quoted.
     with _session() as db:
-        orders = db.query(Order).filter(Order.amount_usd.in_([37.0, 59])).all()
-        assert sorted(o.amount_usd for o in orders if o.plan_id == "starter")[-2:] == [37.0, 59]
+        orders = db.query(Order).filter(Order.amount_usd.in_([29.0, 59])).all()
+        assert sorted(o.amount_usd for o in orders if o.plan_id == "starter")[-2:] == [29.0, 59]
 
 
 def test_admin_edits_the_offer(admin):
@@ -125,7 +125,7 @@ def test_admin_edits_the_offer(admin):
     body = saved.json()
     assert body["promo"]["active"] is True and body["promo"]["ends_at"].startswith("2030-01-01T00:00:00")
     assert body["promo"]["regular"]["pro"] == 139 and body["promo"]["regular"]["starter"] == 59
-    assert body["plans"]["pro"]["regular_price"] == 139 and body["plans"]["pro"]["price"] == 89
+    assert body["plans"]["pro"]["regular_price"] == 139 and body["plans"]["pro"]["price"] == 69
 
     off = put({"enabled": False, "ends_at": "2030-01-01T00:00:00Z"}).json()
     assert off["promo"]["active"] is False and off["plans"]["pro"]["regular_price"] is None

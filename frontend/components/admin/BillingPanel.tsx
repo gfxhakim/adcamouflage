@@ -403,7 +403,7 @@ export function BillingPanel({ user, currency, onChanged }: BillingPanelProps) {
                   <input
                     className="field mt-1"
                     maxLength={500}
-                    placeholder="e.g. refunded $89 on request"
+                    placeholder="e.g. refunded $69 on request"
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                   />

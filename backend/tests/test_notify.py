@@ -102,7 +102,7 @@ def test_checkout_and_payment_send_alerts(alerts, whop_env):
     assert _post_whop(_whop_event(order_id, variant_id="plan_starter")).status_code == 200
     paid = [a for a in alerts if "PAID" in a[0]]
     assert len(paid) == 1
-    assert "$37" in paid[0][0] and paid[0][2] == "high"
+    assert "$29" in paid[0][0] and paid[0][2] == "high"
     assert "Confirmed by: Whop" in paid[0][1]
 
     # A repeated notification credits nothing and sends nothing.
