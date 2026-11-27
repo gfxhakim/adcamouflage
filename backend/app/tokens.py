@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 
 from .activity import log_activity
 from .app_settings import get_setting, set_setting
-from .db import BatchRecord, Order, TokenLedger, User
+from .db import ActivityEvent, BatchRecord, Order, TokenLedger, User
 from .plans import aware, check_allowance, plan_expired
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,7 @@ PLAN_SETTING = "token_plans"
 TOPUP_SETTING = "token_topups"
 RULES_SETTING = "billing_rules"
 PROMO_SETTING = "price_promo"
+FREE_SIGNUP_GENERATIONS = 3
 
 
 # --------------------------------------------------------------------------
@@ -385,6 +386,14 @@ def uses_tokens(user: User, now: datetime | None = None) -> bool:
     return user.billing_mode != LEGACY or plan_expired(user, now)
 
 
+def free_generations_available(user: User) -> int:
+    """Complimentary signup generations usable right now (token accounts before first subscription)."""
+
+    if user.billing_mode != TOKENS or user.sub_plan is not None:
+        return 0
+    return max(0, int(user.free_generations or 0))
+
+
 def generation_cost(user: User, plans: dict[str, TokenPlan] | None = None) -> int:
     """Tokens one generation costs this user: the snapshot taken at purchase."""
 
@@ -488,6 +497,20 @@ def quote_batch(db: Session, user: User, files: int, variants: int, now: datetim
     cost = generations * per_generation
 
     if user.sub_plan is None:
+        free_left = free_generations_available(user)
+        if free_left > 0:
+            if generations <= free_left:
+                return Quote(generations, 0, 0, free_left, None)
+            noun = "generation" if generations == 1 else "generations"
+            free_noun = "generation" if free_left == 1 else "generations"
+            return Quote(
+                generations,
+                0,
+                0,
+                free_left,
+                f"This batch needs {generations} {noun}, but you have {free_left} free {free_noun} left. "
+                "Subscribe to a plan to continue.",
+            )
         return Quote(generations, per_generation, cost, 0, "Subscribe to a plan to start generating.")
     if not subscription_active(user, now):
         plans = get_token_plans(db)
@@ -549,21 +572,48 @@ def _lock_user(db: Session, user: User) -> None:
     )
 
 
-def consume(db: Session, user: User, generations: int, batch_id: str) -> int:
-    """Charge ``generations`` to the user, subscription bucket first, and commit.
+def consume_batch(db: Session, user: User, generations: int, batch_id: str) -> tuple[int, int]:
+    """Charge ``generations`` to tokens or complimentary signup generations; commit and return ``(tokens_spent, free_used)``.
 
     The balance is read again under a per-user lock and the batch is refused
     with ``InsufficientTokens`` when it no longer covers the cost, so two
-    batches submitted at once cannot both spend the same tokens. Returns the
-    tokens taken. Legacy accounts still on their quota pay nothing.
+    batches submitted at once cannot both spend the same allowance.
     """
 
     if generations <= 0 or not uses_tokens(user):
-        return 0
+        return 0, 0
+
+    if user.sub_plan is None:
+        try:
+            _lock_user(db, user)
+            updated = db.execute(
+                update(User)
+                .where(
+                    User.id == user.id,
+                    User.billing_mode == TOKENS,
+                    User.sub_plan.is_(None),
+                    User.free_generations >= generations,
+                )
+                .values(free_generations=User.free_generations - generations)
+                .execution_options(synchronize_session=False)
+            ).rowcount
+            if updated != 1:
+                db.refresh(user)
+                quote = quote_batch(db, user, generations, 1)
+                if quote.allowed:
+                    quote = replace(quote, available=0, refusal="Subscribe to a plan to start generating.")
+                raise InsufficientTokens(quote)
+            db.commit()
+            db.refresh(user)
+        except BaseException:
+            db.rollback()
+            raise
+        return 0, generations
+
     per_generation = generation_cost(user, get_token_plans(db))
     cost = generations * per_generation
     if cost <= 0:
-        return 0
+        return 0, 0
 
     try:
         _lock_user(db, user)
@@ -593,7 +643,20 @@ def consume(db: Session, user: User, generations: int, batch_id: str) -> int:
     except BaseException:
         db.rollback()
         raise
-    return cost
+    return cost, 0
+
+
+def consume(db: Session, user: User, generations: int, batch_id: str) -> int:
+    """Charge ``generations`` to the user, subscription bucket first, and commit.
+
+    The balance is read again under a per-user lock and the batch is refused
+    with ``InsufficientTokens`` when it no longer covers the cost, so two
+    batches submitted at once cannot both spend the same tokens. Returns the
+    tokens taken. Legacy accounts still on their quota pay nothing.
+    """
+
+    tokens_spent, _free_used = consume_batch(db, user, generations, batch_id)
+    return tokens_spent
 
 
 # --------------------------------------------------------------------------
@@ -992,7 +1055,38 @@ def _refund_in_session(db: Session, batch_id: str, asset_id: str) -> int:
         )
     ).all()
     if not rows:
-        return 0  # a legacy batch, or one that was never charged
+        record = db.get(BatchRecord, batch_id)
+        free_used = int(getattr(record, "free_generations_used", 0) or 0) if record is not None else 0
+        if record is None or free_used <= 0:
+            return 0  # a legacy batch, or one that was never charged
+        trial_marker = f"{batch_id}:{asset_id}"
+        already_trial = db.execute(
+            select(func.count(ActivityEvent.id)).where(
+                ActivityEvent.user_id == record.user_id,
+                ActivityEvent.kind == "trial_refund",
+                ActivityEvent.detail == trial_marker,
+            )
+        ).scalar_one()
+        if already_trial:
+            return 0
+        batch_refunds = db.execute(
+            select(func.count(ActivityEvent.id)).where(
+                ActivityEvent.user_id == record.user_id,
+                ActivityEvent.kind == "trial_refund",
+                ActivityEvent.detail.startswith(f"{batch_id}:"),
+            )
+        ).scalar_one()
+        if batch_refunds >= free_used:
+            return 0
+        db.execute(
+            update(User)
+            .where(User.id == record.user_id)
+            .values(free_generations=User.free_generations + 1)
+            .execution_options(synchronize_session=False)
+        )
+        db.add(ActivityEvent(user_id=record.user_id, kind="trial_refund", detail=trial_marker))
+        db.commit()
+        return 1
 
     user_id = rows[0][0]
     consumed = {bucket: 0 for bucket in SPEND_ORDER}
@@ -1080,9 +1174,23 @@ def billing_alerts(db: Session, user: User, now: datetime | None = None) -> list
     alerts: list[dict[str, str]] = []
     subscription = subscription_summary(db, user, now)
     if subscription is None:
-        alerts.append(
-            {"level": "danger", "code": "no_subscription", "text": "Subscribe to a plan to start generating."}
-        )
+        free_left = free_generations_available(user)
+        if free_left > 0:
+            noun = "generation" if free_left == 1 else "generations"
+            alerts.append(
+                {
+                    "level": "info",
+                    "code": "free_trial",
+                    "text": (
+                        f"You have {free_left} free {noun} left to test ProteusFlow. "
+                        "Subscribe to Starter, Pro, or Max to unlock full monthly volume."
+                    ),
+                }
+            )
+        else:
+            alerts.append(
+                {"level": "danger", "code": "no_subscription", "text": "Subscribe to a plan to start generating."}
+            )
         return alerts
 
     label = subscription["plan_label"]

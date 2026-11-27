@@ -51,7 +51,7 @@ from .teams import router as team_router
 from .tokens import (
     InsufficientTokens,
     check_billing,
-    consume,
+    consume_batch,
     ensure_starter_metadata_wipe,
     get_billing_rules,
     get_token_plans,
@@ -454,7 +454,7 @@ async def create_batch(
     # second batch submitted while this one uploaded cannot spend the same
     # tokens; when it is refused, the uploads go and nothing is queued.
     try:
-        token_cost = consume(db, payer, len(accepted), batch.id)
+        token_cost, free_used = consume_batch(db, payer, len(accepted), batch.id)
     except InsufficientTokens as exc:
         for path in stored:
             path.unlink(missing_ok=True)
@@ -466,7 +466,15 @@ async def create_batch(
     batch.asset_ids = [job.id for job in accepted]
     store.save_batch(batch)
     store.attach_assets(batch.id, batch.asset_ids)
-    record_batch(db, batch.id, user.id, len(accepted), resolved, token_cost=token_cost)
+    record_batch(
+        db,
+        batch.id,
+        user.id,
+        len(accepted),
+        resolved,
+        token_cost=token_cost,
+        free_generations_used=free_used,
+    )
 
     for job in accepted:
         try:

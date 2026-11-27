@@ -38,7 +38,13 @@ from .app_settings import announcement, registration_open
 from .config import settings
 from .db import BatchRecord, TeamMember, User, get_db
 from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
-from .tokens import TOKENS, subscription_active, usable_tokens
+from .tokens import (
+    FREE_SIGNUP_GENERATIONS,
+    TOKENS,
+    free_generations_available,
+    subscription_active,
+    usable_tokens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +133,7 @@ class UserProfile(BaseModel):
     billing_mode: str = "legacy"
     tokens_usable: int = 0
     subscription_active: bool = False
+    free_generations: int = 0
     # True for accounts made with Google until a password is set.
     social_only: bool = False
 
@@ -152,6 +159,7 @@ class UserProfile(BaseModel):
             billing_mode=user.billing_mode,
             tokens_usable=usable_tokens(db, payer),
             subscription_active=subscription_active(payer),
+            free_generations=free_generations_available(payer),
             social_only=not security.has_password(user),
         )
 
@@ -298,6 +306,8 @@ def register(
         existing.password_hash = hash_password(password)
         existing.display_name = name or existing.display_name
         existing.account_role = role
+        if existing.sub_plan is None:
+            existing.free_generations = FREE_SIGNUP_GENERATIONS if role == "customer" else 0
         existing.token_version += 1
         db.commit()
         if not security.recently_sent(db, existing, security.VERIFY):
@@ -312,6 +322,7 @@ def register(
         last_login_at=None if needs_code else datetime.now(timezone.utc),
         # New accounts buy a token plan; the legacy quota plan is only a label.
         billing_mode=TOKENS,
+        free_generations=FREE_SIGNUP_GENERATIONS if role == "customer" else 0,
         account_role=role,
         email_verified=not needs_code,
     )
@@ -605,6 +616,7 @@ def record_batch(
     asset_count: int,
     options: object,
     token_cost: int = 0,
+    free_generations_used: int = 0,
 ) -> None:
     """Persist a batch so it survives the Redis retention window."""
 
@@ -619,6 +631,7 @@ def record_batch(
                 asset_count=asset_count,
                 preset=preset,
                 options_json=json.dumps(payload, default=str),
+                free_generations_used=free_generations_used,
             )
         )
         db.commit()
@@ -627,5 +640,11 @@ def record_batch(
         logger.warning("could not record batch %s", batch_id, exc_info=True)
         return
     noun = "file" if asset_count == 1 else "files"
-    cost = f" for {token_cost} tokens" if token_cost else ""
+    if token_cost:
+        cost = f" for {token_cost} tokens"
+    elif free_generations_used:
+        gen_noun = "generation" if free_generations_used == 1 else "generations"
+        cost = f" using {free_generations_used} free {gen_noun}"
+    else:
+        cost = ""
     log_activity(db, user_id, "batch", f"Started a batch of {asset_count} {noun} ({preset}){cost}")

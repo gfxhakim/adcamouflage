@@ -369,8 +369,8 @@ export function PricingSection({
       <GuaranteeBanner />
 
       <p className="mx-auto mt-8 max-w-4xl text-center text-base font-semibold leading-relaxed tracking-[-0.01em] text-white [text-shadow:0_0_16px_rgba(255,255,255,0.9),0_0_34px_rgba(255,255,255,0.48),0_0_54px_rgba(56,189,248,0.42)] sm:text-lg md:text-xl">
-        Account signup is free; rendering unlocks as soon as you activate a plan. Server-failed renders refund 100% of
-        tokens automatically — no auto-renewal surprises.
+        Every new sign-up gets 3 free generations to test the studio; subscribe to a plan anytime to keep scaling.
+        Server-failed renders refund 100% automatically — no auto-renewal surprises.
       </p>
     </div>
   );

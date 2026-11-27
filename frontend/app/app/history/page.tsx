@@ -6,13 +6,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import DownloadLink from "@/components/DownloadLink";
+import FirstRenderTrialModal from "@/components/FirstRenderTrialModal";
 import JobCard from "@/components/JobCard";
 import NeonCard from "@/components/NeonCard";
 import ProgressBar from "@/components/ProgressBar";
 import ThemeDock from "@/components/ThemeDock";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import { cancelAsset, getBatch, getPresets } from "@/lib/api";
-import { fetchMyBatches, type BatchSummary } from "@/lib/auth";
+import { fetchMyBatches, fetchSubscription, type BatchSummary, type Subscription } from "@/lib/auth";
 import { formatDate, plural, timeAgo } from "@/lib/format";
 import type { BatchStatus } from "@/lib/types";
 import { useRequireUser } from "@/lib/useRequireUser";
@@ -85,6 +86,9 @@ function batchBadge(batch: BatchStatus | null | undefined, retentionHours: numbe
 export default function HistoryPage() {
   const user = useRequireUser();
   const [retentionHours, setRetentionHours] = useState(48);
+  const [sub, setSub] = useState<Subscription | null>(null);
+  const [firstRenderOpen, setFirstRenderOpen] = useState(false);
+  const [firstRenderCompleted, setFirstRenderCompleted] = useState(1);
   const [summaries, setSummaries] = useState<BatchSummary[] | null>(null);
   const [details, setDetails] = useState<Record<string, BatchStatus | null>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -94,11 +98,13 @@ export default function HistoryPage() {
   const loadHistory = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
     try {
-      const [rows, catalogue] = await Promise.all([
+      const [rows, catalogue, subscription] = await Promise.all([
         fetchMyBatches(),
         getPresets().catch(() => null),
+        fetchSubscription().catch(() => null),
       ]);
       if (!mountedRef.current) return;
+      if (subscription) setSub(subscription);
       if (catalogue?.limits?.retention_hours) {
         setRetentionHours(catalogue.limits.retention_hours);
       }
@@ -142,18 +148,53 @@ export default function HistoryPage() {
     const timer = window.setInterval(() => {
       void Promise.allSettled(ids.map((id) => getBatch(id))).then((settled) => {
         if (!mountedRef.current) return;
+        let anyDone = false;
         setDetails((prev) => {
           const next = { ...prev };
           ids.forEach((id, index) => {
             const result = settled[index];
-            next[id] = result.status === "fulfilled" ? result.value : null;
+            const val = result.status === "fulfilled" ? result.value : null;
+            next[id] = val;
+            if (val && !isBatchActive(val)) anyDone = true;
           });
           return next;
         });
+        if (anyDone) {
+          void fetchSubscription()
+            .then((s) => {
+              if (mountedRef.current && s) setSub(s);
+            })
+            .catch(() => undefined);
+        }
       });
     }, 1500);
     return () => window.clearInterval(timer);
   }, [activeKey]);
+
+  // Trigger the first-render popup once if the trial user finished rendering while watching History.
+  useEffect(() => {
+    if (!user || user.billing_mode !== "tokens" || user.subscription_active) return;
+    if (sub?.subscription) return;
+    const completedBatch = Object.values(details).find((b) => b && !isBatchActive(b) && b.completed > 0);
+    if (!completedBatch) return;
+    const seenKey = `proteusflow:first_render_popup_seen:${user.id}`;
+    try {
+      if (window.localStorage.getItem(seenKey) === "1") return;
+    } catch {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try {
+        if (window.localStorage.getItem(seenKey) === "1") return;
+        window.localStorage.setItem(seenKey, "1");
+      } catch {
+        return;
+      }
+      setFirstRenderCompleted(completedBatch.completed);
+      setFirstRenderOpen(true);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [details, sub, user]);
 
   const handleCancelAsset = useCallback(async (assetId: string, batchId: string) => {
     try {
@@ -341,6 +382,15 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+      <FirstRenderTrialModal
+        open={firstRenderOpen}
+        freeRemaining={sub?.free_generations ?? user?.free_generations ?? 0}
+        freeTotal={sub?.free_generations_total ?? 3}
+        plans={sub?.token_plans ?? []}
+        currency={sub?.currency ?? "USD"}
+        completedCount={firstRenderCompleted}
+        onClose={() => setFirstRenderOpen(false)}
+      />
       <ThemeDock />
     </WorkspaceShell>
   );

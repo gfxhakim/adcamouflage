@@ -30,6 +30,7 @@ import HelpDrawer from "@/components/help/HelpDrawer";
 import CoachMark from "@/components/help/CoachMark";
 import SupportBotWidget from "@/components/help/SupportBotWidget";
 import WorkspaceTutorialSection from "@/components/help/WorkspaceTutorialSection";
+import FirstRenderTrialModal from "@/components/FirstRenderTrialModal";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
 import OverlayPreview from "@/components/OverlayPreview";
 import PosterPicker from "@/components/PosterPicker";
@@ -176,6 +177,8 @@ export default function WorkspacePage() {
   const [tourMode, setTourMode] = useState(false);
   const [postAgreement, setPostAgreement] = useState(false);
   const [activationGuideDismissed, setActivationGuideDismissed] = useState(false);
+  const [firstRenderOpen, setFirstRenderOpen] = useState(false);
+  const [firstRenderCompleted, setFirstRenderCompleted] = useState(1);
 
   const currentStepId = STEPS[step].id as HelpStepId;
 
@@ -447,7 +450,7 @@ export default function WorkspacePage() {
     const prev = lastRefundSyncRef.current;
     const batchChanged = !prev || prev.batchId !== batch.batch.id;
     const newFailure = !batchChanged && batch.failed > prev.failed;
-    const justSettled = (!batchChanged ? !prev.settled : true) && settled && batch.failed > 0;
+    const justSettled = (!batchChanged ? !prev.settled : true) && settled;
     lastRefundSyncRef.current = { batchId: batch.batch.id, failed: batch.failed, settled };
     if (newFailure || justSettled) {
       syncAccount();
@@ -465,6 +468,51 @@ export default function WorkspacePage() {
 
     return () => clearTimeout(timer);
   }, [batch, refresh, syncAccount]);
+
+  // Show the celebratory upgrade popup once right after a free-trial account's first render finishes.
+  useEffect(() => {
+    if (!user || user.billing_mode !== "tokens" || user.subscription_active) return;
+    if (billing?.subscription) return;
+    const seenKey = `proteusflow:first_render_popup_seen:${user.id}`;
+    try {
+      if (window.localStorage.getItem(seenKey) === "1") return;
+    } catch {
+      return;
+    }
+
+    const completed = batch?.completed ?? 0;
+    const currentBatchSettled = Boolean(
+      batch &&
+        (batch.assets.length > 0
+          ? batch.assets.every(
+              (asset) => asset.status === "completed" || asset.status === "failed" || asset.status === "cancelled",
+            )
+          : batch.completed + batch.failed >= batch.total),
+    );
+    const finishedCurrentBatch = Boolean(currentBatchSettled && completed > 0);
+    const priorTrialActivity = Boolean(
+      !batch &&
+        billing &&
+        billing.batches_total >= 1 &&
+        (billing.free_generations ?? 3) < (billing.free_generations_total ?? 3),
+    );
+    if (!finishedCurrentBatch && !priorTrialActivity) return;
+
+    const timer = window.setTimeout(
+      () => {
+        try {
+          if (window.localStorage.getItem(seenKey) === "1") return;
+          window.localStorage.setItem(seenKey, "1");
+        } catch {
+          return;
+        }
+        setFirstRenderCompleted(finishedCurrentBatch ? completed : 1);
+        setFirstRenderOpen(true);
+      },
+      finishedCurrentBatch ? 650 : 200,
+    );
+    return () => window.clearTimeout(timer);
+  }, [batch, billing, polling, user]);
 
   // --- actions ------------------------------------------------------------
   const handleSubmit = useCallback(async () => {
@@ -600,7 +648,7 @@ export default function WorkspacePage() {
   const outputsReady = batch?.completed ?? 0;
   const engineBlocked = Boolean(health) && !health?.ffmpeg;
 
-  // --- token billing ------------------------------------------------------
+  // --- token billing & free signup trial ---------------------------------
   const tokenMode = user?.billing_mode === "tokens";
   // Once the plan is known, switch off what it does not include so the panel
   // never shows a locked option as on.
@@ -610,8 +658,14 @@ export default function WorkspacePage() {
     setOptions((current) => applyPlanLocks(current, lockedKey.split(",") as PlanFeatureId[]));
   }, [lockedKey]);
 
-  // No active period: nothing can be generated until they subscribe or renew.
-  const paywalled = Boolean(user && tokenMode && !user.subscription_active);
+  const hasSubscription = Boolean(user?.subscription_active);
+  const freeGenerations =
+    tokenMode && !hasSubscription ? Math.max(0, billing?.free_generations ?? user?.free_generations ?? 0) : 0;
+  const freeTotal = Math.max(freeGenerations, billing?.free_generations_total ?? 3);
+  const inFreeTrial = Boolean(user && tokenMode && !hasSubscription && freeGenerations > 0);
+  // No active period and no free signup generations left: subscribe or renew to generate.
+  const paywalled = Boolean(user && tokenMode && !hasSubscription && !inFreeTrial);
+  const exhaustedTrial = Boolean(paywalled && !billing?.subscription && (billing?.batches_total ?? 0) > 0);
   const perGeneration = billing?.subscription?.tokens_per_generation ?? 0;
   const usableTokens = billing?.balance.usable_tokens ?? user?.tokens_usable ?? 0;
   const generations = files.length * Math.max(1, options.variants);
@@ -619,10 +673,14 @@ export default function WorkspacePage() {
     files.length > 0 ? Math.max(1, Math.floor(maxGenerations / files.length)) : maxGenerations;
   const overMaximum = files.length > 0 && generations > maxGenerations;
   const batchCost = perGeneration * generations;
-  const shortOfTokens = tokenMode && !paywalled && perGeneration > 0 && batchCost > usableTokens;
-  // The paywall already says what the danger alerts say; the banner keeps the rest.
+  const shortOfTokens = tokenMode && !paywalled && !inFreeTrial && perGeneration > 0 && batchCost > usableTokens;
+  const shortOfFreeGenerations = inFreeTrial && files.length > 0 && generations > freeGenerations;
+  // The paywall / trial card already covers no_subscription, ended, and free_trial.
   const bannerAlerts = (billing?.alerts ?? []).filter(
-    (alert) => alert.level !== "info" && !(paywalled && (alert.code === "no_subscription" || alert.code === "ended")),
+    (alert) =>
+      alert.level !== "info" &&
+      !(inFreeTrial && alert.code === "free_trial") &&
+      !(paywalled && (alert.code === "no_subscription" || alert.code === "ended")),
   );
 
   const plan = user
@@ -661,7 +719,49 @@ export default function WorkspacePage() {
             </div>
           ) : null}
 
-          {paywalled ? (
+          {inFreeTrial ? (
+            <NeonCard padding="md" radius="lg" glow>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+                      Free Trial · {freeGenerations} of {freeTotal} left
+                    </span>
+                    <div className="flex items-center gap-1" aria-hidden>
+                      {Array.from({ length: freeTotal }, (_, index) => {
+                        const used = index < freeTotal - freeGenerations;
+                        return (
+                          <span
+                            key={index}
+                            className={clsx(
+                              "h-1.5 w-5 rounded-full",
+                              used ? "bg-emerald-500" : "bg-black/15 dark:bg-white/20",
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold text-black dark:text-slate-50">
+                    You have {freeGenerations} free {freeGenerations === 1 ? "generation" : "generations"} left to test
+                    ProteusFlow
+                  </p>
+                  <p className="text-xs leading-relaxed text-ink-muted dark:text-slate-400">
+                    Run {freeGenerations} complimentary {freeGenerations === 1 ? "export" : "exports"} right now with
+                    full studio settings. Once used, subscribe to a{" "}
+                    <strong className="font-semibold text-black dark:text-white">Starter, Pro, or Max</strong> plan to
+                    unlock monthly volume.
+                  </p>
+                </div>
+                <Link href="/app/plan" className="btn-primary shrink-0 !text-xs">
+                  <Crown className="h-3.5 w-3.5" aria-hidden />
+                  View plans &amp; subscribe
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                </Link>
+              </div>
+            </NeonCard>
+          ) : paywalled ? (
             !activationGuideDismissed ? (
               <NeonCard padding="md" radius="lg" glow>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -669,7 +769,11 @@ export default function WorkspacePage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-meta-500/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-meta-700 dark:text-meta-300">
                         <Sparkles className="h-3 w-3" aria-hidden />
-                        {postAgreement ? "Account & agreement complete" : "Quick start guide"}
+                        {exhaustedTrial
+                          ? "3 Free Generations Used"
+                          : postAgreement
+                            ? "Account & agreement complete"
+                            : "Quick start guide"}
                       </span>
                       <span className="text-[11px] font-medium text-ink-faint dark:text-slate-400">
                         1 · Account ready ✓ → 2 · Pick a plan → 3 · Rebuild rejected ads
@@ -678,18 +782,22 @@ export default function WorkspacePage() {
                     <p className="text-sm font-semibold text-black dark:text-slate-50">
                       {billing?.subscription
                         ? "Renew your plan to keep rebuilding rejected ads"
-                        : "Activate a plan to fix rejected & policy-flagged video ads"}
+                        : exhaustedTrial
+                          ? "You've used all 3 free generations — subscribe to keep rendering"
+                          : "Activate a plan to fix rejected & policy-flagged video ads"}
                     </p>
                     <p className="text-xs leading-relaxed text-ink-muted dark:text-slate-400">
                       {billing?.subscription
                         ? "Your previous period ended. Renew any plan so our AI Layer Engine can process and export new variations."
-                        : "You can preview the studio below right away, and rendering starts as soon as you pick Starter, Pro, or Max—unlocking the AI Layer Engine that makes aggressive Meta, TikTok & YouTube ads pass review and convert better."}
+                        : exhaustedTrial
+                          ? "Pick Starter, Pro, or Max below to unlock full monthly volume, token rollover, and uninterrupted exports—100% auto-refund on failed server renders."
+                          : "You can preview the studio below right away, and rendering starts as soon as you pick Starter, Pro, or Max—unlocking the AI Layer Engine that makes aggressive Meta, TikTok & YouTube ads pass review and convert better."}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Link href="/app/plan" className="btn-primary !text-xs">
                       <Crown className="h-3.5 w-3.5" aria-hidden />
-                      {billing?.subscription ? "Renew plan" : "See plans & activate"}
+                      {billing?.subscription ? "Renew plan" : "See plans & subscribe"}
                       <ArrowRight className="h-3.5 w-3.5" aria-hidden />
                     </Link>
                     <button
@@ -719,7 +827,11 @@ export default function WorkspacePage() {
                     </span>
                     <div>
                       <p className="text-sm font-semibold text-black dark:text-slate-50">
-                        {billing?.subscription ? "Renew your plan to keep generating" : "Subscribe to start generating"}
+                        {billing?.subscription
+                          ? "Renew your plan to keep generating"
+                          : exhaustedTrial
+                            ? "All 3 free generations used — subscribe to continue"
+                            : "Subscribe to start generating"}
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-ink-muted dark:text-slate-400">
                         {billing?.alerts.find((a) => a.code === "ended" || a.code === "no_subscription")?.text ??
@@ -822,14 +934,21 @@ export default function WorkspacePage() {
                 href="/app/plan"
                 className={clsx(
                   "chip !font-mono hover:!border-meta-500/60",
-                  (paywalled || usableTokens <= 0) && "!border-red-400/50 !text-red-700 dark:!text-red-300",
+                  inFreeTrial &&
+                    "!border-emerald-400/50 !text-emerald-700 dark:!text-emerald-300",
+                  (paywalled || (!inFreeTrial && usableTokens <= 0)) &&
+                    "!border-red-400/50 !text-red-700 dark:!text-red-300",
                 )}
-                title="Plan & tokens"
+                title={inFreeTrial ? "Free trial & plans" : "Plan & tokens"}
               >
                 <Coins className="h-3.5 w-3.5" aria-hidden />
-                {paywalled
-                  ? "No subscription"
-                  : `${billing?.subscription?.plan_label ?? "Plan"} · ${formatTokens(usableTokens)} tokens`}
+                {inFreeTrial
+                  ? `Free trial · ${freeGenerations}/${freeTotal} left`
+                  : paywalled
+                    ? exhaustedTrial
+                      ? "Trial used · Subscribe"
+                      : "No subscription"
+                    : `${billing?.subscription?.plan_label ?? "Plan"} · ${formatTokens(usableTokens)} tokens`}
               </Link>
             ) : plan ? (
               <Link
@@ -1069,6 +1188,7 @@ export default function WorkspacePage() {
                           overMaximum ||
                           uploading ||
                           paywalled ||
+                          shortOfFreeGenerations ||
                           shortOfTokens ||
                           Boolean(healthError) ||
                           Boolean(overlayProblem)
@@ -1115,7 +1235,45 @@ export default function WorkspacePage() {
                         <ProgressBar value={uploadProgress * 100} active label="Upload progress" />
                       ) : null}
 
-                      {tokenMode && !paywalled && perGeneration > 0 ? (
+                      {tokenMode && inFreeTrial ? (
+                        <p
+                          className={clsx(
+                            "flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed",
+                            shortOfFreeGenerations
+                              ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+                              : "border-emerald-300/70 bg-emerald-50/80 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
+                          )}
+                          aria-live="polite"
+                        >
+                          <Coins className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                          <span>
+                            {files.length === 0
+                              ? `Free trial: ${freeGenerations} of ${freeTotal} free signup ${plural(freeTotal, "generation")} remaining.`
+                              : `${plural(generations, "generation")} queued — uses ${generations} of ${freeGenerations} remaining free signup ${plural(freeGenerations, "generation")}.`}
+                            {shortOfFreeGenerations ? (
+                              <>
+                                {" "}
+                                Only {freeGenerations} free {plural(freeGenerations, "generation")} left — reduce
+                                files/variants or{" "}
+                                <Link href="/app/plan" className="font-semibold underline">
+                                  subscribe to a plan
+                                </Link>
+                                .
+                              </>
+                            ) : (
+                              <>
+                                {" "}
+                                <Link href="/app/plan" className="font-semibold underline">
+                                  Subscribe to a plan
+                                </Link>{" "}
+                                anytime to unlock monthly tokens.
+                              </>
+                            )}
+                          </span>
+                        </p>
+                      ) : null}
+
+                      {tokenMode && !paywalled && !inFreeTrial && perGeneration > 0 ? (
                         <p
                           className={clsx(
                             "flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed",
@@ -1146,11 +1304,23 @@ export default function WorkspacePage() {
 
                       {paywalled ? (
                         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] leading-relaxed text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
-                          Generating is paused until you{" "}
-                          <Link href="/app/plan" className="font-semibold underline">
-                            {billing?.subscription ? "renew your plan" : "subscribe to a plan"}
-                          </Link>
-                          .
+                          {exhaustedTrial ? (
+                            <>
+                              You&apos;ve used all {freeTotal} free generations.{" "}
+                              <Link href="/app/plan" className="font-semibold underline">
+                                Subscribe to Starter, Pro, or Max
+                              </Link>{" "}
+                              to keep generating.
+                            </>
+                          ) : (
+                            <>
+                              Generating is paused until you{" "}
+                              <Link href="/app/plan" className="font-semibold underline">
+                                {billing?.subscription ? "renew your plan" : "subscribe to a plan"}
+                              </Link>
+                              .
+                            </>
+                          )}
                         </p>
                       ) : null}
 
@@ -1282,6 +1452,15 @@ export default function WorkspacePage() {
         stepNumber={step + 1}
         totalSteps={STEPS.length}
         onFinish={handleCloseCoach}
+      />
+      <FirstRenderTrialModal
+        open={firstRenderOpen}
+        freeRemaining={freeGenerations}
+        freeTotal={freeTotal}
+        plans={billing?.token_plans ?? []}
+        currency={billing?.currency ?? "USD"}
+        completedCount={firstRenderCompleted}
+        onClose={() => setFirstRenderOpen(false)}
       />
       <SupportBotWidget onOpenGuide={openHelpDrawer} />
       <ThemeDock />

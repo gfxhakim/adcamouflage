@@ -322,6 +322,7 @@ def test_google_opens_a_new_verified_account(outbox, google):
     assert done.status_code == 200 and "location.replace(\"/app\")" in done.text
     me = client.get("/api/v1/auth/me").json()
     assert me["email"] == email and me["display_name"] == "Gina" and me["social_only"] is True
+    assert me["free_generations"] == 3
     assert _load(email).email_verified is True
     assert len(_to(outbox, email, "Welcome")) == 1
     # Password login is refused with a hint; signing in again with Google works.

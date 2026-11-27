@@ -26,6 +26,8 @@ export interface UserProfile {
   /** Tokens that can be spent right now (0 while the subscription has lapsed). */
   tokens_usable: number;
   subscription_active: boolean;
+  /** Complimentary signup generations left before first paid plan (older APIs omit it). */
+  free_generations?: number;
   /** True for accounts made with Google until a password is set (older APIs leave it out). */
   social_only?: boolean;
 }
@@ -239,7 +241,7 @@ export interface TokenBalance {
 
 export type AlertLevel = "info" | "warning" | "danger";
 
-export type AlertCode = "no_subscription" | "ends_soon" | "ended" | "low_tokens" | "cancelled";
+export type AlertCode = "no_subscription" | "free_trial" | "ends_soon" | "ended" | "low_tokens" | "cancelled";
 
 export interface BillingAlert {
   level: AlertLevel;
@@ -296,6 +298,9 @@ export interface Subscription {
   team?: Team | null;
   /** Render-setting groups the paying plan does not include (older APIs leave it out = none). */
   locked_features?: PlanFeatureId[];
+  /** Complimentary signup generations left before first paid plan. */
+  free_generations?: number;
+  free_generations_total?: number;
 }
 
 // ---------------------------------------------------------------------------

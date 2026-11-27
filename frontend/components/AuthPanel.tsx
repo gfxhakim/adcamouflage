@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Loader2, Lock, Mail, MailCheck, OctagonAlert, User } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Lock, Mail, MailCheck, OctagonAlert, Sparkles, User } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useState } from "react";
@@ -293,9 +293,8 @@ export function AuthPanel({ mode }: { mode: Mode }) {
           </button>
         </div>
         <p className="mt-4 rounded-xl border border-meta-500/25 bg-meta-50/70 px-3.5 py-2.5 text-[11px] leading-relaxed text-slate-700">
-          <span className="font-semibold text-black">Next step after verifying:</span> pick a Starter, Pro, or Max
-          plan to unlock render tokens so our AI Engine can rebuild your rejected or aggressive video ads to pass review
-          and convert better.
+          <span className="font-semibold text-black">3 free generations waiting inside:</span> confirm your email to
+          run 3 studio test renders right away, then subscribe to Starter, Pro, or Max to keep scaling.
         </p>
         <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
           No email after a minute? Check your spam or promotions folder.
@@ -324,6 +323,19 @@ export function AuthPanel({ mode }: { mode: Mode }) {
             : "Sign in to your account, or create a new one below."}
         </p>
       </div>
+
+      {mode === "signup" && !isAffiliateFlow ? (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-emerald-400/45 bg-emerald-50/80 px-3.5 py-3 text-xs leading-relaxed text-emerald-950">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+          <div>
+            <p className="font-semibold text-black">Includes 3 free generations on sign-up</p>
+            <p className="mt-0.5 text-[11px] text-emerald-900/80">
+              Test ProteusFlow right away with 3 complimentary exports. Subscribe to Starter, Pro, or Max anytime to
+              keep scaling.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {current ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-meta-500/20 bg-meta-50 px-4 py-3">

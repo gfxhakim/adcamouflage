@@ -97,6 +97,8 @@ class User(Base):
     sub_tokens_per_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Whop recurring membership id (`mem_...`) from the customer's subscription checkout.
     whop_membership_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Complimentary generations granted once to new sign-ups before their first paid plan.
+    free_generations: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # Set when the user unsubscribes from group emails (Admin > Customer
     # emails > Send to a group). Account emails (welcome, receipts,
@@ -185,6 +187,7 @@ class BatchRecord(Base):
     asset_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     preset: Mapped[str] = mapped_column(String(32), default="balanced", nullable=False)
     options_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    free_generations_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False, index=True
     )
@@ -759,6 +762,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("affiliate_partners", "affiliate_link", "VARCHAR(500) NOT NULL DEFAULT ''"),
     ("refund_requests", "tokens_remaining", "INTEGER"),
     ("refund_requests", "refund_amount_usd", "FLOAT"),
+    ("users", "free_generations", "INTEGER NOT NULL DEFAULT 0"),
+    ("batches", "free_generations_used", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

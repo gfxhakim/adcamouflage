@@ -90,8 +90,8 @@ export default function SignupPolicyModal({
                 they convert better.
               </li>
               <li>
-                Creating an account is free — to start rendering, activate a 30-day plan (Starter, Pro, or Max) to load
-                render tokens onto your profile.
+                Every new account includes <b className="text-black">3 free generations</b> to test the studio right away
+                — after that, activate a 30-day plan (Starter, Pro, or Max) to keep rendering at full volume.
               </li>
               <li>
                 If any render fails on our servers, those tokens are automatically credited back to your account.

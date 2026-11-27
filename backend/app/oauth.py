@@ -51,7 +51,7 @@ from .app_settings import registration_open
 from .config import settings
 from .db import OAuthIdentity, User, get_db
 from .plans import apply_plan, default_plan
-from .tokens import TOKENS
+from .tokens import FREE_SIGNUP_GENERATIONS, TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +238,7 @@ def find_or_create_user(
         password_hash=security.NO_PASSWORD,
         display_name=(name or "").strip()[:120] or None,
         billing_mode=TOKENS,
+        free_generations=FREE_SIGNUP_GENERATIONS if role == "customer" else 0,
         account_role=role,
         email_verified=True,
     )

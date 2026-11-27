@@ -107,13 +107,32 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
   cms.register({ key: "rail.signOut", type: "toggle", label: "Sign out button" });
   const [signingOut, setSigningOut] = useState(false);
 
-  // The token count: only for token accounts; red once there is nothing to spend.
+  // The token count (or free-trial generations): only for token accounts; red once nothing left.
+  const freeGenerations =
+    user && user.billing_mode === "tokens" && !user.subscription_active
+      ? Math.max(0, user.free_generations ?? 0)
+      : 0;
+  const inFreeTrial = Boolean(user && user.billing_mode === "tokens" && !user.subscription_active && freeGenerations > 0);
   const tokens = user && user.billing_mode === "tokens" ? user.tokens_usable : null;
-  const tokensLow = tokens !== null && (!user?.subscription_active || tokens <= 0);
-  const tokenTip = tokens === null ? null : user?.subscription_active ? `${formatTokens(tokens)} tokens` : "No active subscription";
-  const tokenTone = tokensLow
-    ? "border-red-400/50 bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-200"
-    : "border-meta-500/40 bg-white text-meta-700 dark:border-meta-500/50 dark:bg-slate-900 dark:text-meta-200";
+  const tokensLow = tokens !== null && !inFreeTrial && (!user?.subscription_active || tokens <= 0);
+  const tokenBadgeText = inFreeTrial
+    ? `${freeGenerations} free`
+    : tokens !== null
+      ? compactTokens(tokens)
+      : "";
+  const tokenTip =
+    tokens === null
+      ? null
+      : inFreeTrial
+        ? `${freeGenerations} free ${freeGenerations === 1 ? "generation" : "generations"} left · subscribe to scale`
+        : user?.subscription_active
+          ? `${formatTokens(tokens)} tokens`
+          : "No active subscription";
+  const tokenTone = inFreeTrial
+    ? "border-emerald-400/50 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/20 dark:text-emerald-200"
+    : tokensLow
+      ? "border-red-400/50 bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-200"
+      : "border-meta-500/40 bg-white text-meta-700 dark:border-meta-500/50 dark:bg-slate-900 dark:text-meta-200";
 
   const closeDrawer = () => {
     if (isMobile) setOpenMobile(false);
@@ -194,16 +213,16 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
                         <Icon aria-hidden />
                         <span className={LABEL}>{label}</span>
                         {showTokens ? (
-                          <span
-                            className={clsx(
-                              "ml-auto shrink-0 rounded-full border px-1.5 font-mono text-[10px] leading-[1.125rem] tabular-nums group-data-[collapsible=icon]:hidden",
-                              tokenTone,
-                            )}
-                            title={tokenTip ?? undefined}
-                            data-cms-skip
-                          >
-                            {compactTokens(tokens)}
-                          </span>
+                            <span
+                              className={clsx(
+                                "ml-auto shrink-0 rounded-full border px-1.5 font-mono text-[10px] leading-[1.125rem] tabular-nums group-data-[collapsible=icon]:hidden",
+                                tokenTone,
+                              )}
+                              title={tokenTip ?? undefined}
+                              data-cms-skip
+                            >
+                              {tokenBadgeText}
+                            </span>
                         ) : null}
                       </Link>
                     </SidebarMenuButton>
@@ -216,7 +235,7 @@ export function WorkspaceSidebar({ deck = false, onDark = false, user, onOpenHel
                         aria-hidden
                         data-cms-skip
                       >
-                        {compactTokens(tokens)}
+                        {tokenBadgeText}
                       </span>
                     ) : null}
                   </SidebarMenuItem>

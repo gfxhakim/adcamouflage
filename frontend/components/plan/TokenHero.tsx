@@ -1,7 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarDays, Coins, Crown, Snowflake, UserRound, Zap } from "lucide-react";
+import { CalendarDays, Coins, Crown, Snowflake, Sparkles, UserRound, Zap } from "lucide-react";
+import Link from "next/link";
 
 import NeonCard from "@/components/NeonCard";
 import type { Subscription } from "@/lib/auth";
@@ -16,7 +17,17 @@ interface TokenHeroProps {
 /** "Active", "Ends in 3 days", "Ended · renew within 5 days", "Cancelled" and their colours. */
 export function subscriptionStatus(sub: Subscription): { text: string; tone: string } {
   const current = sub.subscription;
-  if (!current) return { text: "No subscription", tone: "border-red-300 bg-red-50 text-red-700" };
+  if (!current) {
+    const freeLeft = Math.max(0, sub.free_generations ?? 0);
+    const freeTotal = Math.max(freeLeft, sub.free_generations_total ?? 3);
+    if (freeLeft > 0) {
+      return {
+        text: `Free trial · ${freeLeft}/${freeTotal} free`,
+        tone: "border-emerald-300 bg-emerald-50 text-emerald-700",
+      };
+    }
+    return { text: "No subscription", tone: "border-red-300 bg-red-50 text-red-700" };
+  }
   if (!current.active) {
     const graceLeft = current.grace_until
       ? Math.max(0, Math.ceil((new Date(current.grace_until).getTime() - Date.now()) / 86_400_000))
@@ -44,6 +55,10 @@ export function TokenHero({ sub }: TokenHeroProps) {
   const balance = sub.balance;
   const status = subscriptionStatus(sub);
   const perGeneration = current?.tokens_per_generation ?? 0;
+  const freeLeft = !current ? Math.max(0, sub.free_generations ?? 0) : 0;
+  const freeTotal = Math.max(freeLeft, sub.free_generations_total ?? 3);
+  const inFreeTrial = !current && freeLeft > 0;
+  const freeShare = inFreeTrial && freeTotal > 0 ? Math.min(1, freeLeft / freeTotal) : 0;
   const subShare = balance.usable_tokens > 0 ? Math.min(1, Math.max(0, balance.subscription_tokens) / balance.usable_tokens) : 0;
 
   return (
@@ -52,20 +67,24 @@ export function TokenHero({ sub }: TokenHeroProps) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="grid h-11 w-11 place-items-center rounded-xl border border-meta-500/30 bg-gradient-to-br from-meta-50 to-meta-100 text-meta-600">
-              <Crown className="h-5 w-5" aria-hidden />
+              {inFreeTrial ? <Sparkles className="h-5 w-5" aria-hidden /> : <Crown className="h-5 w-5" aria-hidden />}
             </span>
             <div>
               <p className="label">Current plan</p>
               <p className="text-2xl font-bold tracking-tight text-black sm:text-3xl">
-                {current ? current.plan_label : "None yet"}
+                {current ? current.plan_label : inFreeTrial ? "Free Trial" : "None yet"}
               </p>
             </div>
             <span className={clsx("chip ml-auto lg:ml-2", status.tone)}>{status.text}</span>
           </div>
 
           <p className="mt-5 text-3xl font-bold tracking-tight text-black">
-            {current ? formatMoney(current.price, sub.currency) : "—"}
-            {current ? <span className="text-sm font-medium text-ink-subtle"> / 30 days</span> : null}
+            {current ? formatMoney(current.price, sub.currency) : inFreeTrial ? "Free" : "—"}
+            {current ? (
+              <span className="text-sm font-medium text-ink-subtle"> / 30 days</span>
+            ) : inFreeTrial ? (
+              <span className="text-sm font-medium text-ink-subtle"> · {freeTotal} signup test generations</span>
+            ) : null}
           </p>
 
           <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -74,14 +93,16 @@ export function TokenHero({ sub }: TokenHeroProps) {
                 <CalendarDays className="h-3.5 w-3.5" aria-hidden /> Period ends
               </dt>
               <dd className={clsx("font-medium", current && !current.active ? "text-red-700" : "text-black")}>
-                {current?.period_end ? formatDate(current.period_end) : "—"}
+                {current?.period_end ? formatDate(current.period_end) : inFreeTrial ? "Until used" : "—"}
               </dd>
             </div>
             <div>
               <dt className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
                 <Zap className="h-3.5 w-3.5" aria-hidden /> Per generation
               </dt>
-              <dd className="font-medium text-black">{perGeneration ? `${perGeneration} tokens` : "—"}</dd>
+              <dd className="font-medium text-black">
+                {perGeneration ? `${perGeneration} tokens` : inFreeTrial ? "1 free credit" : "—"}
+              </dd>
             </div>
             <div>
               <dt className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
@@ -93,7 +114,7 @@ export function TokenHero({ sub }: TokenHeroProps) {
               <dt className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
                 <Coins className="h-3.5 w-3.5" aria-hidden /> Billing
               </dt>
-              <dd className="font-medium text-black">Paid per 30-day period</dd>
+              <dd className="font-medium text-black">{inFreeTrial ? "Complimentary starter trial" : "Paid per 30-day period"}</dd>
             </div>
           </dl>
 
@@ -106,6 +127,14 @@ export function TokenHero({ sub }: TokenHeroProps) {
                 {current.cancelled ? "Resume plan" : "Cancel plan or ask for a refund"}
               </a>
             </p>
+          ) : inFreeTrial ? (
+            <p className="mt-5 text-[11px] text-ink-muted">
+              You have {freeLeft} free {freeLeft === 1 ? "generation" : "generations"} left. Subscribe below when
+              ready to scale.{" "}
+              <Link href="/app" className="font-semibold text-meta-600 hover:underline">
+                Open studio →
+              </Link>
+            </p>
           ) : null}
         </div>
 
@@ -113,16 +142,22 @@ export function TokenHero({ sub }: TokenHeroProps) {
         <div className="rounded-2xl border border-black/[0.07] bg-gradient-to-br from-white to-meta-50/60 p-5 sm:p-6">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <p className="label">Tokens you can use</p>
+              <p className="label">{inFreeTrial ? "Free generations left" : "Tokens you can use"}</p>
               <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight text-black">
-                {formatTokens(balance.usable_tokens)}
+                {inFreeTrial ? `${freeLeft} / ${freeTotal}` : formatTokens(balance.usable_tokens)}
               </p>
               <p className="text-xs text-ink-subtle">
-                {perGeneration ? `${perGeneration} tokens per generation` : "subscription + top-up"}
+                {inFreeTrial
+                  ? "complimentary signup test renders"
+                  : perGeneration
+                    ? `${perGeneration} tokens per generation`
+                    : "subscription + top-up"}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold tabular-nums text-meta-600">{formatTokens(balance.generations_left)}</p>
+              <p className="text-2xl font-bold tabular-nums text-meta-600">
+                {inFreeTrial ? freeLeft : formatTokens(balance.generations_left)}
+              </p>
               <p className="text-xs text-ink-subtle">generations</p>
             </div>
           </div>
@@ -130,16 +165,29 @@ export function TokenHero({ sub }: TokenHeroProps) {
           <div
             className="mt-4 flex h-3 w-full overflow-hidden rounded-full bg-black/[0.06]"
             role="img"
-            aria-label={`${formatTokens(balance.subscription_tokens)} subscription tokens and ${formatTokens(balance.topup_tokens)} top-up tokens`}
+            aria-label={
+              inFreeTrial
+                ? `${freeLeft} of ${freeTotal} free signup generations left`
+                : `${formatTokens(balance.subscription_tokens)} subscription tokens and ${formatTokens(balance.topup_tokens)} top-up tokens`
+            }
           >
-            <div
-              className="h-full bg-gradient-to-r from-meta-400 to-meta-600 transition-all duration-700"
-              style={{ width: `${subShare * 100}%` }}
-            />
-            <div
-              className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
-              style={{ width: `${balance.usable_tokens > 0 ? (1 - subShare) * 100 : 0}%` }}
-            />
+            {inFreeTrial ? (
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 to-meta-500 transition-all duration-700"
+                style={{ width: `${freeShare * 100}%` }}
+              />
+            ) : (
+              <>
+                <div
+                  className="h-full bg-gradient-to-r from-meta-400 to-meta-600 transition-all duration-700"
+                  style={{ width: `${subShare * 100}%` }}
+                />
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
+                  style={{ width: `${balance.usable_tokens > 0 ? (1 - subShare) * 100 : 0}%` }}
+                />
+              </>
+            )}
           </div>
 
           <dl className={clsx("mt-3 grid gap-3 text-xs", (balance.referral_tokens ?? 0) > 0 ? "grid-cols-3" : "grid-cols-2")}>
@@ -180,7 +228,9 @@ export function TokenHero({ sub }: TokenHeroProps) {
             {balance.frozen_topup ? <Snowflake className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> : <Coins className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />}
             {balance.frozen_topup
               ? `Your ${formatTokens(balance.topup_tokens)} top-up tokens are kept but on hold until you subscribe again.`
-              : "Subscription tokens are spent first; top-up tokens never expire while you are subscribed."}
+              : inFreeTrial
+                ? "New accounts include 3 free generations. Subscribe to Starter, Pro, or Max below once ready."
+                : "Subscription tokens are spent first; top-up tokens never expire while you are subscribed."}
           </p>
         </div>
       </div>

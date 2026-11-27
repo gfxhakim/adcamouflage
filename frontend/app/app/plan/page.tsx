@@ -506,13 +506,35 @@ export default function PlanPage() {
                     <div className="space-y-1">
                       <p className="flex items-center gap-1.5 font-semibold text-black">
                         <Sparkles className="h-3.5 w-3.5 text-meta-600" aria-hidden />
-                        Quick guide · How your plan fixes rejected ads
+                        {(sub.free_generations ?? 0) > 0
+                          ? `Free trial active · ${sub.free_generations} free ${(sub.free_generations ?? 0) === 1 ? "generation" : "generations"} ready`
+                          : sub.batches_total > 0
+                            ? "All 3 free generations used · Activate a plan to continue"
+                            : "Quick guide · How your plan fixes rejected ads"}
                       </p>
                       <p className="leading-relaxed text-ink-muted">
-                        Choose a plan below to load studio tokens and open rendering immediately.{" "}
-                        <strong className="font-semibold text-black">Pro &amp; Max</strong> unlock our full AI Layer
-                        Engine built for aggressive and anti-policy video creatives on Meta, TikTok &amp; YouTube—helping
-                        rejected ads pass review and convert higher. Failed server renders refund 100% automatically.
+                        {(sub.free_generations ?? 0) > 0 ? (
+                          <>
+                            You have{" "}
+                            <strong className="font-semibold text-black">
+                              {sub.free_generations} of {sub.free_generations_total ?? 3} free generations
+                            </strong>{" "}
+                            to test the studio right now. When you&apos;re ready to scale, choose Starter, Pro, or Max
+                            below to unlock full monthly volume — Pro &amp; Max include our full AI Layer Engine across
+                            Meta, TikTok &amp; YouTube.{" "}
+                            <Link href="/app" className="font-semibold text-meta-700 underline">
+                              Open studio →
+                            </Link>
+                          </>
+                        ) : (
+                          <>
+                            Choose a plan below to load studio tokens and open rendering immediately.{" "}
+                            <strong className="font-semibold text-black">Pro &amp; Max</strong> unlock our full AI Layer
+                            Engine built for aggressive and anti-policy video creatives on Meta, TikTok &amp;
+                            YouTube—helping rejected ads pass review and convert higher. Failed server renders refund
+                            100% automatically.
+                          </>
+                        )}
                       </p>
                     </div>
                     <button

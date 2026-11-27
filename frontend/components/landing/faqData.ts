@@ -16,8 +16,8 @@ export const FAQS = [
     tag: "Performance",
   },
   {
-    q: "Do I need a paid plan before generating videos?",
-    a: "Creating an account is free, and once inside you activate a 30-day Starter, Pro, or Max plan to load studio render tokens. Pro and Max unlock the full AI layer engine for aggressive Meta, TikTok, and YouTube ads—while any render blocked or failed on our servers refunds 100% of tokens automatically.",
+    q: "Do I get free generations before buying a plan?",
+    a: "Yes — creating an account is free and every new sign-up receives 3 free generations to test ProteusFlow immediately. To keep generating after those 3 or unlock full monthly volume, you subscribe to a 30-day Starter, Pro, or Max plan (Pro and Max add full AI layers for Meta, TikTok, and YouTube; failed server renders refund 100% automatically).",
     tag: "Plans & Refunds",
   },
   {

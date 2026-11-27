@@ -218,8 +218,10 @@ def test_new_signups_start_on_tokens_with_nothing():
     me = _signed_in(email).get("/api/v1/auth/me").json()
     assert me["billing_mode"] == "tokens"
     assert me["tokens_usable"] == 0 and me["subscription_active"] is False
+    assert me["free_generations"] == 3
     user = _load(email)
     assert user.sub_plan is None and user.sub_period_end is None
+    assert user.free_generations == 3
 
 
 def test_subscribe_grants_tokens_and_a_30_day_period():
@@ -354,6 +356,11 @@ def test_quote_reports_cost_and_refusals():
     _signed_in(email)
     with _session() as db:
         user = db.execute(select(User).where(User.email == email)).scalar_one()
+        free_quote = quote_batch(db, user, 1, 3)
+        assert (free_quote.generations, free_quote.cost, free_quote.available, free_quote.refusal) == (3, 0, 3, None)
+        over_trial = quote_batch(db, user, 2, 2)
+        assert over_trial.refusal is not None and "3 free generations left" in over_trial.refusal and "Subscribe to a plan" in over_trial.refusal
+        user.free_generations = 0
         assert quote_batch(db, user, 2, 2).refusal == "Subscribe to a plan to start generating."
     _grant(email, "starter")
     with _session() as db:
@@ -366,6 +373,15 @@ def test_quote_reports_cost_and_refusals():
 def test_batches_are_refused_without_tokens_and_charged_with_them(sample_image):
     email = address("paywall")
     client = _signed_in(email)
+
+    first_free = _upload(client, sample_image, count=1)
+    assert first_free.status_code == 202, first_free.text
+    assert client.get("/api/v1/auth/me").json()["free_generations"] == 2
+    assert _balances(email) == (0, 0)
+
+    next_two_free = _upload(client, sample_image, count=1, variants=2)
+    assert next_two_free.status_code == 202, next_two_free.text
+    assert client.get("/api/v1/auth/me").json()["free_generations"] == 0
 
     refused = _upload(client, sample_image)
     assert refused.status_code == 402
@@ -784,12 +800,22 @@ def test_subscription_payload_for_a_token_user():
     assert data["balance"] == {
         "subscription_tokens": 0, "topup_tokens": 0, "usable_tokens": 0, "generations_left": 0, "frozen_topup": False,
     }
+    assert data["free_generations"] == 3 and data["free_generations_total"] == 3
     assert [p["id"] for p in data["token_plans"]] == ["starter", "pro", "max"]
     assert data["topups"] == {"amounts": [20, 40, 80, 160, 240], "options": []}
-    assert [a["code"] for a in data["alerts"]] == ["no_subscription"]
+    assert [a["code"] for a in data["alerts"]] == ["free_trial"]
+    assert "3 free generations" in data["alerts"][0]["text"]
     assert data["grace_days"] == 7
     # The legacy fields are still there for older clients.
     assert "used_this_month" in data and len(data["daily"]) == 30
+
+    def zero_free(db, user):
+        user.free_generations = 0
+
+    _with_user(email, zero_free)
+    exhausted = client.get("/api/v1/auth/subscription").json()
+    assert exhausted["free_generations"] == 0
+    assert [a["code"] for a in exhausted["alerts"]] == ["no_subscription"]
 
     _grant(email, "pro")
     data = client.get("/api/v1/auth/subscription").json()
@@ -798,6 +824,7 @@ def test_subscription_payload_for_a_token_user():
     assert sub["active"] is True and sub["days_left"] == 30 and sub["in_grace"] is False
     assert sub["tokens_per_generation"] == 90 and sub["cancelled"] is False
     assert data["balance"]["usable_tokens"] == 4500 and data["balance"]["generations_left"] == 50
+    assert data["free_generations"] == 0
     assert data["alerts"] == []
     options = data["topups"]["options"]
     assert [o["amount"] for o in options] == [20, 40, 80, 160, 240]
@@ -1045,3 +1072,111 @@ def test_reminder_task_is_scheduled():
     entry = celery_app.conf.beat_schedule["send-billing-reminders"]
     assert entry["task"] == task.name == "app.tasks.send_billing_reminders"
     assert entry["schedule"] == 3600.0
+
+
+def test_new_signups_receive_three_free_generations_and_exhaust_cleanly(sample_image, monkeypatch):
+    from starlette.requests import Request
+    from app import main as main_module
+    from app.oauth import find_or_create_user
+
+    # 1. New customer signup receives 3 free generations and zero locked studio features.
+    email = address("trial-flow")
+    client = _signed_in(email)
+    sub = client.get("/api/v1/auth/subscription").json()
+    assert sub["free_generations"] == 3 and sub["free_generations_total"] == 3
+    assert sub["locked_features"] == []
+
+    # 2. Affiliate-only signups receive 0 free generations.
+    aff_email = address("trial-aff")
+    aff_client = TestClient(app)
+    aff_res = aff_client.post(
+        "/api/v1/auth/register",
+        json={"email": aff_email, "password": PASSWORD, "account_role": "affiliate"},
+    )
+    assert aff_res.status_code == 201, aff_res.text
+    assert _load(aff_email).free_generations == 0
+
+    # 3. Google OAuth new customer receives 3 free generations.
+    oauth_email = address("trial-oauth")
+    req = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1234)})
+    with _session() as db:
+        oauth_user, opened = find_or_create_user(
+            db,
+            req,
+            provider="google",
+            subject=f"sub-{oauth_email}",
+            email=oauth_email,
+            email_verified=True,
+            name="OAuth Trial",
+        )
+        assert opened is True and oauth_user.free_generations == 3
+
+    # 4. Requesting more than 3 free generations fails without deducting.
+    too_many = _upload(client, sample_image, count=2, variants=2)
+    assert too_many.status_code == 402
+    assert "3 free generations left" in too_many.json()["detail"]
+    assert _load(email).free_generations == 3
+
+    # 5. Concurrent spend between quote and consume never lets free_generations go negative.
+    original_check = main_module.check_billing
+
+    def drain_between(db, user, files, variants):
+        refusal = original_check(db, user, files, variants)
+        _with_user(email, lambda d, u: tokens.consume_batch(d, u, 2, "batch_trial_elsewhere"))
+        return refusal
+
+    monkeypatch.setattr(main_module, "check_billing", drain_between)
+    uploads_before = {p.name for p in settings.uploads_dir.iterdir()}
+    raced = _upload(client, sample_image, count=2, variants=1)
+    assert raced.status_code == 402, raced.text
+    assert "1 free generation left" in raced.json()["detail"]
+    assert _load(email).free_generations == 1
+    assert {p.name for p in settings.uploads_dir.iterdir()} == uploads_before
+
+    monkeypatch.setattr(main_module, "check_billing", original_check)
+    last_free = _upload(client, sample_image, count=1, variants=1)
+    assert last_free.status_code == 202, last_free.text
+    assert _load(email).free_generations == 0
+
+    # 6. Once subscribed and later expired, account never falls back to free trial.
+    _grant(email, "starter")
+    _set_period_end(email, datetime.now(timezone.utc) - timedelta(days=1))
+    after_sub = client.get("/api/v1/auth/subscription").json()
+    assert after_sub["free_generations"] == 0
+    assert _upload(client, sample_image, count=1).status_code == 402
+
+
+def test_failed_free_trial_render_refunds_once_and_cancel_does_not(sample_image, monkeypatch):
+    from app import main as main_module
+    from app import tasks
+    from app.mutator import MutationError
+    from app.schemas import JobStatus
+    from app.storage import get_store
+
+    monkeypatch.setattr(main_module, "enqueue_asset", lambda _asset_id: "celery-stub-task")
+
+    email = address("trial-refund")
+    client = _signed_in(email)
+    created = _upload(client, sample_image, count=2)
+    assert created.status_code == 202, created.text
+    failed_id, cancelled_id = [a["id"] for a in created.json()["accepted"]]
+    assert _load(email).free_generations == 1
+
+    def boom(*_args, **_kwargs):
+        raise MutationError("simulated trial failure")
+
+    monkeypatch.setattr(tasks, "mutate", boom)
+    assert tasks.run_asset_job(failed_id)["status"] == "failed"
+    assert _load(email).free_generations == 2
+
+    # Second failure/refund attempt is idempotent.
+    assert tasks.run_asset_job(failed_id)["status"] == "failed"
+    assert tokens.refund_asset(failed_id) == 0
+    assert _load(email).free_generations == 2
+
+    # User cancel does NOT refund free trial generation.
+    assert client.post(f"/api/v1/assets/{cancelled_id}/cancel").status_code == 200
+    assert get_store().get_asset(cancelled_id).status is JobStatus.CANCELLED
+    assert tokens.refund_asset(cancelled_id) == 0
+    assert _load(email).free_generations == 2
+    assert _ledger(email) == []

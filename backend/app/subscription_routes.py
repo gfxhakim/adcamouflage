@@ -35,8 +35,10 @@ from .plans import (
 from .teams import TeamOut, team_summary, billing_account
 from .plan_features import locked_features
 from .tokens import (
+    FREE_SIGNUP_GENERATIONS,
     balance_summary,
     billing_alerts,
+    free_generations_available,
     get_billing_rules,
     get_token_plans,
     get_topups,
@@ -181,6 +183,9 @@ class Subscription(BaseModel):
     # Render-setting groups the paying plan does not include; the workspace
     # shows their controls locked and the render API switches them off.
     locked_features: list[str] = []
+    # Complimentary signup generations usable before a user's first paid plan.
+    free_generations: int = 0
+    free_generations_total: int = FREE_SIGNUP_GENERATIONS
 
 
 class PlanRequestIn(BaseModel):
@@ -321,6 +326,8 @@ def _token_fields(db: Session, user: User, now: datetime) -> dict[str, Any]:
         "alerts": billing_alerts(db, payer, now),
         "team": team_summary(db, user),
         "locked_features": locked_features(db, user),
+        "free_generations": free_generations_available(payer),
+        "free_generations_total": FREE_SIGNUP_GENERATIONS,
     }
 
 
