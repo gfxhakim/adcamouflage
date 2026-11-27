@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import DangerZoneCard from "@/components/admin/DangerZoneCard";
 import EmailsCard from "@/components/admin/EmailsCard";
+import FreeTrialCard from "@/components/admin/FreeTrialCard";
 import GroupEmailCard from "@/components/admin/GroupEmailCard";
 import PhoneAlertsCard from "@/components/admin/PhoneAlertsCard";
 import TokenPlansCard from "@/components/admin/TokenPlansCard";
@@ -124,6 +125,8 @@ export function SettingsTab({ plans, onPlansChanged }: SettingsTabProps) {
   return (
     <div className="space-y-6">
     <TokenPlansCard onSaved={onPlansChanged} />
+
+    <FreeTrialCard />
 
     <PhoneAlertsCard />
 

@@ -39,9 +39,9 @@ from .config import settings
 from .db import BatchRecord, TeamMember, User, get_db
 from .plans import apply_plan, default_plan, get_plans, plan_expired, plan_label, used_this_month
 from .tokens import (
-    FREE_SIGNUP_GENERATIONS,
     TOKENS,
     free_generations_available,
+    signup_free_generations,
     subscription_active,
     usable_tokens,
 )
@@ -307,7 +307,11 @@ def register(
         existing.display_name = name or existing.display_name
         existing.account_role = role
         if existing.sub_plan is None:
-            existing.free_generations = FREE_SIGNUP_GENERATIONS if role == "customer" else 0
+            if role != "customer":
+                existing.free_generations = 0
+            elif not existing.free_generations_granted:
+                existing.free_generations = signup_free_generations(db, role)
+                existing.free_generations_granted = existing.free_generations
         existing.token_version += 1
         db.commit()
         if not security.recently_sent(db, existing, security.VERIFY):
@@ -315,6 +319,7 @@ def register(
         response.status_code = status.HTTP_202_ACCEPTED
         return RegisterPending(email=email)
 
+    free_count = signup_free_generations(db, role)
     user = User(
         email=email,
         password_hash=hash_password(password),
@@ -322,7 +327,8 @@ def register(
         last_login_at=None if needs_code else datetime.now(timezone.utc),
         # New accounts buy a token plan; the legacy quota plan is only a label.
         billing_mode=TOKENS,
-        free_generations=FREE_SIGNUP_GENERATIONS if role == "customer" else 0,
+        free_generations=free_count,
+        free_generations_granted=free_count,
         account_role=role,
         email_verified=not needs_code,
     )
@@ -372,6 +378,7 @@ def verify_email(payload: CodeIn, request: Request, response: Response, db: Sess
     user.email_verified = True
     db.commit()
     log_activity(db, user.id, "signup", "Confirmed email with the code")
+    affiliates.on_email_verified(db, user)
     _sign_in(db, user, request, response, how="Signed in after confirming email")
     _welcome_new_account(db, user, request)
     return UserProfile.of(user, db)
@@ -468,6 +475,8 @@ def reset_password(payload: ResetIn, request: Request, response: Response, db: S
     newly_verified = not user.email_verified
     user.email_verified = True  # the code proves they own the inbox
     db.commit()
+    if newly_verified:
+        affiliates.on_email_verified(db, user)
     log_activity(db, user.id, "password", "Reset password with an emailed code")
     mailer.send_kind(db, user, "password_changed")
     _sign_in(db, user, request, response, how="Signed in after a password reset")

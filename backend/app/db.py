@@ -99,6 +99,9 @@ class User(Base):
     whop_membership_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     # Complimentary generations granted once to new sign-ups before their first paid plan.
     free_generations: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    # Free generations ever granted to this account (sign-up plus the one-time
+    # grant to existing accounts), so a grant is never given twice.
+    free_generations_granted: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # Set when the user unsubscribes from group emails (Admin > Customer
     # emails > Send to a group). Account emails (welcome, receipts,
@@ -432,6 +435,11 @@ class Referral(Base):
     reward_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     reward_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reward_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The sign-up reward: paid once per referred friend (when their email is
+    # confirmed), to whoever referred them at that moment.
+    signup_reward_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    signup_reward_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    signup_reward_referrer_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     void_reason: Mapped[str] = mapped_column(Text, default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
@@ -584,6 +592,8 @@ class EmailCampaign(Base):
     subject: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     button: Mapped[str] = mapped_column(String(60), default="", server_default="", nullable=False)
+    # Draw the button large and full width (the free-trial follow-up email).
+    big_button: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default="sending", nullable=False, index=True)
     total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -764,6 +774,11 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("refund_requests", "refund_amount_usd", "FLOAT"),
     ("users", "free_generations", "INTEGER NOT NULL DEFAULT 0"),
     ("batches", "free_generations_used", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "free_generations_granted", "INTEGER NOT NULL DEFAULT 0"),
+    ("referrals", "signup_reward_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("referrals", "signup_reward_given_at", "TIMESTAMP WITH TIME ZONE"),
+    ("referrals", "signup_reward_referrer_id", "INTEGER"),
+    ("email_campaigns", "big_button", "BOOLEAN NOT NULL DEFAULT FALSE"),
 ]
 
 

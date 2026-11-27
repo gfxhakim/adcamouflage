@@ -844,6 +844,47 @@ def update_billing_config(
     return _billing_config(db)
 
 
+# --------------------------------------------------------------------------
+# free generations (no plan needed)
+# --------------------------------------------------------------------------
+
+
+class FreeTrialIn(BaseModel):
+    enabled: bool
+    count: int = Field(ge=0, le=20)
+
+
+def _free_trial_out(db: Session) -> dict:
+    from .tokens import count_free_trial_candidates, get_free_trial
+
+    return {**get_free_trial(db), "waiting": count_free_trial_candidates(db)}
+
+
+@router.get("/free-trial")
+def free_trial_config(db: Session = Depends(get_db)) -> dict:
+    return _free_trial_out(db)
+
+
+@router.put("/free-trial")
+def update_free_trial(payload: FreeTrialIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    from .tokens import save_free_trial
+
+    save_free_trial(db, enabled=payload.enabled, count=payload.count)
+    db.commit()
+    state = "on" if payload.enabled else "off"
+    log_activity(db, admin.id, "admin", f"Free generations {state}, {payload.count} per new account")
+    return _free_trial_out(db)
+
+
+@router.post("/free-trial/grant-existing")
+def grant_free_trial(admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    from .tokens import grant_free_trial_to_existing
+
+    given = grant_free_trial_to_existing(db)
+    log_activity(db, admin.id, "admin", f"Gave free generations to {given} existing accounts")
+    return {**_free_trial_out(db), "given": given}
+
+
 def _user_billing(db: Session, user: User) -> UserBilling:
     ledger = (
         db.execute(

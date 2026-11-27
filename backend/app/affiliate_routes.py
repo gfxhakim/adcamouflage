@@ -209,10 +209,13 @@ def _my_offer(db: Session, user: User, program: dict[str, Any]) -> dict[str, Any
 
 def _friend_block(db: Session, user: User, program: dict[str, Any]) -> dict[str, Any]:
     settings_ = program[FRIEND]
-    active = subscription_active(user)
+    active = subscription_active(user) or bool(settings_.get("open_to_all"))
     block: dict[str, Any] = {
         "enabled": bool(settings_["enabled"]),
         "eligible": active,
+        "subscribed": subscription_active(user),
+        "signup_reward_tokens": int(settings_.get("signup_reward_tokens") or 0),
+        "signup_monthly_cap": int(settings_.get("signup_monthly_cap") or 0),
         "discount_pct": settings_["discount_pct"],
         "plans": settings_["plans"],
         "reward_tokens": settings_["reward_tokens"],
@@ -244,6 +247,7 @@ def _friend_block(db: Session, user: User, program: dict[str, Any]) -> dict[str,
             "status": row.status,
             "reward_tokens": row.reward_tokens,
             "reward_due_at": aware(row.reward_due_at),
+            "signup_reward_tokens": row.signup_reward_tokens if row.signup_reward_referrer_id == user.id else 0,
             "created_at": aware(row.created_at),
         }
         for row, email in rows
@@ -548,6 +552,9 @@ class FriendSettingsIn(BaseModel):
     discount_pct: float = Field(default=0.0, ge=0, le=90)
     plans: list[str]
     reward_tokens: dict[str, int]
+    signup_reward_tokens: int = Field(default=200, ge=0, le=100_000)
+    signup_monthly_cap: int = Field(default=20, ge=0, le=10_000)
+    open_to_all: bool = True
     hold_days: int = Field(ge=0, le=365)
     monthly_cap: int = Field(ge=0, le=10_000)
 
@@ -648,6 +655,7 @@ def admin_overview(db: Session = Depends(get_db)) -> dict[str, Any]:
             "friend_signups": count(Referral.channel == FRIEND),
             "friend_paying": count(Referral.channel == FRIEND, Referral.first_order_id.is_not(None)),
             "friend_rewards": count(Referral.channel == FRIEND, Referral.status == "rewarded"),
+            "friend_signup_rewards": count(Referral.channel == FRIEND, Referral.signup_reward_given_at.is_not(None)),
             "friend_reward_tokens": reward_tokens,
             "partner_signups": count(Referral.channel == PARTNER),
             "partner_paying": count(Referral.channel == PARTNER, Referral.first_order_id.is_not(None)),
@@ -867,6 +875,8 @@ def admin_referrals(
             "reward_tokens": r.reward_tokens,
             "reward_due_at": aware(r.reward_due_at),
             "reward_given_at": aware(r.reward_given_at),
+            "signup_reward_tokens": r.signup_reward_tokens,
+            "signup_reward_given_at": aware(r.signup_reward_given_at),
             "first_paid_at": aware(r.first_paid_at),
             "note": r.void_reason,
             "created_at": aware(r.created_at),

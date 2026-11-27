@@ -26,6 +26,10 @@ function planName(id: string, labels: Record<string, string>): string {
 /** The friend referral side: the subscriber's link and code, what they earn and who signed up. */
 export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendProgram; linkDays: number; planLabels: Record<string, string> }) {
   const rewards = Object.entries(friend.reward_tokens).filter(([, tokens]) => tokens > 0);
+  const signupReward = friend.signup_reward_tokens ?? 0;
+  const amounts = Array.from(new Set(rewards.map(([, tokens]) => tokens)));
+  const subscribeLine =
+    amounts.length === 1 ? `${formatTokens(amounts[0])} more tokens when they subscribe to any plan` : "more tokens when they subscribe";
 
   return (
     <NeonCard padding="lg" radius="xl">
@@ -34,13 +38,30 @@ export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendPro
         <h2 className="text-sm font-semibold tracking-tight text-black">Invite friends, earn tokens</h2>
       </div>
       <p className="max-w-2xl text-sm text-ink-muted">
-        Share your invite link with friends. You earn bonus tokens {friend.hold_days} days after they subscribe, up to{" "}
-        {friend.monthly_cap} rewards a month.
+        {signupReward > 0
+          ? `Share your invite link or code. You get ${formatTokens(signupReward)} tokens when a friend signs up and confirms their email, and ${subscribeLine}.`
+          : `Share your invite link or code. You earn bonus tokens ${friend.hold_days} days after a friend subscribes.`}
       </p>
+      {rewards.length || signupReward ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {signupReward > 0 ? (
+            <div className="rounded-2xl border border-meta-500/20 bg-meta-500/[0.06] px-4 py-3">
+              <p className="text-2xl font-extrabold tabular-nums text-black">+{formatTokens(signupReward)}</p>
+              <p className="text-xs text-ink-muted">tokens when your friend signs up</p>
+            </div>
+          ) : null}
+          {amounts.length === 1 ? (
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3">
+              <p className="text-2xl font-extrabold tabular-nums text-black">+{formatTokens(amounts[0])}</p>
+              <p className="text-xs text-ink-muted">more tokens when they subscribe to a plan</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {!friend.eligible || !friend.code ? (
         <p className="mt-4 rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 text-sm text-ink-muted">
-          Your invite link unlocks with an active subscription.{" "}
+          Your invite link unlocks with an active plan.{" "}
           <Link href="/app/plan" className="font-semibold text-meta-600 hover:underline">
             See plans
           </Link>
@@ -58,6 +79,14 @@ export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendPro
             <StatTile icon={CalendarDays} label="Rewards this month" value={`${friend.rewards_this_month} / ${friend.monthly_cap}`} />
             <StatTile icon={Coins} label="Reward tokens left" value={formatTokens(friend.tokens_left)} hint={`${formatTokens(friend.tokens_earned)} earned in total`} />
           </div>
+          {friend.subscribed === false ? (
+            <p className="mt-3 rounded-xl border border-black/10 bg-black/[0.02] px-4 py-3 text-xs text-ink-muted">
+              Your reward tokens wait in your account and are used once you pick a plan.{" "}
+              <Link href="/app/plan" className="font-semibold text-meta-600 hover:underline">
+                See plans
+              </Link>
+            </p>
+          ) : null}
         </>
       )}
 
@@ -65,7 +94,13 @@ export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendPro
         <div>
           <p className="label mb-2">What you earn</p>
           <ul className="divide-y divide-black/[0.06] rounded-xl border border-black/10 text-sm">
-            {rewards.map(([plan, tokens]) => (
+            {signupReward > 0 ? (
+            <li className="flex items-center justify-between px-3 py-2">
+              <span className="text-ink-muted">Friend signs up and confirms their email</span>
+              <span className="font-semibold tabular-nums text-black">{formatTokens(signupReward)} tokens</span>
+            </li>
+          ) : null}
+          {rewards.map(([plan, tokens]) => (
               <li key={plan} className="flex items-center justify-between px-3 py-2">
                 <span className="text-ink-muted">Friend subscribes to {planName(plan, planLabels)}</span>
                 <span className="font-semibold tabular-nums text-black">{formatTokens(tokens)} tokens</span>
@@ -73,8 +108,12 @@ export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendPro
             ))}
           </ul>
           <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-ink-subtle">
-            <li>Reward tokens are used after your plan tokens and before paid top-ups.</li>
+            <li>The subscribe reward arrives {friend.hold_days} days after your friend&apos;s first payment.</li>
+            <li>Reward tokens are used with any plan, after your plan tokens and before paid top-ups.</li>
             <li>They do not expire while you stay subscribed, and are lost if you cancel.</li>
+            <li>
+              Up to {friend.signup_monthly_cap ?? 0} sign-up rewards and {friend.monthly_cap} subscribe rewards a month.
+            </li>
             <li>Only brand-new customers count, and a link works for {linkDays} days after the click.</li>
             <li>No reward for your own accounts, or if your friend is refunded.</li>
             <li>Please share it with people you know, not on coupon sites or in paid ads.</li>
@@ -97,6 +136,7 @@ export function FriendCard({ friend, linkDays, planLabels }: { friend: FriendPro
                       <p className="truncate font-medium text-black">{row.email}</p>
                       <p className="text-xs text-ink-subtle">
                         {formatDate(row.created_at)}
+                        {row.signup_reward_tokens ? ` · +${formatTokens(row.signup_reward_tokens)} on sign-up` : ""}
                         {row.status === "waiting" && row.reward_due_at
                           ? ` · ${formatTokens(row.reward_tokens)} tokens on ${formatDate(row.reward_due_at)}`
                           : row.status === "rewarded"

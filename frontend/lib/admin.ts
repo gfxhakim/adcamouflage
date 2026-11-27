@@ -534,6 +534,22 @@ export interface EmailDraft {
   subject: string;
   body: string;
   button: string;
+  big_button?: boolean;
+}
+
+/** The price table in group emails ({price_offer}): each plan's old and current price. */
+export interface EmailOfferPlan {
+  id: string;
+  label: string;
+  generations: number;
+  was: number;
+  price: number;
+  off_pct: number;
+}
+
+export interface EmailOffer {
+  was: Record<string, number>;
+  plans: EmailOfferPlan[];
 }
 
 export interface GroupEmailCampaign {
@@ -563,6 +579,7 @@ export interface GroupEmailStatus {
   people: EmailPerson[];
   placeholders: Record<string, string>;
   drafts: EmailDraft[];
+  offer: EmailOffer;
   rules: GroupEmailRules;
   sent_today: number;
   left_today: number;
@@ -576,7 +593,24 @@ export interface GroupEmailRecipient {
   sent_at: string | null;
 }
 
-type GroupMessage = { subject: string; body: string; button: string };
+type GroupMessage = { subject: string; body: string; button: string; big_button?: boolean };
+
+export const saveEmailOffer = (was: Record<string, number>) =>
+  call<EmailOffer>("/emails/groups/offer", { method: "PUT", body: JSON.stringify({ was }) });
+
+/** Free generations every new account gets, no plan needed (Admin > Settings). */
+export interface FreeTrialConfig {
+  enabled: boolean;
+  count: number;
+  /** Existing accounts with no plan that never got them yet. */
+  waiting: number;
+  given?: number;
+}
+
+export const getFreeTrial = () => call<FreeTrialConfig>("/free-trial");
+export const saveFreeTrial = (config: { enabled: boolean; count: number }) =>
+  call<FreeTrialConfig>("/free-trial", { method: "PUT", body: JSON.stringify(config) });
+export const grantFreeTrialToExisting = () => call<FreeTrialConfig>("/free-trial/grant-existing", { method: "POST" });
 
 export const getGroupEmails = () => call<GroupEmailStatus>("/emails/groups");
 export const saveGroupEmailRules = (rules: GroupEmailRules) =>
@@ -637,6 +671,9 @@ export interface AffiliateProgram {
     discount_pct: number;
     plans: string[];
     reward_tokens: Record<string, number>;
+    signup_reward_tokens: number;
+    signup_monthly_cap: number;
+    open_to_all: boolean;
     hold_days: number;
     monthly_cap: number;
   };

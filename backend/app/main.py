@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from sqlalchemy.orm import Session
 
-from . import __version__, costs
+from . import __version__, affiliates, costs
 from .accounts import ensure_admin_account, require_studio_user
 from .activity import log_activity
 from .admin_routes import router as admin_router
@@ -52,6 +52,7 @@ from .tokens import (
     InsufficientTokens,
     check_billing,
     consume_batch,
+    ensure_free_trial_backfill,
     ensure_plan_prices_29_69_115,
     ensure_starter_metadata_wipe,
     get_billing_rules,
@@ -99,6 +100,8 @@ async def lifespan(app: FastAPI):
         ensure_admin_account(db)
         ensure_starter_metadata_wipe(db)
         ensure_plan_prices_29_69_115(db)
+        ensure_free_trial_backfill(db)
+        affiliates.ensure_friend_rewards_v2(db)
     store = get_store()
     if not ffmpeg_available():
         logger.error(

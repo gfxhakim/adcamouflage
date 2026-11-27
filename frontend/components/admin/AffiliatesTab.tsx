@@ -164,10 +164,33 @@ function SettingsCard({ overview, currency, onSaved }: { overview: AffiliateOver
             </p>
             <Toggle label="On" checked={program.friend.enabled} onChange={(enabled) => friend({ enabled })} />
           </div>
+          <Toggle
+            label="Every customer can invite (not only subscribers)"
+            checked={program.friend.open_to_all ?? true}
+            onChange={(open_to_all) => friend({ open_to_all })}
+          />
           <div className="grid gap-3 sm:grid-cols-2">
+            <Num
+              label="Sign-up reward for the referrer"
+              suffix="tokens"
+              step="50"
+              value={program.friend.signup_reward_tokens ?? 0}
+              onChange={(signup_reward_tokens) => friend({ signup_reward_tokens })}
+            />
+            <Num
+              label="Max sign-up rewards"
+              suffix="per month"
+              value={program.friend.signup_monthly_cap ?? 0}
+              onChange={(signup_monthly_cap) => friend({ signup_monthly_cap })}
+            />
             <Num label="Reward after" suffix="days" value={program.friend.hold_days} onChange={(hold_days) => friend({ hold_days })} />
             <Num label="Max rewards" suffix="per month" value={program.friend.monthly_cap} onChange={(monthly_cap) => friend({ monthly_cap })} />
           </div>
+          <p className={clsx("text-[11px]", faint)}>
+            The sign-up reward is paid once per friend, when they confirm their email. It is skipped for the referrer&apos;s
+            own accounts (same email, same device) and when the friend signs up from the referrer&apos;s network. The
+            subscribe reward below comes after the friend&apos;s first payment has stayed the days above.
+          </p>
           <PlanChecks plans={overview.plans} value={program.friend.plans} onChange={(plans) => friend({ plans })} />
           <p className={clsx("text-[11px]", faint)}>Friend invites award bonus tokens to the referrer; promo reductions apply only via Whop promo codes.</p>
           <div>
