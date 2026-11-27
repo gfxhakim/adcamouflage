@@ -1,25 +1,16 @@
 """ProteusFlow AI Support Bot + Live Agent Escalation & Multimedia Chat.
 
 Features:
-- Complete knowledge base of all ProteusFlow options, presets, 23 camouflage
-  layers (including all 10 Gen-4 layers), the 4-step How to Use guide,
-  platform presets, brand overlay & poster frame tools, token billing, and
-  troubleshooting.
+- User-facing help desk knowledge base covering workspace steps, preset
+  profiles, brand overlay & cover frame tools, plans, tokens & billing, and
+  troubleshooting without disclosing backend internals or processing layers.
 - Replies with clarifying questions when a user's request is ambiguous or
   when the user reports that an answer did not resolve their issue.
 - Tracks bot attempts per thread (`bot_attempts`). After 5 attempts (`>= 5`),
   unlocks the "Contact Agent" button for the user.
-- When the user presses "Contact Agent":
-  1) Immediately replies as the bot:
-     "The agent may reply to you from now to 30min Max..."
-  2) Marks the thread as `escalated` and increments `unread_admin` so a live
-     notification banner + badge appear when the admin opens the Admin Panel,
-     showing all user account information and the issues reported to the bot.
-  3) Emails all admin addresses (via Resend if configured) with the user's
-     complete profile, subscription/token status, and conversation transcript.
 - Two-way live chat between the user (in the bottom of the bot widget) and
-  the admin (in `/admin#support`), supporting both text messages and file
-  uploads (screenshots and video/screen recordings).
+  the admin (in `/admin#support`), supporting text messages, media attachments,
+  and admin moderation/deletion of bot or conversation messages.
 """
 
 from __future__ import annotations
@@ -110,17 +101,18 @@ def support_media_dir() -> Path:
 # ---------------------------------------------------------------------------
 
 WELCOME_MESSAGE = (
-    "Hi! I'm the **ProteusFlow AI Assistant**. I know every option, studio variation layer, "
-    "platform preset, and step in the **How to Use Guide**.\n\n"
-    "Tell me what you're trying to do or what issue you're facing — or pick a topic below:"
+    "Hi! I'm the **ProteusFlow Support Assistant**. I can help you with workspace steps "
+    "(`01 Load` to `04 Render`), intensity profiles, brand overlays & cover frames, "
+    "plans & tokens, and troubleshooting.\n\n"
+    "Tell me what you need help with — or pick a topic below:"
 )
 
 WELCOME_SUGGESTIONS = [
-    "How do I use ProteusFlow step by step?",
-    "Which profile & layers are best for Meta or TikTok?",
-    "Explain all 23 Studio Layers (including Gen-4)",
-    "How do tokens, variants & refunds work?",
-    "My upload or render failed — help me fix it",
+    "How do I get started in the workspace?",
+    "Which profile should I pick for Meta or TikTok?",
+    "How do brand overlays & poster frames work?",
+    "How do tokens, free generations & refunds work?",
+    "My upload or export failed — help me fix it",
     "Talk to a real agent",
 ]
 
@@ -146,7 +138,8 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
         id="how_to_use",
         keywords=[
             "how to use",
-            "how does it work",
+            "get started",
+            "getting started",
             "guide",
             "tutorial",
             "step by step",
@@ -158,21 +151,21 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "beginner",
         ],
         answer=(
-            "### ProteusFlow 4-Step How to Use Guide\n"
-            "1. **Step 01 · Load (`Upload`)**: Drag & drop up to your batch limit of videos (`MP4, MOV, MKV, WEBM, AVI, M4V`) or images (`PNG, JPG, WEBP`). Always upload your clean master creative rather than an already-processed copy.\n"
+            "### ProteusFlow 4-Step Workspace Guide\n"
+            "1. **Step 01 · Load (`Upload`)**: Drag & drop your videos (`MP4, MOV, MKV, WEBM, AVI, M4V`) or images (`PNG, JPG, WEBP`). Upload your clean original creative rather than an already-exported copy.\n"
             "2. **Step 02 · Settings (`Configure`)**:\n"
             "   - Pick your **Target Ad Platform** (Meta / Facebook & Instagram, TikTok, YouTube Shorts, Snapchat, or Google PMax).\n"
-            "   - Choose a **Studio Intensity Profile**: **Light (35)** for gentle refresh, **Balanced (65 — Recommended)** for everyday Meta/TikTok scaling, **Deep (90)** for heavily fatigued creatives, or **Custom** to toggle individual layers.\n"
-            "   - Choose **Variants (`1–10`)** to generate multiple unique copies per master file.\n"
-            "3. **Step 03 · Overlay (`Optional`)**: Add a transparent PNG brand logo/watermark (drag to position, set size, opacity & fade timing) and/or pick a **Poster Frame** (video frame or custom image burned into frame 0).\n"
-            "4. **Step 04 · Render (`Queue`)**: Click **Render Variations**. Renders run on the background worker queue so you can download each variant individually or as a single `.zip`."
+            "   - Choose a **Studio Intensity Profile**: **Light (35)** for gentle polish, **Balanced (65 — Recommended)** for everyday Meta/TikTok scaling, **Deep (90)** for heavily fatigued creatives, or **Custom** for format and frame-rate preferences.\n"
+            "   - Choose **Variants** to produce multiple unique outputs per uploaded file.\n"
+            "3. **Step 03 · Overlay (`Optional`)**: Add a transparent PNG brand logo/watermark (drag to position, adjust size, opacity & timing) and optionally pick a **Poster Frame** cover image.\n"
+            "4. **Step 04 · Render (`Queue`)**: Click **Render Variations** to process your creatives and download each output individually or as a single `.zip`."
         ),
         follow_up_question=(
-            "Which of the 4 steps (`01 Load`, `02 Settings`, `03 Overlay`, or `04 Render`) would you like me to explain in more detail, or are you stuck on a specific step?"
+            "Which of the 4 steps (`01 Load`, `02 Settings`, `03 Overlay`, or `04 Render`) would you like help with, or are you stuck on a specific step?"
         ),
         suggestions=[
             "Tell me more about Step 02 Settings & Profiles",
-            "How do Brand Overlay & Poster Frame work?",
+            "How do brand overlays & poster frames work?",
             "What happens in Step 04 Render & Queue?",
             "Still didn't solve my issue",
         ],
@@ -185,6 +178,8 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "subtle",
             "balanced",
             "aggressive",
+            "deep",
+            "light",
             "custom",
             "intensity",
             "which setting",
@@ -199,79 +194,18 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
         ],
         answer=(
             "### Studio Intensity Profiles & Platform Recommendations\n"
-            "- **Balanced · Intensity 65 (Recommended for 90% of runs)**: Enables 18 visual, psychoacoustic, and container polish layers including Gen-4 Sub-pixel Frame Grid, Micro-contrast Texture, 3D Color Curve, Audio Phase Alignment, Formant LFO, Clean MP4 Container Standardization, and Adaptive Bitrate Balance. Ideal for **Meta (FB/IG)** and **TikTok**.\n"
-            "- **Light · Intensity 35**: Gentle pixel, metadata, and bitstream refresh with minimal visual or temporal shift. Best for strict brand-guideline creatives.\n"
-            "- **Deep · Intensity 90**: Enables all **23/23 layers** including Frame Pacing Jitter, High-Frequency Texture, Studio Room Ambience (RIR), Frequency Smoothing, and Deep Bitstream Rebuild. Best when refreshing a heavily fatigued creative.\n"
-            "- **Custom**: Lets you manually toggle any of the 23 layers, set exact **Target FPS** (`23.976, 24, 25, 29.97, 30, 50, 60`), **Audio Pitch Ratio**, and **Output Format** (`mp4, mov, webm, png, jpg, webp`)."
+            "- **Balanced · Intensity 65 (Recommended for 90% of runs)**: Our standard high-compatibility studio profile designed for everyday **Meta (FB/IG)** and **TikTok** campaigns.\n"
+            "- **Light · Intensity 35**: Subtle visual polish ideal for strict brand-guideline creatives.\n"
+            "- **Deep · Intensity 90**: Our strongest preset profile designed for refreshing heavily fatigued creatives.\n"
+            "- **Custom**: Lets you choose output format (`mp4, mov, webm, png, jpg, webp`), target frame rate (`23.976, 24, 25, 29.97, 30, 50, 60`), and audio/speed preferences in the UI."
         ),
         follow_up_question=(
-            "To recommend the exact configuration for your campaign: **which ad platform** are you launching on, and is this a **brand-new creative** or a **refresh of a fatigued creative**?"
+            "To recommend the right preset profile in the workspace: **which ad platform** are you launching on, and is this a **brand-new creative** or a **refresh of a fatigued creative**?"
         ),
         suggestions=[
             "Refreshing a fatigued creative on Meta/TikTok",
-            "Scaling a winning video with 5–10 variants",
-            "Explain all 23 Studio Layers",
-            "Still didn't solve my issue",
-        ],
-    ),
-    KnowledgeTopic(
-        id="layers_gen4",
-        keywords=[
-            "layer",
-            "layers",
-            "23",
-            "gen-4",
-            "gen 4",
-            "mesh warp",
-            "dct",
-            "jnd",
-            "clahe",
-            "lut",
-            "optical flow",
-            "adversarial",
-            "cnn",
-            "allpass",
-            "all-pass",
-            "formant",
-            "rir",
-            "reverb",
-            "atom spoof",
-            "macroblock",
-            "micro crop",
-            "micro-crop",
-            "noise",
-            "color drift",
-            "gop",
-            "keyframe",
-            "metadata",
-            "mirror",
-            "deep scramble",
-        ],
-        answer=(
-            "### All 23 ProteusFlow Studio Layers\n"
-            "**1. Gen-4 Visual & Spatial Studio Layers**\n"
-            "- **Sub-pixel Frame Grid (`elastic_mesh_warp`)**: Non-linear low-frequency spatial grid alignment so 8×8 macroblocks shift cleanly without cutting subtitles.\n"
-            "- **Micro-contrast Texture (`dct_jnd_perturbation`)**: Applies luminance/texture-balanced mid-band frequency detail within human visual thresholds.\n"
-            "- **3D Color Curve & Local CLAHE (`lut_clahe_color`)**: Non-linear S-curve contrast and shadow/highlight split-toning while protecting skin tones.\n"
-            "- **High-Frequency Texture (`adversarial_cnn_layer`)**: Imperceptible Gabor/Laplacian micro-texture across key regions.\n"
-            "- **Frame Pacing Jitter (`optical_flow_timewarp`)**: Smooth sinusoidal speed modulation (±3%) while preserving exact total duration.\n\n"
-            "**2. Gen-4 Psychoacoustic Audio Polish Layers**\n"
-            "- **Audio Phase Alignment (`audio_allpass_phase`)**: Rotates phase across 4–6 poles without changing perceived tone.\n"
-            "- **Formant-Preserving Micro-Drift LFO (`formant_pitch_lfo`)**: Time-varying pitch LFO (±15–25 cents) that keeps voiceovers sounding natural.\n"
-            "- **Studio Room Ambience RIR (`psychoacoustic_rir`)**: Blends early studio room reflections (8–18 ms at -28 dB) for natural acoustic depth.\n\n"
-            "**3. Gen-4 Container & Bitstream Layers**\n"
-            "- **Clean MP4 Container (`authentic_atom_spoof`)**: Writes standardized MP4 `moov/udta/hdlr` container structures.\n"
-            "- **Adaptive Bitrate & Psy-RD Balance (`macroblock_aq_variance`)**: Optimizes x264/x265 AQ Mode 3, `aq-strength`, `psy-rd`, and `qcomp` per variant.\n\n"
-            "**4. Classic Core Layers (`13 layers`)**\n"
-            "- `micro_crop`, `frame_rate_stagger`, `noise_injection`, `color_drift`, `temporal_trim`, `keyframe_gop_jitter`, `container_bitrate_shuffle`, `chroma_matrix_shift`, `frequency_smoothing`, `deep_scramble`, `mirror`, `audio_mutation`, and `strip_metadata`."
-        ),
-        follow_up_question=(
-            "Are you looking to customize specific layers for **Video**, **Audio**, or **Images**, or are you experiencing a visual/audio artifact you want to adjust?"
-        ),
-        suggestions=[
-            "How do I avoid cutting off subtitles or logos?",
-            "How do I keep audio voice natural?",
-            "Which layers work on static images?",
+            "How do I get started in the workspace?",
+            "How do tokens, free generations & refunds work?",
             "Still didn't solve my issue",
         ],
     ),
@@ -285,20 +219,19 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "poster",
             "thumbnail",
             "cover frame",
-            "frame 0",
             "step 3",
+            "step 03",
             "placement",
             "opacity",
         ],
         answer=(
             "### Step 03 · Brand Overlay & Poster Frame\n"
-            "- **Brand Overlay (`workspace.overlayTool`)**:\n"
+            "- **Brand Overlay**:\n"
             "  - Upload a **transparent PNG** (or JPG/WEBP) logo or badge.\n"
-            "  - Drag it directly on the live video preview or pick one of the **9 anchor positions** (`top-left`, `center`, `bottom-right`, etc.).\n"
-            "  - Adjust **Size (`2%–60%`)**, **Opacity (`5%–100%`)**, **Start/End seconds**, and **Fade-in / Fade-out**.\n"
-            "- **Poster Frame (`workspace.posterTool`)**:\n"
-            "  - Scrub your video to pick an exact frame timestamp OR upload a custom cover image.\n"
-            "  - ProteusFlow both attaches it as the container cover stream AND blends it into frame 0 so ad managers display your chosen thumbnail."
+            "  - Drag it directly on the live preview or pick one of the **9 anchor positions** (`top-left`, `center`, `bottom-right`, etc.).\n"
+            "  - Adjust **Size (`2%–60%`)**, **Opacity (`5%–100%`)**, **Start/End timing**, and **Fade-in / Fade-out**.\n"
+            "- **Poster Frame**:\n"
+            "  - Scrub your video to pick an exact thumbnail frame OR upload a custom cover image to set your creative's preview cover."
         ),
         follow_up_question=(
             "Are you having trouble uploading an overlay image, positioning it on the preview, or setting a custom poster thumbnail?"
@@ -315,6 +248,9 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
         keywords=[
             "token",
             "tokens",
+            "free generation",
+            "free generations",
+            "trial",
             "cost",
             "price",
             "pricing",
@@ -333,15 +269,15 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "expired",
         ],
         answer=(
-            "### Tokens, Plans & Automatic Refunds\n"
+            "### Free Trial, Tokens, Plans & Automatic Refunds\n"
+            "- **3 Free Signup Generations**: Every new customer account receives **3 free generations** to test ProteusFlow. Once those are used, subscribe to **Starter ($29/mo)**, **Pro ($69/mo)**, or **Max ($115/mo)** on `/app/plan` to continue.\n"
             "- **How Token Cost is Calculated**:\n"
             "  `Total Cost = Queued Files × Variants per File × Tokens per Generation`\n"
-            "  *(Example: 4 videos × 5 variants = 20 generations. At 5 tokens/gen, that batch uses 100 tokens.)*\n"
-            "- **Automatic Refunds**: If any asset fails to render or you cancel it in the queue before completion, its tokens are **automatically refunded** to your balance.\n"
+            "- **Automatic Refunds**: If any file fails to export or you cancel a pending job in the queue before completion, its tokens (or failed free-trial slot) are **automatically refunded**.\n"
             "- **Rollover & Top-ups**:\n"
-            "  - Unused subscription tokens roll over when you renew before your period expires (or within the grace window).\n"
+            "  - Unused subscription tokens roll over on eligible plans when you renew before your period expires (or within the grace window).\n"
             "  - **Top-up tokens** never expire while your subscription is active.\n"
-            "- **Payments**: You can subscribe or top up directly on `/app/plan` via **Whop** (card, Apple Pay, Google Pay, and supported payment methods). Balances credit automatically as soon as payment confirms."
+            "- **Payments**: Subscribe or top up on `/app/plan` via **Whop** (card, Apple Pay, Google Pay, and supported methods). Balances update right after payment confirmation."
         ),
         follow_up_question=(
             "What do you need help with regarding your plan or tokens — checking why a payment is pending, calculating batch cost, or renewing a subscription?"
@@ -358,10 +294,11 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
             "error",
             "fail",
             "failed",
+            "export",
+            "render",
             "stuck",
             "queue",
             "upload",
-            "ffmpeg",
             "unreachable",
             "rejected",
             "disapproved",
@@ -377,22 +314,21 @@ KNOWLEDGE_TOPICS: list[KnowledgeTopic] = [
         ],
         answer=(
             "### Quick Troubleshooting Checklist\n"
-            "1. **Refreshing heavily fatigued creatives for Meta or TikTok**:\n"
-            "   - Make sure you uploaded your **clean original master**.\n"
-            "   - Switch from `Light` to **Balanced (65)** or **Deep (90)** so all Gen-4 studio layers (`elastic_mesh_warp`, `dct_jnd_perturbation`, `audio_allpass_phase`, `authentic_atom_spoof`) are active.\n"
-            "   - Generate **3–5 variants** and test each in your ad sets.\n"
-            "2. **Subtitles or edge logos slightly clipped**:\n"
-            "   - Switch Profile to **Custom** and turn off `micro_crop`, while keeping `elastic_mesh_warp` and `dct_jnd_perturbation` ON.\n"
-            "3. **Upload or Render Error**:\n"
+            "1. **Refreshing fatigued creatives for Meta or TikTok**:\n"
+            "   - Start from your **clean original creative**.\n"
+            "   - Switch from `Light` to **Balanced (65)** or **Deep (90)** and export **3–5 variants** to test in your ad sets.\n"
+            "2. **Subtitles or edge logos looking tight**:\n"
+            "   - Check positioning in the live preview or switch profile to **Balanced (65)** or **Custom**.\n"
+            "3. **Upload or Export Error**:\n"
             "   - Check that each file is under the max upload MB limit and in a supported format (`MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG, WEBP`).\n"
-            "   - If the status chip says `Engine unreachable`, refresh in a few seconds; any failed job automatically refunds your tokens."
+            "   - If the status chip shows a temporary service notice, refresh in a few seconds; any failed job automatically refunds your tokens."
         ),
         follow_up_question=(
             "Did one of those match your problem, or could you tell me: **1)** What exact error message or behavior you see, and **2)** Which step (`Load`, `Settings`, `Overlay`, or `Render`) it happens on?"
         ),
         suggestions=[
-            "How do I refresh a fatigued creative on Meta/TikTok?",
-            "My render failed in Step 04 Queue",
+            "Refreshing a fatigued creative on Meta/TikTok",
+            "My upload or export failed — help me fix it",
             "Subtitles or audio look/sound off",
             "Still didn't solve my issue",
         ],
@@ -424,6 +360,137 @@ NEGATIVE_OR_UNSOLVED_PHRASES = (
 )
 
 
+CONFIDENTIAL_REFUSAL_REPLY = (
+    "I can't share details about our backend infrastructure, internal architecture, how ProteusFlow works "
+    "under the hood, or our proprietary processing layers.\n\n"
+    "I'm happy to help you with **workspace steps** (`01 Load` to `04 Render`), choosing an intensity profile "
+    "(**Light**, **Balanced**, or **Deep**), **brand overlays & cover frames**, **plans & tokens**, or troubleshooting an export!"
+)
+
+CONFIDENTIAL_SUGGESTIONS = [
+    "How do I get started in the workspace?",
+    "Which profile should I pick for Meta or TikTok?",
+    "How do tokens, free generations & refunds work?",
+    "Talk to a real agent",
+]
+
+INTERNAL_TECH_PHRASES: tuple[str, ...] = (
+    "how does it work",
+    "how does this work",
+    "how does the app work",
+    "how does your app work",
+    "how does proteusflow work",
+    "how does the engine work",
+    "how does your engine work",
+    "how does the system work",
+    "how does the tool work",
+    "how it works",
+    "how the app works",
+    "how your app works",
+    "how proteusflow works",
+    "how the engine works",
+    "how your engine works",
+    "how do you process",
+    "how do you edit",
+    "how do you render",
+    "how do you rebuild",
+    "how do you modify",
+    "how do you mutate",
+    "how do you cloak",
+    "how do you camouflage",
+    "how do you bypass",
+    "how do you evade",
+    "how do you strip",
+    "how do you scrub",
+    "how are videos processed",
+    "how are ads processed",
+    "under the hood",
+    "behind the scenes",
+    "tech stack",
+    "technology stack",
+    "source code",
+    "system prompt",
+    "secret sauce",
+    "internal architecture",
+    "what is it built with",
+    "powered by",
+    "what library",
+    "what libraries",
+    "what software do you use",
+    "what tools do you use",
+    "gen-4",
+    "gen 4",
+    "gen4",
+    "23 layers",
+    "23 studio",
+    "mesh warp",
+    "optical flow",
+    "micro crop",
+    "micro-crop",
+    "atom spoof",
+    "deep scramble",
+    "color drift",
+    "noise injection",
+    "frame rate stagger",
+    "temporal trim",
+    "chroma matrix",
+    "frequency smoothing",
+    "audio mutation",
+    "strip metadata",
+    "all-pass",
+    "allpass",
+    "psy-rd",
+    "aq mode",
+    "room ambience",
+    "formant",
+    "elastic_mesh_warp",
+    "dct_jnd_perturbation",
+    "lut_clahe_color",
+    "adversarial_cnn_layer",
+    "optical_flow_timewarp",
+    "audio_allpass_phase",
+    "formant_pitch_lfo",
+    "psychoacoustic_rir",
+    "authentic_atom_spoof",
+    "macroblock_aq_variance",
+    "keyframe_gop_jitter",
+    "container_bitrate_shuffle",
+    "chroma_matrix_shift",
+    "frequency_smoothing",
+    "deep_scramble",
+    "audio_mutation",
+    "strip_metadata",
+    "micro_crop",
+    "frame_rate_stagger",
+    "noise_injection",
+    "color_drift",
+    "temporal_trim",
+)
+
+INTERNAL_TECH_WORDS_RE = re.compile(
+    r"\b("
+    r"backend|back-end|server|servers|infrastructure|architecture|codebase|"
+    r"algorithm|algorithms|pipeline|pipelines|stack|database|postgres|postgresql|"
+    r"sqlite|redis|celery|fastapi|uvicorn|docker|railway|worker|workers|"
+    r"ffmpeg|ffprobe|opencv|x264|x265|codec|codecs|bitstream|container|"
+    r"moov|udta|hdlr|macroblock|macroblocks|dct|jnd|clahe|lut|cnn|adversarial|"
+    r"gabor|laplacian|rir|reverb|gop|keyframe|keyframes|lfo|psychoacoustic|"
+    r"sub-pixel|subpixel|phash|dhash|fingerprint|fingerprinting|checksum|"
+    r"hash|hashes|metadata|layer|layers|endpoint|endpoints|api|webhook|webhooks|"
+    r"github|repo|repository|python|nextjs|typescript"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _asks_internal_details(cleaned: str) -> bool:
+    if not cleaned:
+        return False
+    if any(phrase in cleaned for phrase in INTERNAL_TECH_PHRASES):
+        return True
+    return bool(INTERNAL_TECH_WORDS_RE.search(cleaned))
+
+
 def generate_bot_response(
     user_text: str,
     has_attachment: bool,
@@ -433,6 +500,15 @@ def generate_bot_response(
 
     cleaned = (user_text or "").strip().lower()
     words = [w for w in re.split(r"\W+", cleaned) if w]
+
+    # Never disclose backend architecture, infrastructure, tech stack, or internal layers.
+    if _asks_internal_details(cleaned):
+        reply = CONFIDENTIAL_REFUSAL_REPLY
+        if attempt_number >= MAX_ATTEMPTS_BEFORE_AGENT:
+            reply += (
+                "\n\n*(Need human help? You've reached 5 attempts — you can press the **Contact Live Agent** button below at any time to escalate this chat to our team.)*"
+            )
+        return reply, CONFIDENTIAL_SUGGESTIONS
 
     # Check if user explicitly said the previous answer didn't help or asked for an agent
     is_unsolved_signal = any(phrase in cleaned for phrase in NEGATIVE_OR_UNSOLVED_PHRASES)
@@ -464,7 +540,7 @@ def generate_bot_response(
                 "so let me ask a quick clarifying question:\n\n"
                 "1. **Which part of ProteusFlow are you working with right now?**\n"
                 "   - Uploading creatives (**Step 01 · Load**)\n"
-                "   - Choosing a platform preset or studio layers (**Step 02 · Settings**)\n"
+                "   - Choosing a target platform or intensity profile (**Step 02 · Settings**)\n"
                 "   - Adding a logo or poster frame (**Step 03 · Overlay**)\n"
                 "   - Rendering / downloading variations (**Step 04 · Render**)\n"
                 "   - **Tokens, Plans & Billing**"
@@ -495,10 +571,10 @@ def generate_bot_response(
                 "When you press it, I will immediately send your account details and everything you told me here to our team, and you can chat and share screenshots or video recordings directly with an agent in this window."
             )
         suggestions = [
-            "How do I use ProteusFlow step by step?",
-            "Best settings for Meta / TikTok ads",
-            "My render or upload has an error",
-            "Tokens & subscription question",
+            "How do I get started in the workspace?",
+            "Which profile should I pick for Meta or TikTok?",
+            "My upload or export failed — help me fix it",
+            "How do tokens, free generations & refunds work?",
         ]
         return reply, suggestions
 
@@ -613,6 +689,12 @@ class EscalateThreadIn(BaseModel):
 
 class UpdateThreadStatusIn(BaseModel):
     status: str = Field(pattern="^(bot|escalated|agent_active|resolved)$")
+
+
+class DeleteSupportMessagesIn(BaseModel):
+    message_ids: list[int] | None = None
+    delete_all_bot: bool = False
+    delete_all: bool = False
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -1520,6 +1602,94 @@ def admin_get_support_thread(
     )
 
 
+def _cleanup_orphaned_support_media(db: Session, candidate_urls: list[str]) -> None:
+    prefix = "/api/v1/support/media/"
+    for url in {u for u in candidate_urls if u}:
+        if not url.startswith(prefix):
+            continue
+        filename = url[len(prefix) :]
+        if not _MEDIA_NAME_RE.match(filename):
+            continue
+        still_used = db.execute(
+            select(SupportMessage.id).where(SupportMessage.attachment_url == url).limit(1)
+        ).first()
+        if still_used is not None:
+            continue
+        (support_media_dir() / filename).unlink(missing_ok=True)
+
+
+@admin_router.post("/threads/{thread_id}/messages/delete", response_model=AdminSupportThreadDetail)
+def admin_delete_support_messages(
+    thread_id: int,
+    payload: DeleteSupportMessagesIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminSupportThreadDetail:
+    """Delete selected messages, all bot responses, or all messages in a support thread."""
+
+    thread = db.get(SupportThread, thread_id)
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Support thread not found.")
+    user = db.get(User, thread.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    clean_ids = sorted({int(mid) for mid in (payload.message_ids or []) if int(mid) > 0})
+    if not payload.delete_all and not payload.delete_all_bot and not clean_ids:
+        raise HTTPException(status_code=422, detail="Select messages or choose a delete option.")
+
+    stmt = select(SupportMessage).where(SupportMessage.thread_id == thread.id)
+    if payload.delete_all:
+        pass
+    elif payload.delete_all_bot:
+        stmt = stmt.where(SupportMessage.sender_role == "bot")
+    else:
+        stmt = stmt.where(SupportMessage.id.in_(clean_ids))
+
+    to_delete = list(db.execute(stmt).scalars())
+    media_urls = [m.attachment_url for m in to_delete if m.attachment_url]
+    deleted_count = len(to_delete)
+    for msg in to_delete:
+        db.delete(msg)
+    db.flush()
+
+    if media_urls:
+        _cleanup_orphaned_support_media(db, media_urls)
+
+    remaining_messages = list(
+        db.execute(
+            select(SupportMessage)
+            .where(SupportMessage.thread_id == thread.id)
+            .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
+        ).scalars()
+    )
+
+    if payload.delete_all and not remaining_messages:
+        thread.bot_attempts = 0
+        thread.unread_admin = 0
+        thread.unread_user = 0
+        thread.issue_summary = ""
+    elif any(m.sender_role == "user" for m in remaining_messages) or thread.status != "bot":
+        thread.issue_summary = _build_issue_summary(remaining_messages)
+    else:
+        thread.issue_summary = ""
+
+    thread.updated_at = utcnow()
+    if deleted_count > 0:
+        log_activity(
+            db,
+            admin.id,
+            "admin",
+            f"Deleted {deleted_count} support message(s) in ticket #{thread.id}",
+        )
+    db.commit()
+    db.refresh(thread)
+    return AdminSupportThreadDetail(
+        thread=_serialize_thread(thread, remaining_messages),
+        customer=_safe_dossier(db, user),
+    )
+
+
 @admin_router.post("/threads/{thread_id}/message", response_model=AdminSupportThreadDetail)
 def admin_send_support_message(
     thread_id: int,
@@ -1571,6 +1741,94 @@ def admin_send_support_message(
     )
 
 
+def _cleanup_orphaned_support_media(db: Session, candidate_urls: list[str]) -> None:
+    prefix = "/api/v1/support/media/"
+    for url in {u for u in candidate_urls if u}:
+        if not url.startswith(prefix):
+            continue
+        filename = url[len(prefix) :]
+        if not _MEDIA_NAME_RE.match(filename):
+            continue
+        still_used = db.execute(
+            select(SupportMessage.id).where(SupportMessage.attachment_url == url).limit(1)
+        ).first()
+        if still_used is not None:
+            continue
+        (support_media_dir() / filename).unlink(missing_ok=True)
+
+
+@admin_router.post("/threads/{thread_id}/messages/delete", response_model=AdminSupportThreadDetail)
+def admin_delete_support_messages(
+    thread_id: int,
+    payload: DeleteSupportMessagesIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminSupportThreadDetail:
+    """Delete selected messages, all bot responses, or all messages in a support thread."""
+
+    thread = db.get(SupportThread, thread_id)
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Support thread not found.")
+    user = db.get(User, thread.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    clean_ids = sorted({int(mid) for mid in (payload.message_ids or []) if int(mid) > 0})
+    if not payload.delete_all and not payload.delete_all_bot and not clean_ids:
+        raise HTTPException(status_code=422, detail="Select messages or choose a delete option.")
+
+    stmt = select(SupportMessage).where(SupportMessage.thread_id == thread.id)
+    if payload.delete_all:
+        pass
+    elif payload.delete_all_bot:
+        stmt = stmt.where(SupportMessage.sender_role == "bot")
+    else:
+        stmt = stmt.where(SupportMessage.id.in_(clean_ids))
+
+    to_delete = list(db.execute(stmt).scalars())
+    media_urls = [m.attachment_url for m in to_delete if m.attachment_url]
+    deleted_count = len(to_delete)
+    for msg in to_delete:
+        db.delete(msg)
+    db.flush()
+
+    if media_urls:
+        _cleanup_orphaned_support_media(db, media_urls)
+
+    remaining_messages = list(
+        db.execute(
+            select(SupportMessage)
+            .where(SupportMessage.thread_id == thread.id)
+            .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
+        ).scalars()
+    )
+
+    if payload.delete_all and not remaining_messages:
+        thread.bot_attempts = 0
+        thread.unread_admin = 0
+        thread.unread_user = 0
+        thread.issue_summary = ""
+    elif any(m.sender_role == "user" for m in remaining_messages) or thread.status != "bot":
+        thread.issue_summary = _build_issue_summary(remaining_messages)
+    else:
+        thread.issue_summary = ""
+
+    thread.updated_at = utcnow()
+    if deleted_count > 0:
+        log_activity(
+            db,
+            admin.id,
+            "admin",
+            f"Deleted {deleted_count} support message(s) in ticket #{thread.id}",
+        )
+    db.commit()
+    db.refresh(thread)
+    return AdminSupportThreadDetail(
+        thread=_serialize_thread(thread, remaining_messages),
+        customer=_safe_dossier(db, user),
+    )
+
+
 @admin_router.patch("/threads/{thread_id}", response_model=AdminSupportThreadDetail)
 def admin_update_support_thread_status(
     thread_id: int,
@@ -1600,5 +1858,93 @@ def admin_update_support_thread_status(
     )
     return AdminSupportThreadDetail(
         thread=_serialize_thread(thread, messages),
+        customer=_safe_dossier(db, user),
+    )
+
+
+def _cleanup_orphaned_support_media(db: Session, candidate_urls: list[str]) -> None:
+    prefix = "/api/v1/support/media/"
+    for url in {u for u in candidate_urls if u}:
+        if not url.startswith(prefix):
+            continue
+        filename = url[len(prefix) :]
+        if not _MEDIA_NAME_RE.match(filename):
+            continue
+        still_used = db.execute(
+            select(SupportMessage.id).where(SupportMessage.attachment_url == url).limit(1)
+        ).first()
+        if still_used is not None:
+            continue
+        (support_media_dir() / filename).unlink(missing_ok=True)
+
+
+@admin_router.post("/threads/{thread_id}/messages/delete", response_model=AdminSupportThreadDetail)
+def admin_delete_support_messages(
+    thread_id: int,
+    payload: DeleteSupportMessagesIn,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminSupportThreadDetail:
+    """Delete selected messages, all bot responses, or all messages in a support thread."""
+
+    thread = db.get(SupportThread, thread_id)
+    if thread is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Support thread not found.")
+    user = db.get(User, thread.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    clean_ids = sorted({int(mid) for mid in (payload.message_ids or []) if int(mid) > 0})
+    if not payload.delete_all and not payload.delete_all_bot and not clean_ids:
+        raise HTTPException(status_code=422, detail="Select messages or choose a delete option.")
+
+    stmt = select(SupportMessage).where(SupportMessage.thread_id == thread.id)
+    if payload.delete_all:
+        pass
+    elif payload.delete_all_bot:
+        stmt = stmt.where(SupportMessage.sender_role == "bot")
+    else:
+        stmt = stmt.where(SupportMessage.id.in_(clean_ids))
+
+    to_delete = list(db.execute(stmt).scalars())
+    media_urls = [m.attachment_url for m in to_delete if m.attachment_url]
+    deleted_count = len(to_delete)
+    for msg in to_delete:
+        db.delete(msg)
+    db.flush()
+
+    if media_urls:
+        _cleanup_orphaned_support_media(db, media_urls)
+
+    remaining_messages = list(
+        db.execute(
+            select(SupportMessage)
+            .where(SupportMessage.thread_id == thread.id)
+            .order_by(SupportMessage.created_at.asc(), SupportMessage.id.asc())
+        ).scalars()
+    )
+
+    if payload.delete_all and not remaining_messages:
+        thread.bot_attempts = 0
+        thread.unread_admin = 0
+        thread.unread_user = 0
+        thread.issue_summary = ""
+    elif any(m.sender_role == "user" for m in remaining_messages) or thread.status != "bot":
+        thread.issue_summary = _build_issue_summary(remaining_messages)
+    else:
+        thread.issue_summary = ""
+
+    thread.updated_at = utcnow()
+    if deleted_count > 0:
+        log_activity(
+            db,
+            admin.id,
+            "admin",
+            f"Deleted {deleted_count} support message(s) in ticket #{thread.id}",
+        )
+    db.commit()
+    db.refresh(thread)
+    return AdminSupportThreadDetail(
+        thread=_serialize_thread(thread, remaining_messages),
         customer=_safe_dossier(db, user),
     )

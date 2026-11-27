@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Bot,
   CheckCircle2,
+  CheckSquare,
   Clock,
   Coins,
   ExternalLink,
@@ -18,7 +19,9 @@ import {
   RefreshCw,
   Search,
   Send,
+  Square,
   StopCircle,
+  Trash2,
   User as UserIcon,
   Video,
   X,
@@ -28,6 +31,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import NeonCard from "@/components/NeonCard";
 import { formatBytes, formatTokens } from "@/lib/format";
 import {
+  deleteAdminSupportMessages,
   getAdminSupportThread,
   listAdminSupportThreads,
   resolveSupportMediaUrl,
@@ -104,6 +108,8 @@ export default function SupportTab({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingMsgs, setDeletingMsgs] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [draft, setDraft] = useState("");
@@ -170,12 +176,21 @@ export default function SupportTab({
   }, [loadThreads, refreshKey]);
 
   useEffect(() => {
+    setSelectedMsgIds([]);
     if (selectedId !== null) {
       void loadDetail(selectedId);
     } else {
       setDetail(null);
     }
   }, [selectedId, loadDetail]);
+
+  useEffect(() => {
+    const validIds = new Set((detail?.thread.messages ?? []).map((m) => m.id));
+    setSelectedMsgIds((prev) => {
+      const next = prev.filter((id) => validIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [detail?.thread.messages]);
 
   // Live 3-second polling for active chat
   useEffect(() => {
@@ -300,6 +315,48 @@ export default function SupportTab({
       onNotificationsChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update ticket status.");
+    }
+  };
+
+  const toggleSelectMsg = (msgId: number) => {
+    setSelectedMsgIds((prev) =>
+      prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId],
+    );
+  };
+
+  const handleDeleteMessages = async (opts: {
+    messageIds?: number[];
+    deleteAllBot?: boolean;
+    deleteAll?: boolean;
+  }) => {
+    if (!selectedId || deletingMsgs) return;
+    const msgCount = opts.messageIds?.length ?? 0;
+    const confirmText = opts.deleteAll
+      ? "Delete ALL messages in this conversation (customer, bot, and agent)? This cannot be undone."
+      : opts.deleteAllBot
+        ? "Delete ALL AI Bot responses in this conversation? Customer and agent messages will stay."
+        : msgCount === 1
+          ? "Delete this selected message? This cannot be undone."
+          : `Delete ${msgCount} selected messages? This cannot be undone.`;
+    if (!window.confirm(confirmText)) return;
+
+    setDeletingMsgs(true);
+    setError(null);
+    try {
+      const updated = await deleteAdminSupportMessages(selectedId, {
+        message_ids: opts.messageIds,
+        delete_all_bot: opts.deleteAllBot,
+        delete_all: opts.deleteAll,
+      });
+      setDetail(updated);
+      const remainingIds = new Set(updated.thread.messages.map((m) => m.id));
+      setSelectedMsgIds((prev) => prev.filter((id) => remainingIds.has(id)));
+      void loadThreads(true);
+      onNotificationsChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete messages.");
+    } finally {
+      setDeletingMsgs(false);
     }
   };
 
@@ -515,11 +572,122 @@ export default function SupportTab({
                 </div>
               </div>
 
+              {/* Message Selection & Deletion Bar */}
+              {thread.messages.length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 py-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(() => {
+                      const botIds = thread.messages
+                        .filter((m) => m.sender_role === "bot")
+                        .map((m) => m.id);
+                      const allBotSelected =
+                        botIds.length > 0 && botIds.every((id) => selectedMsgIds.includes(id));
+                      const allSelected = thread.messages.every((m) =>
+                        selectedMsgIds.includes(m.id),
+                      );
+                      return (
+                        <>
+                          {botIds.length > 0 ? (
+                            <button
+                              type="button"
+                              disabled={deletingMsgs}
+                              onClick={() => {
+                                if (allBotSelected) {
+                                  setSelectedMsgIds((prev) =>
+                                    prev.filter((id) => !botIds.includes(id)),
+                                  );
+                                } else {
+                                  setSelectedMsgIds((prev) =>
+                                    Array.from(new Set([...prev, ...botIds])),
+                                  );
+                                }
+                              }}
+                              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-slate-300 transition hover:bg-white/10 disabled:opacity-40"
+                            >
+                              {allBotSelected ? "Unselect bot" : `Select bot (${botIds.length})`}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={deletingMsgs}
+                            onClick={() => {
+                              if (allSelected) {
+                                setSelectedMsgIds([]);
+                              } else {
+                                setSelectedMsgIds(thread.messages.map((m) => m.id));
+                              }
+                            }}
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-slate-300 transition hover:bg-white/10 disabled:opacity-40"
+                          >
+                            {allSelected
+                              ? "Unselect all"
+                              : `Select all (${thread.messages.length})`}
+                          </button>
+                          {selectedMsgIds.length > 0 ? (
+                            <span className="px-1 font-mono text-[10px] text-amber-300">
+                              {selectedMsgIds.length} selected ·{" "}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedMsgIds([])}
+                                className="underline hover:text-white"
+                              >
+                                Clear
+                              </button>
+                            </span>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {selectedMsgIds.length > 0 ? (
+                      <button
+                        type="button"
+                        disabled={deletingMsgs}
+                        onClick={() => void handleDeleteMessages({ messageIds: selectedMsgIds })}
+                        className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1 font-semibold text-white transition hover:bg-red-500 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3 w-3" aria-hidden />
+                        Delete selected ({selectedMsgIds.length})
+                      </button>
+                    ) : null}
+                    {thread.messages.some((m) => m.sender_role === "bot") ? (
+                      <button
+                        type="button"
+                        disabled={deletingMsgs}
+                        onClick={() => void handleDeleteMessages({ deleteAllBot: true })}
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-400/40 bg-red-500/15 px-2.5 py-1 font-semibold text-red-200 transition hover:bg-red-500/25 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3 w-3" aria-hidden />
+                        Delete all bot (
+                        {thread.messages.filter((m) => m.sender_role === "bot").length})
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={deletingMsgs}
+                      onClick={() => void handleDeleteMessages({ deleteAll: true })}
+                      className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-red-300 transition hover:border-red-400/40 hover:bg-red-500/15 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden />
+                      Delete all
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {/* Messages Stream */}
               <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain py-4 pr-1">
+                {thread.messages.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center text-xs text-slate-500">
+                    No messages in this conversation yet.
+                  </div>
+                ) : null}
                 {thread.messages.map((msg) => {
                   const isAgent = msg.sender_role === "agent";
                   const isUser = msg.sender_role === "user";
+                  const isSelected = selectedMsgIds.includes(msg.id);
                   const mediaUrl = resolveSupportMediaUrl(msg.attachment_url);
 
                   return (
@@ -531,6 +699,23 @@ export default function SupportTab({
                       )}
                     >
                       <div className="flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 font-mono text-[10px] text-slate-400">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectMsg(msg.id)}
+                          aria-label={isSelected ? "Deselect message" : "Select message"}
+                          className={clsx(
+                            "rounded p-0.5 transition",
+                            isSelected
+                              ? "text-red-400"
+                              : "text-slate-500 hover:text-slate-200",
+                          )}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-3.5 w-3.5" aria-hidden />
+                          ) : (
+                            <Square className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                        </button>
                         {isAgent ? (
                           <>
                             <span className="font-semibold text-emerald-400">
@@ -552,16 +737,27 @@ export default function SupportTab({
                           </>
                         )}
                         <span>· {new Date(msg.created_at).toLocaleTimeString()}</span>
+                        <button
+                          type="button"
+                          disabled={deletingMsgs}
+                          onClick={() => void handleDeleteMessages({ messageIds: [msg.id] })}
+                          title="Delete message"
+                          aria-label="Delete message"
+                          className="rounded p-0.5 text-slate-500 transition hover:bg-red-500/15 hover:text-red-300 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-3 w-3" aria-hidden />
+                        </button>
                       </div>
 
                       <div
                         className={clsx(
-                          "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-2.5 text-xs leading-relaxed [overflow-wrap:anywhere] sm:max-w-[85%]",
+                          "min-w-0 max-w-[92%] break-words rounded-2xl px-4 py-2.5 text-xs leading-relaxed transition [overflow-wrap:anywhere] sm:max-w-[85%]",
                           isAgent
                             ? "rounded-br-sm bg-emerald-600 text-white"
                             : isUser
                               ? "rounded-bl-sm border border-amber-400/40 bg-amber-500/15 text-slate-100"
                               : "rounded-bl-sm border border-white/10 bg-slate-900/80 text-slate-300",
+                          isSelected && "ring-2 ring-red-400/70",
                         )}
                       >
                         {msg.body ? (

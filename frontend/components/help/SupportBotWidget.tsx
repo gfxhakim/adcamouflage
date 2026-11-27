@@ -394,7 +394,7 @@ export default function SupportBotWidget({ onOpenGuide }: SupportBotWidgetProps)
                 <p className="truncate text-[11px] text-white/80">
                   {isAgentMode
                     ? "Send messages, screenshots, or screen recordings below"
-                    : "Knows all 23 layers, options & How to Use guide"}
+                    : "Help with workspace settings, billing & troubleshooting"}
                 </p>
               </div>
             </div>

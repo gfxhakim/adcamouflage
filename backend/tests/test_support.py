@@ -236,3 +236,118 @@ def test_old_brand_name_in_saved_bot_messages_is_replaced(admin):
         db.get(SupportThread, tid).issue_summary = "• is BluEditor down?"
         db.commit()
     assert _admin_ticket(admin, tid)["issue_summary"] == "• is BluEditor down?"
+
+
+def test_bot_never_reveals_backend_internals_or_layers():
+    forbidden = (
+        "ffmpeg",
+        "celery",
+        "redis",
+        "fastapi",
+        "postgres",
+        "elastic_mesh_warp",
+        "dct_jnd_perturbation",
+        "lut_clahe_color",
+        "adversarial_cnn_layer",
+        "optical_flow_timewarp",
+        "audio_allpass_phase",
+        "formant_pitch_lfo",
+        "psychoacoustic_rir",
+        "authentic_atom_spoof",
+        "macroblock_aq_variance",
+        "micro_crop",
+        "deep_scramble",
+        "23 layers",
+        "23/23",
+        "gen-4",
+        "x264",
+        "moov",
+        "worker queue",
+    )
+    customer = _signed_in(address("nosybot"))
+    probing_prompts = (
+        "how does your backend work?",
+        "explain all 23 layers and Gen-4",
+        "what does elastic_mesh_warp and dct_jnd_perturbation do?",
+        "do you use ffmpeg, celery, redis, or fastapi?",
+        "how does your app work under the hood?",
+    )
+    for prompt in probing_prompts:
+        res = customer.post("/api/v1/support/thread/message", json={"body": prompt})
+        assert res.status_code == 200, res.text
+        reply = res.json()["messages"][-1]["body"].lower()
+        assert "can't share details about our backend infrastructure" in reply
+        for term in forbidden:
+            assert term not in reply
+
+    safe_prompts = (
+        "How do I get started?",
+        "Which profile is best for Meta?",
+        "How do tokens and refunds work?",
+        "My render failed",
+    )
+    for prompt in safe_prompts:
+        res = customer.post("/api/v1/support/thread/message", json={"body": prompt})
+        assert res.status_code == 200, res.text
+        reply = res.json()["messages"][-1]["body"].lower()
+        assert "can't share details about our backend infrastructure" not in reply
+        for term in forbidden:
+            assert term not in reply
+
+
+def test_admin_can_delete_selected_bot_all_bot_and_all_messages(admin):
+    customer = _signed_in(address("delbot"))
+    customer.post("/api/v1/support/thread/message", json={"body": "How do tokens and refunds work?"})
+    customer.post("/api/v1/support/thread/message", json={"body": "My render failed"})
+    esc = customer.post("/api/v1/support/thread/message", json={"body": "I want to talk to a real agent"})
+    assert esc.status_code == 200
+    tid = esc.json()["id"]
+
+    sent = admin.post(f"/api/v1/admin/support/threads/{tid}/message", json={"body": "Agent checking now"})
+    assert sent.status_code == 200
+
+    # Non-admin receives 404 from require_admin.
+    assert (
+        customer.post(
+            f"/api/v1/admin/support/threads/{tid}/messages/delete",
+            json={"delete_all_bot": True},
+        ).status_code
+        == 404
+    )
+
+    detail = admin.get(f"/api/v1/admin/support/threads/{tid}").json()["thread"]
+    bot_msgs = [m for m in detail["messages"] if m["sender_role"] == "bot"]
+    assert len(bot_msgs) >= 3
+    one_bot_id = bot_msgs[0]["id"]
+
+    # 1) Delete a single selected bot message.
+    r1 = admin.post(
+        f"/api/v1/admin/support/threads/{tid}/messages/delete",
+        json={"message_ids": [one_bot_id]},
+    )
+    assert r1.status_code == 200, r1.text
+    ids_after_one = {m["id"] for m in r1.json()["thread"]["messages"]}
+    assert one_bot_id not in ids_after_one
+    cust_ids = {m["id"] for m in customer.get("/api/v1/support/thread").json()["messages"]}
+    assert one_bot_id not in cust_ids
+
+    # 2) Delete all remaining bot replies while keeping user & agent messages.
+    r2 = admin.post(
+        f"/api/v1/admin/support/threads/{tid}/messages/delete",
+        json={"delete_all_bot": True},
+    )
+    assert r2.status_code == 200, r2.text
+    roles_after_bot = [m["sender_role"] for m in r2.json()["thread"]["messages"]]
+    assert "bot" not in roles_after_bot
+    assert "user" in roles_after_bot and "agent" in roles_after_bot
+    assert "bot" not in [m["sender_role"] for m in customer.get("/api/v1/support/thread").json()["messages"]]
+
+    # 3) Delete all messages in the conversation cleanly.
+    r3 = admin.post(
+        f"/api/v1/admin/support/threads/{tid}/messages/delete",
+        json={"delete_all": True},
+    )
+    assert r3.status_code == 200, r3.text
+    assert r3.json()["thread"]["messages"] == []
+    assert r3.json()["thread"]["bot_attempts"] == 0
+    assert customer.get("/api/v1/support/thread").json()["messages"] == []

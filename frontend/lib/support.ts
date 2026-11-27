@@ -221,3 +221,17 @@ export function updateAdminSupportThreadStatus(
     body: JSON.stringify({ status }),
   });
 }
+
+export function deleteAdminSupportMessages(
+  threadId: number,
+  payload: {
+    message_ids?: number[];
+    delete_all_bot?: boolean;
+    delete_all?: boolean;
+  },
+): Promise<AdminSupportThreadDetail> {
+  return request<AdminSupportThreadDetail>(`/api/v1/admin/support/threads/${threadId}/messages/delete`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
