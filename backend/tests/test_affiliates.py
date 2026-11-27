@@ -1,7 +1,8 @@
 """Referral and partner program: coupons, rewards, commissions, payouts and the batch cost view.
 
 The numbers asserted are the owner's program sheet: 10% off Pro/Max for a
-friend, 300/750/1,250 reward tokens after 7 days, 15% off for a creator's
+friend; the referrer gets 200 tokens when the friend signs up and 400 after
+the friend's first plan payment has stayed 7 days, 15% off for a creator's
 audience and 25/30/35% of collected revenue by paying customers a month.
 """
 
@@ -161,6 +162,9 @@ def make_partner(admin: TestClient, code: str) -> tuple[TestClient, str]:
 
 
 def test_only_active_subscribers_get_a_friend_code():
+    with session() as db:
+        affiliates.save_program(db, {"friend": {"open_to_all": False}})
+        db.commit()
     email = address("nosub")
     client = client_for(email)
     friend = client.get("/api/v1/referrals/me").json()["friend"]
@@ -205,13 +209,13 @@ def test_reward_comes_after_seven_days_and_is_spent_after_subscription_tokens():
     pay(friend_email, order_id)
 
     row = referral(friend_email)
-    assert row.status == "waiting" and row.reward_tokens == 1250
+    assert row.status == "waiting" and row.reward_tokens == 400
     with session() as db:
         affiliates.process_due_rewards(db)  # still inside the hold
         assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 0
         assert affiliates.process_due_rewards(db, datetime.now(timezone.utc) + timedelta(days=7, minutes=1)) >= 1
         user = user_of(db, referrer_email)
-        assert bucket_totals(db, user)[REFERRAL] == 1250
+        assert bucket_totals(db, user)[REFERRAL] == 400
         # 1,500 subscription tokens go first, then the reward, before any top-up.
         tokens.grant_bonus(db, user, 500, "test top-up")
         db.commit()
@@ -219,12 +223,12 @@ def test_reward_comes_after_seven_days_and_is_spent_after_subscription_tokens():
         db.commit()
         consume(db, user, 17, "spend-order-test")  # 1,700 tokens at 100 each
         totals = bucket_totals(db, user)
-        assert totals == {"subscription": 0, "referral": 1050, "topup": 500}
+        assert totals == {"subscription": 0, "referral": 200, "topup": 500}
     assert referral(friend_email).status == "rewarded"
     # The second payment earns nothing more.
     pay(friend_email, checkout(friend, "max").json()["order_id"])
     with session() as db:
-        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 1050
+        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 200
 
 
 def test_reward_amounts_follow_the_friends_plan_and_the_monthly_cap():
@@ -247,9 +251,9 @@ def test_reward_amounts_follow_the_friends_plan_and_the_monthly_cap():
             affiliates.process_due_rewards(db, later)
         row = referral(email)
         statuses.append((row.status, row.reward_tokens))
-    assert statuses == [("rewarded", 300), ("rewarded", 750), ("capped", 1250)]
+    assert statuses == [("rewarded", 400), ("rewarded", 400), ("capped", 400)]
     with session() as db:
-        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 1050
+        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 800
 
 
 def test_same_device_or_mailbox_is_blocked_as_self_referral():
@@ -313,8 +317,8 @@ def test_a_refund_cancels_the_reward_or_takes_it_back(admin):
     pay(late, order_b)
     with session() as db:
         affiliates.process_due_rewards(db, later)
-        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 750
-    assert "750" in admin.post(f"/api/v1/admin/affiliates/orders/{order_b}/refund", json={}).json()["reversed"]
+        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 400
+    assert "400" in admin.post(f"/api/v1/admin/affiliates/orders/{order_b}/refund", json={}).json()["reversed"]
     with session() as db:
         assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 0
     assert admin.post(f"/api/v1/admin/affiliates/orders/{order_b}/refund", json={}).status_code == 409
@@ -509,7 +513,8 @@ def test_admin_can_change_every_number_and_customers_cannot_see_the_panel(admin)
     assert client_for(address("nosy")).get("/api/v1/admin/affiliates").status_code == 404
     data = admin.get("/api/v1/admin/affiliates").json()
     program = data["program"]
-    assert program["friend"]["reward_tokens"] == {"starter": 300, "pro": 750, "max": 1250}
+    assert program["friend"]["reward_tokens"] == {"starter": 400, "pro": 400, "max": 400}
+    assert program["friend"]["signup_reward_tokens"] == 200
     program["friend"].update(discount_pct=20, plans=["starter", "pro", "max"], hold_days=3)
     program["partner"]["tiers"] = [{"min": 0, "pct": 10}, {"min": 5, "pct": 40}]
     program["link_days"] = 14
@@ -544,7 +549,7 @@ def test_admin_can_allow_a_blocked_referral_and_reward_now(admin):
     pay(friend_email, checkout(friend, "pro").json()["order_id"])
     assert admin.post(f"/api/v1/admin/affiliates/referrals/{row.id}", json={"action": "reward_now"}).json()["status"] == "rewarded"
     with session() as db:
-        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 750
+        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 400
 
 
 # --------------------------------------------------------------------------
@@ -649,7 +654,7 @@ def test_a_reward_is_only_ever_given_once():
         assert affiliates.give_reward(first, row_a, now=later) == "rewarded"
         assert affiliates.give_reward(second, row_b, now=later) == "rewarded"  # sees it is done, pays nothing
     with session() as db:
-        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 750
+        assert bucket_totals(db, user_of(db, referrer_email))[REFERRAL] == 400
 
 
 def test_public_program_and_affiliate_only_account_isolation():

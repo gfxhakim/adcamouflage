@@ -150,6 +150,7 @@ def _groups(db: Session, now: datetime) -> list[dict[str, str]]:
         {"id": "new_7d", "label": "New sign-ups", "hint": "Signed up in the last 7 days."},
         {"id": "never_paid", "label": "Never paid", "hint": "Signed up but never had a plan."},
         {"id": "checkout_unpaid", "label": "Checkout not finished", "hint": "Opened a checkout, never paid."},
+        {"id": "free_left", "label": "Free generations unused", "hint": "No plan yet and still has free generations to try."},
         {"id": "active", "label": "Active subscribers", "hint": "On any plan right now."},
     ]
     for plan_id, plan in get_token_plans(db, now).items():
@@ -174,7 +175,14 @@ def _counts_by_user(db: Session, stmt) -> dict[int, int]:  # type: ignore[no-unt
 def people(db: Session, now: datetime | None = None) -> list[Person]:
     """Every customer account with the groups it belongs to right now."""
 
-    from .tokens import generation_cost, get_billing_rules, get_token_plans, in_grace, subscription_active
+    from .tokens import (
+        free_generations_available,
+        generation_cost,
+        get_billing_rules,
+        get_token_plans,
+        in_grace,
+        subscription_active,
+    )
 
     now = now or _now()
     plans = get_token_plans(db, now)
@@ -204,6 +212,8 @@ def people(db: Session, now: datetime | None = None) -> list[Person]:
             g.append("new_7d")
         if not had_plan:
             g.append("never_paid")
+            if free_generations_available(user) > 0:
+                g.append("free_left")
             if opened.get(user.id, 0) > 0:
                 g.append("checkout_unpaid")
         if active:
@@ -240,6 +250,149 @@ def people(db: Session, now: datetime | None = None) -> list[Person]:
     return out
 
 
+# --------------------------------------------------------------------------
+# offer blocks: {free_offer} and {price_offer}
+# --------------------------------------------------------------------------
+
+OFFER_SETTING = "email_offer"
+# The prices before the reduction, shown struck through next to today's price.
+DEFAULT_OFFER: dict[str, Any] = {"was": {"starter": 37.0, "pro": 89.0, "max": 149.0}}
+FREE_MARKER = "{free_offer}"
+PRICE_MARKER = "{price_offer}"
+
+
+def get_offer(db: Session) -> dict[str, Any]:
+    from .tokens import PLAN_IDS
+
+    saved = get_setting(db, OFFER_SETTING, {}) or {}
+    was_in = {**DEFAULT_OFFER["was"], **((saved.get("was") if isinstance(saved, dict) else None) or {})}
+    was: dict[str, float] = {}
+    for plan_id in PLAN_IDS:
+        try:
+            was[plan_id] = round(max(0.0, float(was_in.get(plan_id) or 0)), 2)
+        except (TypeError, ValueError):
+            was[plan_id] = 0.0
+    return {"was": was}
+
+
+def _money(value: float) -> str:
+    return f"${value:,.0f}" if float(value).is_integer() else f"${value:,.2f}"
+
+
+def offer_rows(db: Session) -> list[dict[str, Any]]:
+    """Each plan with its old price, today's price and the saving (old price 0 = no reduction shown)."""
+
+    from .tokens import get_token_plans
+
+    was = get_offer(db)["was"]
+    rows = []
+    for plan_id, plan in get_token_plans(db).items():
+        old = was.get(plan_id, 0.0)
+        now_price = float(plan.price)
+        off = round((old - now_price) / old * 100) if old > now_price > 0 else 0
+        rows.append(
+            {
+                "id": plan_id,
+                "label": plan.label,
+                "generations": int(plan.generations),
+                "was": old if off > 0 else 0.0,
+                "price": now_price,
+                "off_pct": off,
+            }
+        )
+    return rows
+
+
+def free_for(db: Session, user: User) -> int:
+    """Free generations to promise this person: what they have left, or what a new account gets."""
+
+    from .tokens import free_generations_available, get_free_trial
+
+    left = free_generations_available(user)
+    if left:
+        return left
+    if user.sub_plan is None and not user.free_generations_granted:
+        trial = get_free_trial(db)
+        return trial["count"] if trial["enabled"] else 0
+    return 0
+
+
+def offer_blocks(
+    db: Session, style: dict[str, Any] | None = None, free: int = 0
+) -> tuple[dict[str, str], dict[str, str]]:
+    """(html, text) for the {free_offer} and {price_offer} marker lines. ``free`` = 0 hides the free box."""
+
+    st = mailer.clean_style(style) if style is not None else dict(mailer.DEFAULT_STYLE)
+    esc = html_lib.escape
+    sans = mailer.SANS
+    accent, accent_text, text_color = st["header_color"], st["header_text_color"], st["text_color"]
+    html: dict[str, str] = {}
+    text: dict[str, str] = {}
+
+    if free:
+        noun = "generation" if free == 1 else "generations"
+        html[FREE_MARKER] = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px">'
+            f'<tr><td align="center" style="background:{accent};border-radius:18px;padding:28px 20px 26px">'
+            f'<div style="font-family:{sans};font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;'
+            f'color:{accent_text};opacity:.85">On the house</div>'
+            f'<div style="font-family:{sans};font-weight:800;font-size:64px;line-height:1;letter-spacing:-2px;'
+            f'color:{accent_text};padding-top:8px">{free}</div>'
+            f'<div style="font-family:{sans};font-weight:700;font-size:20px;line-height:1.25;color:{accent_text};'
+            f'padding-top:6px">free {noun} waiting for you</div>'
+            f'<div style="font-family:{sans};font-size:13px;line-height:1.5;color:{accent_text};opacity:.85;padding-top:8px">'
+            "No plan and no card needed. Upload a video and see the result.</div>"
+            "</td></tr></table>"
+        )
+        text[FREE_MARKER] = f"You have {free} free {noun} waiting. No plan and no card needed."
+    else:
+        html[FREE_MARKER] = ""
+        text[FREE_MARKER] = ""
+
+    rows = offer_rows(db)
+    cells = []
+    lines = ["New lower prices:"]
+    for i, row in enumerate(rows):
+        border = "" if i == len(rows) - 1 else "border-bottom:1px solid #e6e9f0;"
+        was = (
+            f'<span style="font-family:{sans};font-size:15px;color:#9aa1ad;text-decoration:line-through;'
+            f'padding-right:8px">{_money(row["was"])}</span>'
+            if row["was"]
+            else ""
+        )
+        badge = (
+            f'<div style="padding-top:5px"><span style="display:inline-block;background:#e7f8ee;color:#127a3e;'
+            f'font-family:{sans};font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px">'
+            f'Save {row["off_pct"]}%</span></div>'
+            if row["off_pct"]
+            else ""
+        )
+        cells.append(
+            f'<tr><td style="{border}padding:14px 16px" valign="middle">'
+            f'<div style="font-family:{sans};font-size:16px;font-weight:700;color:{text_color}">{esc(row["label"])}</div>'
+            f'<div style="font-family:{sans};font-size:12px;color:#6b7280;padding-top:3px">'
+            f'{row["generations"]:,} generations a month</div></td>'
+            f'<td align="right" style="{border}padding:14px 16px;white-space:nowrap" valign="middle">{was}'
+            f'<span style="font-family:{sans};font-size:22px;font-weight:800;color:{text_color}">{_money(row["price"])}</span>'
+            f'<span style="font-family:{sans};font-size:12px;color:#6b7280">/mo</span>{badge}</td></tr>'
+        )
+        lines.append(
+            f"- {row['label']}: "
+            + (f"{_money(row['was'])} -> " if row["was"] else "")
+            + f"{_money(row['price'])}/month ({row['generations']:,} generations)"
+        )
+    html[PRICE_MARKER] = (
+        f'<div style="font-family:{sans};font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;'
+        f'color:{accent};padding:2px 0 10px">New lower prices</div>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+        'style="margin:0 0 22px;border:1px solid #e6e9f0;border-radius:14px;border-collapse:separate">'
+        + "".join(cells)
+        + "</table>"
+    )
+    text[PRICE_MARKER] = "\n".join(lines)
+    return html, text
+
+
 def person_values(db: Session, user: User, tokens: int | None = None) -> dict[str, Any]:
     from .tokens import get_token_plans, subscription_active, usable_tokens
 
@@ -254,6 +407,7 @@ def person_values(db: Session, user: User, tokens: int | None = None) -> dict[st
         "tokens": f"{int(tokens):,}",
         "end_date": f"{end:%d %B %Y}" if end else "",
         "status": "active" if subscription_active(user) else ("ended" if end else "no plan yet"),
+        "free_generations": str(free_for(db, user) or 3),
     }
 
 
@@ -266,6 +420,9 @@ PLACEHOLDERS: dict[str, str] = {
     "status": "active, ended, or no plan yet",
     "app_url": "Link to the workspace",
     "plan_url": "Link to their plan page",
+    "free_generations": "Free generations they can use (or the number new accounts get)",
+    "free_offer": "On its own line: the big free-generations box",
+    "price_offer": "On its own line: the price table, old prices struck through",
 }
 
 
@@ -277,6 +434,8 @@ def compose(
     *,
     button: str = "",
     style: dict[str, Any] | None = None,
+    big_button: bool = False,
+    blocks: tuple[dict[str, str], dict[str, str]] | None = None,
 ) -> tuple[str, str, str, dict[str, str]]:
     """(subject, text, html, headers) for one person, with the unsubscribe footer.
 
@@ -290,9 +449,16 @@ def compose(
     filled = mailer.fill(body, values)
     footer = f'<a href="{html_lib.escape(page)}" style="color:#8a8d91">Unsubscribe</a> from these updates.'
     design = {"headline": subject, "button": " ".join(mailer.fill(button, values).split())}
-    text_body = f"{filled}\n\n--\nYou are receiving this because you have a {mailer.BRAND} account.\nUnsubscribe: {page}"
+    html_blocks, text_blocks = blocks or ({}, {})
+    plain = filled
+    for marker, value in text_blocks.items():
+        plain = plain.replace(marker, value)
+    text_body = f"{plain}\n\n--\nYou are receiving this because you have a {mailer.BRAND} account.\nUnsubscribe: {page}"
     headers = {"List-Unsubscribe": f"<{one_click}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
-    return subject, text_body, mailer.to_html(filled, footer=footer, design=design, style=style), headers
+    html = mailer.to_html(
+        filled, footer=footer, design=design, style=style, blocks=html_blocks, big_button=big_button
+    )
+    return subject, text_body, html, headers
 
 
 # --------------------------------------------------------------------------
@@ -418,6 +584,8 @@ def process(
                         person_values(db, user),
                         button=campaign.button,
                         style=style,
+                        big_button=bool(campaign.big_button),
+                        blocks=offer_blocks(db, style, free_for(db, user)),
                     )
                     ok = bool(send(user.email, subject, html, text_body, headers=headers))
                 except Exception:  # noqa: BLE001 - one bad send must not stop the rest
@@ -480,6 +648,26 @@ kick: Callable[[], None] = _kick_default
 SIGN_OFF = mailer.SIGN_OFF
 
 DRAFTS: list[dict[str, Any]] = [
+    {
+        "id": "free_trial_offer",
+        "button": "Try your {free_generations} free generations",
+        "big_button": True,
+        "label": "Free generations + new prices",
+        "groups": ["free_left", "never_paid", "checkout_unpaid"],
+        "subject": "{name}, your {free_generations} free generations are ready",
+        "body": (
+            "Hi {name},\n\n"
+            "You made your {brand} account but have not tried it yet. We saved some free generations for you, "
+            "so you can see what the studio does with your own video before you pay anything.\n\n"
+            "{free_offer}\n\n"
+            "{app_url}\n\n"
+            "Upload a clip, pick your formats, and download the results in a few minutes.\n\n"
+            "When you want more, our plans now cost less:\n\n"
+            "{price_offer}\n\n"
+            "Questions? Just reply to this email.\n\n"
+            f"{SIGN_OFF}"
+        ),
+    },
     {
         "id": "choose_plan",
         "button": "Choose a plan",
@@ -584,6 +772,12 @@ class MessageIn(BaseModel):
     body: str = Field(min_length=1, max_length=mailer.BODY_MAX)
     # Label of the button drawn from the first line that is only a link.
     button: str = Field(default="", max_length=60)
+    # Draw the button large and full width.
+    big_button: bool = False
+
+
+class OfferIn(BaseModel):
+    was: dict[str, float]
 
 
 class PreviewIn(MessageIn):
@@ -652,6 +846,7 @@ def _status(db: Session) -> dict[str, Any]:
         ],
         "placeholders": PLACEHOLDERS,
         "drafts": drafts(),
+        "offer": {**get_offer(db), "plans": offer_rows(db)},
         "rules": rules,
         "sent_today": today,
         "left_today": max(0, rules["daily_limit"] - today),
@@ -672,12 +867,36 @@ def save_rules(payload: RulesIn, admin: User = Depends(require_admin), db: Sessi
     return _status(db)
 
 
+@router.put("/offer")
+def save_offer(payload: OfferIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
+    from .tokens import PLAN_IDS
+
+    unknown = set(payload.was) - set(PLAN_IDS)
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown plan '{sorted(unknown)[0]}'.")
+    if any(value < 0 or value > 1_000_000 for value in payload.was.values()):
+        raise HTTPException(status_code=422, detail="Old prices must be from 0 to 1,000,000.")
+    current = get_offer(db)
+    set_setting(db, OFFER_SETTING, {"was": {**current["was"], **{k: round(v, 2) for k, v in payload.was.items()}}})
+    db.commit()
+    audit.record(db, admin, None, "email_offer", "Changed the old prices shown in the price table")
+    return {**get_offer(db), "plans": offer_rows(db)}
+
+
 @router.post("/preview")
 def preview(payload: PreviewIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     user = db.get(User, payload.user_id) if payload.user_id else None
     user = user or admin
+    style = mailer.get_style(db)
     subject, text_body, html, _headers = compose(
-        user.id, payload.subject, payload.body, person_values(db, user), button=payload.button, style=mailer.get_style(db)
+        user.id,
+        payload.subject,
+        payload.body,
+        person_values(db, user),
+        button=payload.button,
+        style=style,
+        big_button=payload.big_button,
+        blocks=offer_blocks(db, style, free_for(db, user)),
     )
     return {"subject": subject, "text": text_body, "html": html, "for": user.email}
 
@@ -686,8 +905,16 @@ def preview(payload: PreviewIn, admin: User = Depends(require_admin), db: Sessio
 def send_test(payload: MessageIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, Any]:
     if not mailer.configured():
         raise HTTPException(status_code=409, detail="Email is not set up on the server yet.")
+    style = mailer.get_style(db)
     subject, text_body, html, headers = compose(
-        admin.id, payload.subject, payload.body, person_values(db, admin), button=payload.button, style=mailer.get_style(db)
+        admin.id,
+        payload.subject,
+        payload.body,
+        person_values(db, admin),
+        button=payload.button,
+        style=style,
+        big_button=payload.big_button,
+        blocks=offer_blocks(db, style, free_for(db, admin)),
     )
     if not mailer.send_email(admin.email, "[Test] " + subject, html, text_body, headers=headers):
         raise HTTPException(status_code=502, detail="The mail server did not accept the message. Check the api logs.")
@@ -719,6 +946,7 @@ def send_group(payload: SendIn, admin: User = Depends(require_admin), db: Sessio
         subject=payload.subject.strip(),
         body=payload.body.replace("\r\n", "\n"),
         button=payload.button.strip(),
+        big_button=payload.big_button,
         status="sending",
         total=len(reachable),
     )

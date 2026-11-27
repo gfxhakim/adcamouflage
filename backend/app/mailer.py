@@ -577,9 +577,12 @@ def _abs(url: str) -> str:
     return url
 
 
-def _paragraphs(blocks: list[str], color: str) -> str:
+def _paragraphs(blocks: list[str], color: str, html_blocks: dict[str, str] | None = None) -> str:
     out = []
     for block in blocks:
+        if html_blocks and block.strip() in html_blocks:
+            out.append(html_blocks[block.strip()])
+            continue
         safe = html_lib.escape(block)
         safe = _LINK.sub(lambda m: f'<a href="{m.group(1)}" style="color:#0866ff">{m.group(1)}</a>', safe)
         out.append(
@@ -630,6 +633,8 @@ def to_html(
     *,
     design: dict[str, Any] | None = None,
     style: dict[str, Any] | None = None,
+    blocks: dict[str, str] | None = None,
+    big_button: bool = False,
 ) -> str:
     """Plain text -> the branded ProteusFlow HTML email.
 
@@ -644,6 +649,10 @@ def to_html(
     ``header_text_color`` the text inside the highlight box. ``footer`` is
     extra trusted HTML from the app (for example an unsubscribe link) shown
     under the footer text. Customer and admin text is always escaped.
+
+    ``blocks`` maps a marker paragraph (a line on its own, like
+    ``{price_offer}``) to trusted HTML built by the app, such as the price
+    table. ``big_button`` draws the button full width and large.
     """
 
     st = clean_style(style) if style is not None else dict(DEFAULT_STYLE)
@@ -705,8 +714,17 @@ def to_html(
             f'<tr><td align="center" style="background:{accent};border-radius:16px;padding:24px 20px">{big}{sub}</td></tr>'
             "</table>"
         )
-    content.append(_paragraphs(before, text_color))
-    if link:
+    content.append(_paragraphs(before, text_color, blocks))
+    if link and big_button:
+        content.append(
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 26px">'
+            f'<tr><td align="center" style="border-radius:16px;background:{st["button_color"]};'
+            'box-shadow:0 10px 24px rgba(8,102,255,.28)">'
+            f'<a href="{esc(link)}" style="display:block;padding:22px 24px;font-family:{SANS};font-size:20px;'
+            f'line-height:1.2;font-weight:800;letter-spacing:-0.2px;color:{st["button_text_color"]};text-decoration:none;'
+            f'border-radius:16px;text-align:center">{esc(button)} &rarr;</a></td></tr></table>'
+        )
+    elif link:
         content.append(
             '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 24px"><tr>'
             f'<td style="border-radius:999px;background:{st["button_color"]}">'
@@ -714,7 +732,7 @@ def to_html(
             f'font-weight:600;color:{st["button_text_color"]};text-decoration:none;border-radius:999px">'
             f"{esc(button)} &rarr;</a></td></tr></table>"
         )
-    content.append(_paragraphs(after, text_color))
+    content.append(_paragraphs(after, text_color, blocks))
 
     foot = []
     if st["show_footer_logo"]:

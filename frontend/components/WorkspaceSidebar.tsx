@@ -2,7 +2,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Clock, Crown, HelpCircle, LayoutGrid, LogOut, Megaphone, PlayCircle, type LucideIcon } from "lucide-react";
+import { Clock, Crown, Gift, HelpCircle, LayoutGrid, LogOut, Megaphone, PlayCircle, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -44,6 +44,7 @@ const ITEMS: NavItem[] = [
   { href: "/app/history", label: "History", icon: Clock },
   { href: "/app/plan", label: "My plan", icon: Crown },
   { href: "/app/referrals", label: "Affiliate program", icon: Megaphone },
+  { href: "/app/invite", label: "Invite friends", icon: Gift },
 ];
 
 const BRAND_MARK = "/brand/proteusflow-mark.png";

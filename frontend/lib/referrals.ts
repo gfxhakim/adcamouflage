@@ -22,8 +22,13 @@ export interface CodeStats {
 
 export interface FriendProgram {
   enabled: boolean;
-  /** Only active subscribers have a link. */
+  /** Has a link: everyone when the program is open to all, else active subscribers. */
   eligible: boolean;
+  /** Has an active plan (reward tokens are spent with a plan). */
+  subscribed?: boolean;
+  /** Tokens the referrer gets when a friend signs up and confirms their email. */
+  signup_reward_tokens?: number;
+  signup_monthly_cap?: number;
   discount_pct: number;
   plans: string[];
   reward_tokens: Record<string, number>;
@@ -34,7 +39,14 @@ export interface FriendProgram {
   rewards_this_month: number;
   tokens_earned: number;
   tokens_left: number;
-  friends: { email: string; status: string; reward_tokens: number; reward_due_at: string | null; created_at: string }[];
+  friends: {
+    email: string;
+    status: string;
+    reward_tokens: number;
+    reward_due_at: string | null;
+    signup_reward_tokens?: number;
+    created_at: string;
+  }[];
 }
 
 export interface CommissionTotals {

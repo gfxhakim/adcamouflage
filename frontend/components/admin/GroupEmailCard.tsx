@@ -9,6 +9,7 @@ import {
   getGroupEmails,
   previewGroupEmail,
   retryGroupEmail,
+  saveEmailOffer,
   saveGroupEmailRules,
   sendGroupEmail,
   stopGroupEmail,
@@ -49,6 +50,8 @@ export default function GroupEmailCard() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [button, setButton] = useState("");
+  const [bigButton, setBigButton] = useState(false);
+  const [oldPrices, setOldPrices] = useState<Record<string, number> | null>(null);
   const [preview, setPreview] = useState<{ html: string; for: string } | null>(null);
 
   // send
@@ -69,6 +72,7 @@ export default function GroupEmailCard() {
       const next = await getGroupEmails();
       setData(next);
       setRules((r) => r ?? next.rules);
+      setOldPrices((o) => o ?? next.offer.was);
       setLoadError(null);
     } catch (err) {
       setLoadError(message(err, "Could not load group emails."));
@@ -294,12 +298,13 @@ export default function GroupEmailCard() {
           <button
             key={d.id}
             type="button"
-            className={chip(false)}
+            className={d.big_button ? `${chip(false)} !border-meta-500/50 !text-meta-600` : chip(false)}
             title={`Good for: ${d.groups.map(groupLabel).join(", ")}`}
             onClick={() => {
               setSubject(d.subject);
               setBody(d.body);
               setButton(d.button);
+              setBigButton(Boolean(d.big_button));
               setPreview(null);
             }}
           >
@@ -335,6 +340,55 @@ export default function GroupEmailCard() {
             empty to keep it a plain link.
           </span>
         </label>
+        <label className="flex items-center gap-2 text-xs text-black/70 dark:text-slate-300">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-meta-500"
+            checked={bigButton}
+            onChange={(e) => setBigButton(e.target.checked)}
+          />
+          Big button (full width, for offers)
+        </label>
+        {oldPrices ? (
+          <div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
+            <p className="text-xs font-semibold text-black dark:text-slate-100">Old prices in the price table</p>
+            <p className={`${faint} mb-2`}>
+              Put {"{price_offer}"} on its own line to show your plans with the old price struck through next to today&apos;s
+              price, and {"{free_offer}"} for the big free-generations box. Set an old price to 0 to show only today&apos;s price.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              {data.offer.plans.map((plan) => (
+                <label key={plan.id} className={label}>
+                  {plan.label} (now ${plan.price})
+                  <input
+                    type="number"
+                    min={0}
+                    step="1"
+                    className="field mt-1 !w-28"
+                    value={oldPrices[plan.id] ?? 0}
+                    onChange={(e) => setOldPrices({ ...oldPrices, [plan.id]: Math.max(0, Number(e.target.value) || 0) })}
+                  />
+                </label>
+              ))}
+              <button
+                type="button"
+                className="btn-ghost !text-xs"
+                disabled={busy !== null}
+                onClick={() =>
+                  void run("offer", async () => {
+                    const saved = await saveEmailOffer(oldPrices);
+                    setOldPrices(saved.was);
+                    setData({ ...data, offer: saved });
+                    setNote({ ok: true, text: "Old prices saved." });
+                  })
+                }
+              >
+                {busy === "offer" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Save className="h-3.5 w-3.5" aria-hidden />}
+                Save old prices
+              </button>
+            </div>
+          </div>
+        ) : null}
         <p className={faint}>
           You can use:{" "}
           {Object.entries(data.placeholders).map(([key, help], i) => (
@@ -354,7 +408,7 @@ export default function GroupEmailCard() {
           disabled={!hasMessage || busy !== null}
           onClick={() =>
             void run("preview", async () => {
-              const r = await previewGroupEmail({ subject, body, button, user_id: picked[0]?.id });
+              const r = await previewGroupEmail({ subject, body, button, big_button: bigButton, user_id: picked[0]?.id });
               setPreview({ html: r.html, for: `${r.subject} (as ${r.for} sees it)` });
             })
           }
@@ -368,7 +422,7 @@ export default function GroupEmailCard() {
           disabled={!hasMessage || data.transport === "" || busy !== null}
           onClick={() =>
             void run("test", async () => {
-              const { sent_to } = await testGroupEmail({ subject, body, button });
+              const { sent_to } = await testGroupEmail({ subject, body, button, big_button: bigButton });
               setNote({ ok: true, text: `Test sent to ${sent_to}.` });
             })
           }
@@ -427,6 +481,7 @@ export default function GroupEmailCard() {
                     subject,
                     body,
                     button,
+                    big_button: bigButton,
                     user_ids: picked.map((p) => p.id),
                     audience: audience(),
                     confirm: confirmWord.trim(),

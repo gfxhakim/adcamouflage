@@ -66,7 +66,14 @@ DEFAULTS: dict[str, Any] = {
         "enabled": True,
         "discount_pct": 0.0,
         "plans": ["starter", "pro", "max"],
-        "reward_tokens": {"starter": 300, "pro": 750, "max": 1250},  # by the friend's plan
+        # Tokens for the referrer when the friend subscribes, by the friend's plan.
+        "reward_tokens": {"starter": 400, "pro": 400, "max": 400},
+        # Tokens for the referrer as soon as the friend signs up and confirms their email.
+        "signup_reward_tokens": 200,
+        "signup_monthly_cap": 20,
+        # True: every customer account has a link and code (rewards are spent with a plan).
+        # False: only active subscribers can invite.
+        "open_to_all": True,
         "hold_days": 7,
         "monthly_cap": 10,
     },
@@ -275,7 +282,7 @@ def code_usable(db: Session, code: ReferralCode, program: dict[str, Any] | None 
     if owner is None or not owner.is_active:
         return "This code is not active."
     if code.channel == FRIEND:
-        if not subscription_active(owner):
+        if not program[FRIEND].get("open_to_all") and not subscription_active(owner):
             return "This code is not active right now."
     else:
         partner = db.get(AffiliatePartner, code.user_id)
@@ -451,6 +458,7 @@ def attribute(
     db.commit()
     if blocked:
         raise AttributionError("This code cannot be used on your own account.")
+    give_signup_reward(db, row)
     return row
 
 
@@ -673,7 +681,7 @@ def give_reward(db: Session, row: Referral, *, force: bool = False, now: datetim
         row.status, row.void_reason = "void", "Account no longer exists"
     elif not force and (referred.sub_cancelled_at is not None or not subscription_active(referred, now)):
         row.status, row.void_reason = "void", "The referred customer did not stay subscribed for the hold period"
-    elif not subscription_active(referrer, now):
+    elif not program[FRIEND].get("open_to_all") and not subscription_active(referrer, now):
         row.status, row.void_reason = "void", "The referrer had no active subscription when the reward came due"
     elif not force and rewards_this_month(db, referrer.id, now) >= int(program[FRIEND]["monthly_cap"]):
         row.status, row.void_reason = "capped", f"Over the cap of {program[FRIEND]['monthly_cap']} rewards a month"
@@ -694,6 +702,107 @@ def give_reward(db: Session, row: Referral, *, force: bool = False, now: datetim
         row.void_reason = ""
     db.commit()
     return row.status
+
+
+def signup_rewards_this_month(db: Session, referrer_id: int, now: datetime | None = None) -> int:
+    now = now or _now()
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return int(
+        db.execute(
+            select(func.count(Referral.id)).where(
+                Referral.signup_reward_referrer_id == referrer_id,
+                Referral.signup_reward_given_at.is_not(None),
+                Referral.signup_reward_given_at >= start,
+            )
+        ).scalar_one()
+    )
+
+
+def give_signup_reward(db: Session, row: Referral, now: datetime | None = None) -> bool:
+    """Pay the sign-up reward for one referred friend, once ever. Never raises. Commits.
+
+    Paid when the friend's account is a confirmed customer account and the
+    referral passed the self-referral check. A friend moved to another
+    code later never earns a second sign-up reward.
+    """
+
+    from .tokens import REFERRAL, _entry
+
+    try:
+        now = now or _now()
+        program = get_program(db)
+        friend = program[FRIEND]
+        tokens = int(friend.get("signup_reward_tokens") or 0)
+        if (
+            not friend["enabled"]
+            or tokens <= 0
+            or row.channel != FRIEND
+            or row.status not in ("signed_up", "waiting", "rewarded")
+            or row.signup_reward_given_at is not None
+        ):
+            return False
+        referred = db.get(User, row.referred_user_id)
+        referrer = db.get(User, row.referrer_id)
+        if referred is None or referrer is None or not referrer.is_active or referrer.id == referred.id:
+            return False
+        if not referred.email_verified or referred.is_admin or referred.account_role != "customer":
+            return False
+        # Same network as the referrer: the free sign-up reward is skipped (the
+        # subscribe reward still applies, since that needs a real payment).
+        if "ip" in {flag for flag in (row.flags or "").split(",") if flag}:
+            return False
+        if signup_rewards_this_month(db, referrer.id, now) >= int(friend.get("signup_monthly_cap") or 0):
+            return False
+        claimed = db.execute(
+            update(Referral)
+            .where(Referral.id == row.id, Referral.signup_reward_given_at.is_(None))
+            .values(signup_reward_given_at=now, signup_reward_tokens=tokens, signup_reward_referrer_id=referrer.id)
+            .execution_options(synchronize_session=False)
+        ).rowcount
+        if claimed != 1:
+            db.rollback()
+            return False
+        _entry(
+            db,
+            referrer.id,
+            REFERRAL,
+            "reward",
+            tokens,
+            note=f"referral sign-up reward: {mask_email(referred.email)} joined with {row.code}",
+        )
+        db.commit()
+        db.refresh(row)
+        return True
+    except Exception:  # noqa: BLE001 - a reward must never break a sign-up
+        db.rollback()
+        logger.warning("sign-up reward for referral %s failed", getattr(row, "id", "?"), exc_info=True)
+        return False
+
+
+def on_email_verified(db: Session, user: User) -> None:
+    """The friend confirmed their email: pay the referrer's sign-up reward if it is still owed."""
+
+    row = referral_of(db, user.id)
+    if row is not None:
+        give_signup_reward(db, row)
+
+
+def ensure_friend_rewards_v2(db: Session) -> None:
+    """One-time: move saved friend rewards to 200 on sign-up and 400 on subscribe."""
+
+    key = "migration.friend_rewards_200_400_v1"
+    if get_setting(db, key, False):
+        return
+    saved = dict(get_setting(db, SETTING, {}) or {})
+    friend = dict(saved.get(FRIEND) or {})
+    if friend:
+        friend["reward_tokens"] = dict(DEFAULTS[FRIEND]["reward_tokens"])
+        friend["signup_reward_tokens"] = DEFAULTS[FRIEND]["signup_reward_tokens"]
+        friend.setdefault("open_to_all", True)
+        saved[FRIEND] = friend
+        set_setting(db, SETTING, saved)
+    set_setting(db, key, True)
+    db.commit()
 
 
 def process_due_rewards(db: Session, now: datetime | None = None) -> int:

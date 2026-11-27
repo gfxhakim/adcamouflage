@@ -407,6 +407,99 @@ def uses_tokens(user: User, now: datetime | None = None) -> bool:
     return user.billing_mode != LEGACY or plan_expired(user, now)
 
 
+FREE_TRIAL_SETTING = "free_trial"
+FREE_TRIAL_MAX = 20
+
+
+def get_free_trial(db: Session) -> dict[str, Any]:
+    """Admin > Settings > Free generations: whether new accounts get them, and how many."""
+
+    saved = get_setting(db, FREE_TRIAL_SETTING, {}) or {}
+    count = saved.get("count", FREE_SIGNUP_GENERATIONS) if isinstance(saved, dict) else FREE_SIGNUP_GENERATIONS
+    try:
+        count = max(0, min(FREE_TRIAL_MAX, int(count)))
+    except (TypeError, ValueError):
+        count = FREE_SIGNUP_GENERATIONS
+    enabled = bool(saved.get("enabled", True)) if isinstance(saved, dict) else True
+    return {"enabled": enabled, "count": count}
+
+
+def save_free_trial(db: Session, *, enabled: bool, count: int) -> dict[str, Any]:
+    set_setting(db, FREE_TRIAL_SETTING, {"enabled": bool(enabled), "count": max(0, min(FREE_TRIAL_MAX, int(count)))})
+    return get_free_trial(db)
+
+
+def signup_free_generations(db: Session, role: str = "customer") -> int:
+    """Free generations a new account starts with (0 for partners, admins, or when switched off)."""
+
+    if role != "customer":
+        return 0
+    trial = get_free_trial(db)
+    return trial["count"] if trial["enabled"] else 0
+
+
+def free_trial_candidates(db: Session):  # type: ignore[no-untyped-def]
+    """Customer token accounts with no plan yet that were never given free generations."""
+
+    used = select(BatchRecord.user_id).where(BatchRecord.free_generations_used > 0)
+    return (
+        select(User)
+        .where(
+            User.is_active.is_(True),
+            User.is_admin.is_(False),
+            User.account_role == "customer",
+            User.billing_mode == TOKENS,
+            User.sub_plan.is_(None),
+            User.free_generations_granted == 0,
+            User.free_generations == 0,
+            User.id.not_in(used),
+        )
+    )
+
+
+def count_free_trial_candidates(db: Session) -> int:
+    return int(db.execute(select(func.count()).select_from(free_trial_candidates(db).subquery())).scalar_one())
+
+
+def grant_free_trial_to_existing(db: Session) -> int:
+    """One-time grant: give every waiting account its free generations. Safe to repeat. Commits."""
+
+    trial = get_free_trial(db)
+    count = trial["count"]
+    if not trial["enabled"] or count <= 0:
+        return 0
+    granted = 0
+    for user in db.execute(free_trial_candidates(db)).scalars().all():
+        changed = db.execute(
+            update(User)
+            .where(User.id == user.id, User.free_generations_granted == 0, User.sub_plan.is_(None))
+            .values(free_generations=User.free_generations + count, free_generations_granted=count)
+            .execution_options(synchronize_session=False)
+        ).rowcount
+        if changed == 1:
+            granted += 1
+            db.add(ActivityEvent(user_id=user.id, kind="trial_grant", detail=f"Given {count} free generations"))
+    db.commit()
+    return granted
+
+
+def ensure_free_trial_backfill(db: Session) -> None:
+    """On first start with this release: give existing no-plan accounts their free generations once."""
+
+    key = "migration.free_trial_existing_v1"
+    if get_setting(db, key, False):
+        return
+    try:
+        given = grant_free_trial_to_existing(db)
+        set_setting(db, key, True)
+        db.commit()
+        if given:
+            logger.info("gave free generations to %s existing accounts", given)
+    except Exception:  # noqa: BLE001 - never block start-up
+        db.rollback()
+        logger.warning("free generation backfill failed; it will retry on the next start", exc_info=True)
+
+
 def free_generations_available(user: User) -> int:
     """Complimentary signup generations usable right now (token accounts before first subscription)."""
 
