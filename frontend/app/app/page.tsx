@@ -29,6 +29,7 @@ import WelcomeTour from "@/components/help/WelcomeTour";
 import HelpDrawer from "@/components/help/HelpDrawer";
 import CoachMark from "@/components/help/CoachMark";
 import SupportBotWidget from "@/components/help/SupportBotWidget";
+import WorkspaceCaseStudySection from "@/components/help/WorkspaceCaseStudySection";
 import WorkspaceTutorialSection from "@/components/help/WorkspaceTutorialSection";
 import FirstRenderTrialModal from "@/components/FirstRenderTrialModal";
 import OverlayPanel, { createOverlayLayer } from "@/components/OverlayPanel";
@@ -1418,6 +1419,8 @@ export default function WorkspacePage() {
               </div>
             </div>
           </NeonCard>
+
+          <WorkspaceCaseStudySection />
 
           <WorkspaceTutorialSection compact />
 
